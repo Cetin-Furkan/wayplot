@@ -86,7 +86,7 @@ sudo pacman -S wayland wayland-protocols vulkan-icd-loader vulkan-headers \
 ### Build Commands
 
 ```bash
-git clone https://github.com/yourusername/graphway.git
+git clone https://github.com/Cetin-Furkan/graphway.git
 cd graphway
 
 make              # Debug build (sanitizers enabled)
