@@ -905,7 +905,6 @@ static void draw_frame(struct Application *app) {
     };
     vkCmdSetScissor(app->vk.command_buffer, 0, 1, &scissor);
 
-    // Draw 4 vertices -> Plus symbol (+)
     vkCmdDraw(app->vk.command_buffer, 3, 1, 0, 0);
 
     vkCmdEndRendering(app->vk.command_buffer);
