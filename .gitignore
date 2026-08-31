@@ -1,0 +1,29 @@
+# Objects and depfiles
+build/
+
+# Linked binaries (keep bin/.gitkeep)
+bin/*
+!bin/.gitkeep
+
+# clangd / cache
+compile_commands.json
+.cache/
+
+# Compiled shaders (sources stay under shaders/)
+*.spv
+
+# Editor / OS
+*~
+*.swp
+*.swo
+.DS_Store
+*.o
+*.d
+*.a
+*.so
+build/
+bin/
+*.log
+compile_commands.json
+project_bundle.txt
+.version-stamp

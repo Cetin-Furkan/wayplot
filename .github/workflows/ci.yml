@@ -1,0 +1,40 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: build (${{ matrix.target }})
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [debug, release]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            gcc make pkg-config \
+            libvulkan-dev libdrm-dev
+
+      - name: Build ${{ matrix.target }}
+        run: make ${{ matrix.target }} V=1
+
+      - name: Smoke run
+        run: ./bin/${{ matrix.target }}/wayplot
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: wayplot-${{ matrix.target }}-${{ github.sha }}
+          path: bin/${{ matrix.target }}/wayplot
+          if-no-files-found: error
