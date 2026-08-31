@@ -1,5 +1,9 @@
 # wayplot
 
+Wayplot is a new graphical engine for scientific and engineering 3D simulations and tests that is build completely from scratch using Vulkan and Wayland on Linux enviroment.
+
+Wayplot is specifically optimized for relatively modern laptop devices that utilize iGPUs, this repo has no NVIDIA specific codes or optimizations.
+
 A from-scratch Wayland client with Vulkan 1.4 on **Mesa iGPUs** (Intel ANV, AMD RADV; Turnip later). Scientific 3D + instrument cards on office laptops. Not a NVIDIA stack, not GLFW, not libwayland.
 
 This tree is a new host. The previous client (DMA-BUF, feedback, io_uring recv) lives next to this folder as reference — copy algorithms, do not re-type them from memory.
