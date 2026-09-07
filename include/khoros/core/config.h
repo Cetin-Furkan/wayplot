@@ -38,7 +38,10 @@ constexpr uint32_t KHR_WINDOW_MIN_H =
     KHR_WINDOW_CHROME_TOP + KHR_WINDOW_CHROME_EDGE + 64U;
 
 constexpr uint32_t KHR_WINDOW_DBLCLICK_MS = 400;
+constexpr uint32_t KHR_WINDOW_DBLCLICK_PX = 6;  /* trackpad jitter */
 constexpr uint32_t KHR_WINDOW_CURSOR_PX   = 24;
+constexpr uint32_t KHR_WINDOW_POPUP_W     = 220;
+constexpr uint32_t KHR_WINDOW_POPUP_H     = 148;
 
 typedef enum {
     KHR_HIT_CLIENT = 0,
@@ -147,6 +150,21 @@ static inline khr_hit_t khr_window_hit(int32_t x, int32_t y, uint32_t w, uint32_
         return KHR_HIT_MOVE;
     }
     return KHR_HIT_CLIENT;
+}
+
+[[nodiscard]]
+static inline bool khr_window_dblclick_near(int32_t x, int32_t y,
+                                            uint32_t last_x, uint32_t last_y) {
+    int32_t dx = x - (int32_t)last_x;
+    int32_t dy = y - (int32_t)last_y;
+    if (dx < 0) {
+        dx = -dx;
+    }
+    if (dy < 0) {
+        dy = -dy;
+    }
+    return dx <= (int32_t)KHR_WINDOW_DBLCLICK_PX &&
+           dy <= (int32_t)KHR_WINDOW_DBLCLICK_PX;
 }
 
 [[nodiscard]]

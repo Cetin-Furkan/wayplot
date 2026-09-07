@@ -1,5 +1,6 @@
 #include "khoros/wayland/seat.h"
 #include "khoros/wayland/wire.h"
+#include "khoros/core/config.h"
 
 #include <string.h>
 
@@ -138,9 +139,10 @@ uint32_t khr_seat_consume(khr_wl_client_t* client, khr_seat_t* seat,
                         seat->button_time_ms = time;
                         if (state == KHR_WL_POINTER_PRESSED) {
                             if (seat->left_down == false &&
-                                time - seat->last_click_ms <= 400U &&
-                                (uint32_t)seat->x == seat->last_click_x &&
-                                (uint32_t)seat->y == seat->last_click_y) {
+                                time - seat->last_click_ms <= KHR_WINDOW_DBLCLICK_MS &&
+                                khr_window_dblclick_near(seat->x, seat->y,
+                                                         seat->last_click_x,
+                                                         seat->last_click_y)) {
                                 seat->double_click = true;
                             }
                             seat->last_click_ms = time;
@@ -149,6 +151,13 @@ uint32_t khr_seat_consume(khr_wl_client_t* client, khr_seat_t* seat,
                             seat->left_down = true;
                         } else {
                             seat->left_down = false;
+                        }
+                    } else if (button == KHR_BTN_RIGHT) {
+                        seat->button_serial = serial;
+                        if (state == KHR_WL_POINTER_PRESSED) {
+                            seat->right_down = true;
+                        } else {
+                            seat->right_down = false;
                         }
                     }
                     count++;

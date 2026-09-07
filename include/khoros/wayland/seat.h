@@ -31,6 +31,7 @@ constexpr uint32_t KHR_WL_SEAT_CAP_KEYBOARD  = 2;
 constexpr uint32_t KHR_WL_POINTER_PRESSED    = 1;
 constexpr uint32_t KHR_WL_POINTER_RELEASED   = 0;
 constexpr uint32_t KHR_BTN_LEFT              = 0x110U;
+constexpr uint32_t KHR_BTN_RIGHT             = 0x111U;
 constexpr uint32_t KHR_KEY_ESC               = 1;
 constexpr uint32_t KHR_KEY_F11               = 87;
 constexpr uint32_t KHR_WL_KEY_PRESSED        = 1;
@@ -50,6 +51,7 @@ typedef struct {
     uint32_t last_click_y;
     bool     pointer_in;
     bool     left_down;
+    bool     right_down;
     bool     double_click;
     bool     f11_pressed;
     bool     esc_pressed;
