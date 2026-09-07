@@ -1,0 +1,41 @@
+# Build Artifacts & Binaries
+build/
+bin/
+*.o
+*.a
+*.so
+*.out
+*.exe
+
+# Core Dumps & Debug
+/core
+core.[0-9]*
+core.*
+vgcore.*
+*.dSYM/
+*.gdb
+
+# Editor & Tooling Metadata
+.cache/
+.clangd/
+.vscode/
+.idea/
+compile_commands.json
+*.swp
+*.swo
+*~
+
+# Logs & Temporary Files
+*.log
+logs/
+test_results.log
+tmp/
+*.tmp
+
+# Agent Scratch & Generated Artifacts (never committed)
+.agents/
+project_bundle.txt
+
+# OS Metadata
+.DS_Store
+Thumbs.db
