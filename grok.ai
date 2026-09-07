@@ -541,4 +541,14 @@ User: ~5% GPU / ~2% CPU, colors strobing gray/black/other (black looked like a f
 
 Interactive cursor-resize / side-tile not driven from this session (no gnome-shell Eval). The protocol path is the one the new test covers.
 
+---
+
+## [2026-09-07T21:40:36+03:00] - Plot ribbon from BDA; ingest still parked
+
+Window freeze is 11 commits on `engine` (not pushed). Then the plot step: 256-float demo series in the hugepage BDA (`0x740000040`), `khr_plot_draw` in the client rect under the 32px bar. Same two present slots, dirty-only, no arena reset, no file ingest.
+
+`khr_dmabuf_slot_render_scene` / `khr_dmabuf_present_commit_scene` draw cards then the ribbon with a viewport inset. Samples filled once by `khr_plot_fill_demo_samples` (stays in (0,1)). Ring B ingest of a real file is **not started** — waiting on user approval.
+
+Gates: `make lint` PASS, `make test` 98/98 (2570 assertions). Live ~50 s SIGTERM: `Plot: 256 samples BDA=0x740000040`, `frames=1`, `alive=yes`, CPU 0.0%.
+
 
