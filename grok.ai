@@ -593,3 +593,14 @@ Ring B already has the 3-SQE chain (OPENAT2 → READ_FIXED into the 2 MiB hugepa
 
 Gates: `make lint` PASS, `make test` 99/99 (2612 assertions). Engine binary rebuilt. Not pushed.
 
+---
+
+## [2026-09-07T23:45:28+03:00] - Push close/hit-list; manuals match the window
+
+User's `git add .` + `git push` was a no-op (staged, never committed). Committed and pushed:
+
+- `e058cd1` `feat(wayland): title-bar close and first-match hit list`
+- `1d1aa4f` `docs(agent): record close, hit list, and parked ingest`
+
+Follow-up: user asked to do the git/docs side. Updated `doc/wayland.md` (product window: close, hit list, double-click = set_maximized), `doc/testing.md` (window tests), `doc/ingest.md` (hugepage is BDA; live ingest parked until partition), `window.h` comment. Still no ingest, no cart rows.
+
