@@ -335,7 +335,8 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
     uint32_t popup_shm_id = 0;
     khr_shm_pool_t popup_pool = { .fd = -1 };
     uint32_t popup_buffer_id = 0;
-    uint32_t popup_parent_seq = 0;
+    uint32_t popup_parent_w = 0;
+    uint32_t popup_parent_h = 0;
 
     while (!shell.closed && !client.display_error && !khr_window_stop) {
         bool resizing =
@@ -402,13 +403,14 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
 
         khr_hit_t hit = khr_window_hit(seat.x, seat.y, buf_w, buf_h,
                                        shell.fullscreen);
-        /* xdg_popup.grab only auto-dismisses clicks *outside our surfaces*.
-         * Clicks on the parent, move/resize, and parent configure are ours:
-         * destroy the popup (same rule GTK/Chromium apply, our loop). */
-        bool parent_moved = shell.popup_live &&
-                            (shell.size_seq != popup_parent_seq ||
-                             want_w != buf_w || want_h != buf_h || resizing);
-        if (shell.popup_done || parent_moved) {
+        /* Dismiss only when the parent buffer size actually changes.
+         * The RESIZING state bit can stick after an edge drag; using it
+         * here made every new cart die until a later move configure
+         * cleared the bit. Clicks on the parent still teardown below. */
+        bool parent_resized = shell.popup_live &&
+                              (want_w != popup_parent_w ||
+                               want_h != popup_parent_h);
+        if (shell.popup_done || parent_resized) {
             khr_window_popup_teardown(&client, &shell, &popup_pool,
                                       &popup_buffer_id);
         }
@@ -433,7 +435,8 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
                                        seat.x, seat.y,
                                        (int32_t)KHR_WINDOW_POPUP_W,
                                        (int32_t)KHR_WINDOW_POPUP_H)) {
-                    popup_parent_seq = shell.size_seq;
+                    popup_parent_w = want_w;
+                    popup_parent_h = want_h;
                 }
             } else if (shell.popup_live) {
                 khr_window_popup_teardown(&client, &shell, &popup_pool,
