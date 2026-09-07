@@ -120,10 +120,13 @@ void khr_topology_recycle_cqe_buffer(khr_topology_t* topo, const khr_cqe_event_t
         }
     }
 
-    /* Fallback routing if tag is generic or unclassified */
-    if (topo->pbuf0_live && bid < topo->pbuf_tier0.entries) {
+    /* Untagged fallback: bids 0–15 are ambiguous (both tiers). Prefer not
+     * recycling into the wrong ring over a silent leak of one buffer. */
+    if (topo->pbuf0_live && bid >= topo->pbuf_tier1.entries &&
+        bid < topo->pbuf_tier0.entries) {
         khr_pbuf_recycle(&topo->pbuf_tier0, bid);
-    } else if (topo->pbuf1_live && bid < topo->pbuf_tier1.entries) {
+    } else if (topo->pbuf1_live && bid >= topo->pbuf_tier0.entries &&
+               bid < topo->pbuf_tier1.entries) {
         khr_pbuf_recycle(&topo->pbuf_tier1, bid);
     }
 }
@@ -152,8 +155,10 @@ static bool khr_evt_q_pop(khr_cqe_event_t* q, uint32_t cap, uint32_t* head,
 
 static void khr_pump_classify(khr_topology_t* topo, const khr_cqe_event_t* evt) {
     /* MSG_RING results carry their dispatch key in res (payload in user_data:
-     * the kernel writes sqe->off into CQE user_data and sqe->len into res). */
-    if (evt->res == (int32_t)KHR_MSG_RES_BDA) {
+     * the kernel writes sqe->off into CQE user_data and sqe->len into res).
+     * The outstanding gate narrows res-code aliasing to a genuinely
+     * coincident in-flight signal plus an exact-size packet. */
+    if (evt->res == (int32_t)KHR_MSG_RES_BDA && topo->bda_outstanding > 0) {
         if (!khr_evt_q_push(topo->bda_q, KHR_BDA_Q_CAP,
                             &topo->bda_head, &topo->bda_tail, evt)) {
             /* BDA stream overflow: keep the newest, drop it explicitly rather
@@ -162,7 +167,7 @@ static void khr_pump_classify(khr_topology_t* topo, const khr_cqe_event_t* evt) 
         }
         return;
     }
-    if (evt->res == (int32_t)KHR_MSG_RES_INGEST) {
+    if (evt->res == (int32_t)KHR_MSG_RES_INGEST && topo->ingest_outstanding > 0) {
         (void)khr_evt_q_push(topo->ingest_q, KHR_INGEST_Q_CAP,
                              &topo->ingest_head, &topo->ingest_tail, evt);
         return;
@@ -206,6 +211,45 @@ uint32_t khr_topology_pump(khr_topology_t* topo, uint32_t timeout_ms) {
     return harvested;
 }
 
+[[nodiscard]]
+bool khr_topology_await_tag(khr_topology_t* topo, uint64_t tag, int32_t* out_res,
+                            uint32_t timeout_ms) {
+    if (topo == nullptr || !topo->ring_a_live || out_res == nullptr) {
+        return false;
+    }
+    struct timespec start = {};
+    clock_gettime(CLOCK_MONOTONIC, &start);
+    for (;;) {
+        struct timespec now = {};
+        clock_gettime(CLOCK_MONOTONIC, &now);
+        int64_t elapsed_ms = ((now.tv_sec - start.tv_sec) * 1000LL) +
+                             ((now.tv_nsec - start.tv_nsec) / 1'000'000LL);
+        /* Scan first: a prior pump may already have classified our tag.
+         * Pumping before the scan waits for a *new* CQE and can time out
+         * with the send completion already sitting in evt_q. */
+        for (uint32_t i = topo->evt_tail; i != topo->evt_head; i++) {
+            uint32_t idx = i & (KHR_EVT_Q_CAP - 1U);
+            if (topo->evt_q[idx].user_data == tag) {
+                *out_res = topo->evt_q[idx].res;
+                for (uint32_t j = i; j + 1U != topo->evt_head; j++) {
+                    topo->evt_q[j & (KHR_EVT_Q_CAP - 1U)] =
+                        topo->evt_q[(j + 1U) & (KHR_EVT_Q_CAP - 1U)];
+                }
+                topo->evt_head--;
+                return true;
+            }
+        }
+        if (elapsed_ms >= (int64_t)timeout_ms) {
+            return false;
+        }
+        uint32_t remain = (uint32_t)((int64_t)timeout_ms - elapsed_ms);
+        if (remain == 0) {
+            remain = 1;
+        }
+        (void)khr_topology_pump(topo, remain);
+    }
+}
+
 bool khr_topology_wake_worker(khr_topology_t* topo) {
     if (topo == nullptr || !topo->ring_a_live || !topo->worker_started) {
         return false;
@@ -232,13 +276,16 @@ bool khr_topology_wake_worker(khr_topology_t* topo) {
  * along the way are already classified into their own queues, so nothing is
  * ever swallowed and no waiter starves another. */
 static bool khr_queue_wait(khr_topology_t* topo, khr_cqe_event_t* q, uint32_t cap,
-                           uint32_t* head, uint32_t* tail,
+                           uint32_t* head, uint32_t* tail, uint32_t* outstanding,
                            uint64_t* out_ud, uint32_t timeout_ms) {
     struct timespec start = {};
     clock_gettime(CLOCK_MONOTONIC, &start);
     for (;;) {
         khr_cqe_event_t evt = {};
         if (khr_evt_q_pop(q, cap, head, tail, &evt)) {
+            if (outstanding != nullptr && *outstanding > 0) {
+                (*outstanding)--;
+            }
             if (out_ud != nullptr) {
                 *out_ud = evt.user_data;
             }
@@ -249,6 +296,11 @@ static bool khr_queue_wait(khr_topology_t* topo, khr_cqe_event_t* q, uint32_t ca
         int64_t elapsed_ms = ((now.tv_sec - start.tv_sec) * 1000LL) +
                              ((now.tv_nsec - start.tv_nsec) / 1'000'000LL);
         if (elapsed_ms >= (int64_t)timeout_ms) {
+            /* Late CQE must not keep the res-code gate open (tier-1 packets
+             * of size 0xBDA0/0x1E57 would otherwise classify as IPC). */
+            if (outstanding != nullptr && *outstanding > 0) {
+                (*outstanding)--;
+            }
             return false;
         }
         uint32_t remain = timeout_ms - (uint32_t)elapsed_ms;
@@ -256,6 +308,9 @@ static bool khr_queue_wait(khr_topology_t* topo, khr_cqe_event_t* q, uint32_t ca
             remain = 1;
         }
         if (khr_topology_pump(topo, remain) == 0) {
+            if (outstanding != nullptr && *outstanding > 0) {
+                (*outstanding)--;
+            }
             return false;
         }
     }
@@ -280,7 +335,11 @@ static bool khr_worker_drain_ring_b(khr_topology_t* t, khr_ingest_op_t* op) {
         uint64_t tag = cqe->user_data;
         int res = cqe->res;
         khr_uring_cqe_seen(&t->ring_b, cqe);
-        if (res == (int32_t)KHR_MSG_RES_WAKE) {
+        /* Doorbell needs BOTH halves: a chain CQE reports a byte count in
+         * res, and a file of exactly 0x574B (22'347) bytes would otherwise
+         * alias the wake code and be swallowed here. Wake doorbells always
+         * carry payload 0, so tag == 0 disambiguates exactly. */
+        if (res == (int32_t)KHR_MSG_RES_WAKE && tag == 0) {
             continue; /* Pure doorbell: the cmdq drain below does the work. */
         }
         if (op->active && khr_ingest_op_feed(op, tag, res)) {
@@ -291,7 +350,7 @@ static bool khr_worker_drain_ring_b(khr_topology_t* t, khr_ingest_op_t* op) {
                 khr_ingest_op_begin(op, false);
                 if (khr_ingest_chain_submit(&t->ring_b, t->ingest_path,
                                             t->hugepage, 0, t->hugepage_sz,
-                                            false) != 0) {
+                                            op) != 0) {
                     op->active = false;
                     (void)khr_worker_msg_ring(t, 0, KHR_MSG_RES_INGEST);
                     ingest_done = true;
@@ -317,11 +376,12 @@ static bool khr_worker_start_ingest(khr_topology_t* t, khr_ingest_op_t* op,
     size_t len = strnlen(item->path, sizeof(t->ingest_path) - 1);
     memcpy(t->ingest_path, item->path, len);
     t->ingest_path[len] = '\0';
+    khr_ingest_op_begin(op, true);
     if (khr_ingest_chain_submit(&t->ring_b, t->ingest_path, t->hugepage, 0,
-                                t->hugepage_sz, true) != 0) {
+                                t->hugepage_sz, op) != 0) {
+        op->active = false;
         return false;
     }
-    khr_ingest_op_begin(op, true);
     t->ingest_active = true;
     return true;
 }
@@ -566,6 +626,7 @@ bool khr_topology_signal_bda(khr_topology_t* topo, uint64_t bda) {
     if (!khr_cmdq_push(topo, KHR_WCMD_MSG_BDA, bda, nullptr)) {
         return false;
     }
+    topo->bda_outstanding++;
     (void)khr_topology_wake_worker(topo);
     return true;
 }
@@ -576,11 +637,12 @@ bool khr_topology_wait_bda(khr_topology_t* topo, uint64_t* out_bda, uint32_t tim
         return false;
     }
     return khr_queue_wait(topo, topo->bda_q, KHR_BDA_Q_CAP,
-                          &topo->bda_head, &topo->bda_tail, out_bda, timeout_ms);
+                          &topo->bda_head, &topo->bda_tail,
+                          &topo->bda_outstanding, out_bda, timeout_ms);
 }
 
 [[nodiscard]]
-bool khr_topology_ingest(khr_topology_t* topo, const char* path, size_t* out_bytes) {
+bool khr_topology_ingest_submit(khr_topology_t* topo, const char* path) {
     if (topo == nullptr || path == nullptr || !topo->worker_started) {
         return false;
     }
@@ -590,10 +652,45 @@ bool khr_topology_ingest(khr_topology_t* topo, const char* path, size_t* out_byt
     if (!khr_cmdq_push(topo, KHR_WCMD_INGEST, 0, path)) {
         return false;
     }
+    topo->ingest_outstanding++;
     (void)khr_topology_wake_worker(topo);
+    return true;
+}
+
+[[nodiscard]]
+bool khr_topology_pop_ingest(khr_topology_t* topo, size_t* out_bytes) {
+    if (topo == nullptr) {
+        return false;
+    }
+    khr_cqe_event_t evt = {};
+    if (!khr_evt_q_pop(topo->ingest_q, KHR_INGEST_Q_CAP,
+                       &topo->ingest_head, &topo->ingest_tail, &evt)) {
+        if (khr_topology_pump(topo, 0) == 0) {
+            return false;
+        }
+        if (!khr_evt_q_pop(topo->ingest_q, KHR_INGEST_Q_CAP,
+                           &topo->ingest_head, &topo->ingest_tail, &evt)) {
+            return false;
+        }
+    }
+    if (topo->ingest_outstanding > 0) {
+        topo->ingest_outstanding--;
+    }
+    if (out_bytes != nullptr) {
+        *out_bytes = (size_t)evt.user_data;
+    }
+    return evt.user_data > 0;
+}
+
+[[nodiscard]]
+bool khr_topology_ingest(khr_topology_t* topo, const char* path, size_t* out_bytes) {
+    if (!khr_topology_ingest_submit(topo, path)) {
+        return false;
+    }
     uint64_t n = 0;
     if (!khr_queue_wait(topo, topo->ingest_q, KHR_INGEST_Q_CAP,
-                        &topo->ingest_head, &topo->ingest_tail, &n, 2'000)) {
+                        &topo->ingest_head, &topo->ingest_tail,
+                        &topo->ingest_outstanding, &n, 2'000)) {
         return false;
     }
     if (out_bytes != nullptr) {

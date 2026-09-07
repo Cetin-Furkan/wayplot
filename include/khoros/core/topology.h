@@ -56,7 +56,9 @@ typedef struct {
     char     path[KHR_PATH_MAX];
 } khr_wcmd_item_t;
 
-typedef struct {
+/* Named tag (struct khr_topology) so upper layers can forward-declare
+ * khr_topology_t for back-pointers without including this header. */
+typedef struct khr_topology {
     khr_uring_t ring_a;
     khr_uring_t ring_b;
     khr_pbuf_t  pbuf_tier0;
@@ -112,6 +114,14 @@ typedef struct {
     uint32_t         evt_head;
     uint32_t         evt_tail;
 
+    /* Result expectation counters (Core 0 only). A harvested CQE is routed to
+     * bda_q/ingest_q only when its res code matches AND a signal is
+     * outstanding; otherwise it falls through to evt_q. Without this, a
+     * Wayland burst of exactly 0xBDA0/0x1E57 bytes would alias a result code
+     * and corrupt pairing. Tier-0 packets can never collide (256 B cap). */
+    uint32_t         bda_outstanding;
+    uint32_t         ingest_outstanding;
+
     /* Worker-owned async ingest operation (Core 1 only). The 3-SQE chain is
      * submitted and the worker returns to its parked wait; chain CQEs harvested
      * from Ring B advance the op, and completion is reported to Core 0 with a
@@ -143,6 +153,14 @@ bool khr_topology_wait_bda(khr_topology_t* topo, uint64_t* out_bda, uint32_t tim
 [[nodiscard]]
 bool khr_topology_ingest(khr_topology_t* topo, const char* path, size_t* out_bytes);
 
+/* Non-blocking ingest: push + doorbell, return immediately. Reap with
+ * khr_topology_pop_ingest / the pump. Presentation must not wait on disk. */
+[[nodiscard]]
+bool khr_topology_ingest_submit(khr_topology_t* topo, const char* path);
+
+[[nodiscard]]
+bool khr_topology_pop_ingest(khr_topology_t* topo, size_t* out_bytes);
+
 [[nodiscard]]
 bool khr_topology_arm_eventfd(khr_topology_t* topo, int efd);
 
@@ -169,6 +187,28 @@ uint32_t khr_topology_pump(khr_topology_t* topo, uint32_t timeout_ms);
  * khr_cmdq_push (signal_bda / ingest do it internally).
  */
 bool khr_topology_wake_worker(khr_topology_t* topo);
+
+/*
+ * Tag-matched synchronous wait: harvest every Ring A completion through the
+ * normal pump classification (foreign completions land in their queues,
+ * nothing is swallowed), then extract the first evt_q entry with
+ * user_data == tag into *out_res. Repeats until the tag arrives or the
+ * timeout_ms budget is spent. Returns false on timeout.
+ *
+ * This is what makes io_uring sends sound: the caller submits a tagged
+ * request, awaits its own completion, and only then reuses the send buffer.
+ * Blindly consuming "the next CQE" instead would confirm the wrong operation
+ * (a stale linked NOP, an inbound packet) while the real send is still in
+ * flight over freed stack memory.
+ *
+ * Scope note: the match scans evt_q only. Request completions (byte counts)
+ * can never alias the bda_q/ingest_q res-code gates: the largest sendable
+ * message (khr_wl_msg_buf_t, 4096 bytes) is smaller than the smallest
+ * MSG_RES_* code, so tagged request completions always classify into evt_q.
+ */
+[[nodiscard]]
+bool khr_topology_await_tag(khr_topology_t* topo, uint64_t tag, int32_t* out_res,
+                            uint32_t timeout_ms);
 
 [[nodiscard]]
 bool khr_topology_pop_cqe(khr_topology_t* topo, khr_cqe_event_t* out_evt);
