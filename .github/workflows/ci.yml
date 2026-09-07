@@ -1,0 +1,84 @@
+name: Khoros Engine CI & Standards Verification
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+jobs:
+  verify-and-build:
+    name: Pure C23 & Banned Library Enforcement
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository source tree
+        uses: actions/checkout@v4
+
+      - name: Install modern Linux compiler toolchain (GCC 14+ with C23 support)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-14 libvulkan-dev vulkan-tools
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 100
+
+      - name: Verify ISO C23 compiler conformance
+        run: |
+          echo "Checking C23 standard macros on compiler..."
+          gcc -std=c23 -dM -E - < /dev/null | grep -E "__STDC_VERSION__"
+          echo "Compiler version:"
+          gcc --version
+
+      - name: Audit - Enforce strict ban on stdbool.h and stdalign.h
+        run: |
+          echo "Scanning all codebase files for banned headers <stdbool.h> and <stdalign.h>..."
+          if grep -rnE '^[[:space:]]*#[[:space:]]*include[[:space:]]*<std(bool|align)\.h>' include/ src/ tests/ main.c 2>/dev/null; then
+            echo "ERROR: Banned header detected! In C23, bool, true, false, alignas, and alignof are native keywords."
+            exit 1
+          else
+            echo "PASSED: Zero instances of <stdbool.h> or <stdalign.h> found."
+          fi
+
+      - name: Audit - Enforce strict ban on liburing, epoll, and poll
+        run: |
+          echo "Scanning for prohibited legacy I/O libraries (liburing, epoll, poll)..."
+          if grep -rnE "liburing\.h|<sys/epoll\.h>|<poll\.h>|epoll_create|epoll_ctl|epoll_wait|poll\(" include/ src/ tests/ main.c 2>/dev/null; then
+            echo "ERROR: Prohibited I/O interface detected! Khoros strictly uses direct raw kernel io_uring syscalls."
+            exit 1
+          else
+            echo "PASSED: Codebase is clean of liburing, epoll, and poll."
+          fi
+
+      - name: Audit - Enforce strict ban on libwayland and OpenGL
+        run: |
+          echo "Scanning for prohibited graphics/windowing libraries (libwayland, opengl, egl, glx)..."
+          if grep -rnE "wayland-client\.h|<GL/|<GLES/|<EGL/|glBegin|glDraw" include/ src/ tests/ main.c 2>/dev/null; then
+            echo "ERROR: Prohibited graphic library detected! Khoros exclusively uses Vulkan 1.4 Direct-to-Display."
+            exit 1
+          else
+            echo "PASSED: Codebase is clean of libwayland and OpenGL."
+          fi
+
+      - name: Audit - Ensure no binary artifacts or build files are committed
+        run: |
+          echo "Verifying no compiled objects, binaries, or build directories exist in source tree..."
+          if find . -type f \( -name "*.o" -o -name "*.so" -o -name "*.a" -o -name "engine" \) -not -path "./.git/*" | grep -q .; then
+            echo "ERROR: Binary artifact committed to git!"
+            exit 1
+          else
+            echo "PASSED: Clean source tree."
+          fi
+
+      - name: Build engine executable with strict C23 flags and -O3
+        run: |
+          echo "Compiling main engine binary with make all..."
+          make all
+
+      - name: Execute engine binary verification
+        run: |
+          echo "Running engine binary..."
+          make run
+
+      - name: Execute test suite and verify test logging
+        run: |
+          echo "Running make test..."
+          make test
+
