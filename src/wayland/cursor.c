@@ -62,11 +62,13 @@ bool khr_cursor_setup(khr_wl_client_t* client, uint32_t compositor_id,
             return false;
         }
         cur->shape_proto = true;
-        /* Fall through: also keep a shm arrow. Mutter often ignores
-         * set_shape until set_cursor has run once. */
+        /* Do not also create a wl_shm cursor. A 2304-byte pool made Mutter
+         * post invalid arguments on wl_shm_pool.create_buffer and kill the
+         * connection before DMA-BUF init. Shape protocol is enough here. */
+        return true;
     }
     if (compositor_id == 0 || pointer_id == 0) {
-        return cur->shape_proto;
+        return false;
     }
     if (!khr_shm_bind(client, &cur->shm_id)) {
         return true;

@@ -46,18 +46,25 @@ bool khr_shm_pool_init(khr_wl_client_t* client, uint32_t shm_id, size_t size,
     if (pool_id == 0) {
         return false;
     }
+    /* Page-align: some compositors reject create_buffer when the pool is a
+     * partial page (cursor 24×24×4 = 2304 died live on Mutter). */
+    constexpr size_t page = 4'096;
+    size_t pooled = (size + page - 1U) & ~(page - 1U);
+    if (pooled < page) {
+        pooled = page;
+    }
     int fd = memfd_create("khoros-shm-pool", MFD_CLOEXEC | MFD_ALLOW_SEALING);
     if (fd < 0) {
         return false;
     }
     /* Size FIRST: F_SEAL_GROW forbids growth, so sealing precedes nothing.
      * Seals stop silent SIGBUS truncation races; best-effort on odd kernels. */
-    if (ftruncate(fd, (off_t)size) != 0) {
+    if (ftruncate(fd, (off_t)pooled) != 0) {
         close(fd);
         return false;
     }
     (void)fcntl(fd, F_ADD_SEALS, F_SEAL_SHRINK | F_SEAL_GROW);
-    void* addr = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    void* addr = mmap(nullptr, pooled, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (addr == MAP_FAILED) {
         close(fd);
         return false;
@@ -66,21 +73,21 @@ bool khr_shm_pool_init(khr_wl_client_t* client, uint32_t shm_id, size_t size,
     khr_wl_buf_init(&out);
     bool enc = khr_wl_encode_header(&out, shm_id, KHR_WL_SHM_CREATE_POOL, 16) &&
                khr_wl_encode_u32(&out, pool_id) &&
-               khr_wl_encode_i32(&out, (int32_t)size);
+               khr_wl_encode_i32(&out, (int32_t)pooled);
     if (!enc) {
-        munmap(addr, size);
+        munmap(addr, pooled);
         close(fd);
         return false;
     }
     if (!khr_wl_client_send_with_fd(client, out.data, out.size, fd)) {
-        munmap(addr, size);
+        munmap(addr, pooled);
         close(fd);
         return false;
     }
     *out_pool = (khr_shm_pool_t){
         .pool_id = pool_id,
         .fd = fd,
-        .size = size,
+        .size = pooled,
         .addr = addr,
     };
     return true;

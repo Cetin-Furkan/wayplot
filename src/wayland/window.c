@@ -278,6 +278,14 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
     }
     (void)khr_seat_offer_devices(&client, &seat);
     (void)khr_cursor_setup(&client, shell.compositor_id, seat.pointer_id, &cursor);
+    khr_window_feed(topo, &client, &shell, &seat, nullptr, false, 0);
+    if (client.display_error) {
+        printf("  Present:      DISPLAY ERROR object=%u code=%u '%s'\n",
+               client.error_object, client.error_code, client.error_msg);
+        khr_cursor_destroy(&client, &cursor);
+        khr_wl_client_disconnect(&client);
+        return false;
+    }
 
     uint32_t buf_w = 0, buf_h = 0;
     khr_window_buffer_size(&shell, &buf_w, &buf_h);
