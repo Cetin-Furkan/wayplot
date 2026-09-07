@@ -1,8 +1,10 @@
 #include "khoros/wayland/client.h"
+#include "khoros/core/topology.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <errno.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 
@@ -15,6 +17,7 @@ bool khr_wl_client_connect(khr_wl_client_t* client, khr_uring_t* ring, const cha
         .sock_fd = -1,
         .is_direct = false,
         .ring = ring,
+        .next_id = KHR_WL_CALLBACK_ID + 1U,
     };
 
     struct sockaddr_un sun = { .sun_family = AF_UNIX };
@@ -182,6 +185,17 @@ void khr_wl_client_disconnect(khr_wl_client_t* client) {
 }
 
 [[nodiscard]]
+uint32_t khr_wl_client_alloc_id(khr_wl_client_t* client) {
+    if (client == nullptr) {
+        return 0;
+    }
+    if (client->next_id <= KHR_WL_CALLBACK_ID) {
+        client->next_id = KHR_WL_CALLBACK_ID + 1U;
+    }
+    return client->next_id++;
+}
+
+[[nodiscard]]
 const khr_wl_global_t* khr_wl_client_find_global(const khr_wl_client_t* client, const char* interface) {
     if (client == nullptr || interface == nullptr) {
         return nullptr;
@@ -240,6 +254,26 @@ static void khr_wl_process_message(khr_wl_client_t* client,
         }
     } else if (hdr->object_id == KHR_WL_CALLBACK_ID && hdr->opcode == KHR_WL_CALLBACK_EVENT_DONE) {
         client->sync_completed = true;
+    } else if (hdr->object_id == KHR_WL_DISPLAY_ID &&
+               hdr->opcode == KHR_WL_DISPLAY_EVENT_ERROR) {
+        size_t offset = 0;
+        uint32_t obj = 0;
+        uint32_t code = 0;
+        const char* msg = nullptr;
+        uint32_t msg_len = 0;
+        if (khr_wl_decode_u32(payload, payload_len, &offset, &obj) &&
+            khr_wl_decode_u32(payload, payload_len, &offset, &code)) {
+            client->display_error = true;
+            client->error_object = obj;
+            client->error_code = code;
+            if (khr_wl_decode_string(payload, payload_len, &offset, &msg, &msg_len) &&
+                msg != nullptr) {
+                size_t n = msg_len < sizeof(client->error_msg) ? msg_len
+                                                               : sizeof(client->error_msg) - 1U;
+                memcpy(client->error_msg, msg, n);
+                client->error_msg[n] = '\0';
+            }
+        }
     }
 }
 
@@ -247,7 +281,8 @@ static void khr_wl_process_message(khr_wl_client_t* client,
  * Used by the bootstrap roundtrip (stack buffer) and by the non-blocking
  * PBUF consumer (provided buffers). Returns messages dispatched. */
 static uint32_t khr_wl_client_consume_bytes(khr_wl_client_t* client,
-                                            const uint8_t* data, size_t len) {
+                                            const uint8_t* data, size_t len,
+                                            size_t* consumed) {
     uint32_t count = 0;
     size_t offset = 0;
     while (offset + 8 <= len) {
@@ -261,6 +296,9 @@ static uint32_t khr_wl_client_consume_bytes(khr_wl_client_t* client,
         khr_wl_process_message(client, &hdr, data + offset + 8, hdr.size - 8);
         offset += hdr.size;
         count++;
+    }
+    if (consumed != nullptr) {
+        *consumed = offset;
     }
     return count;
 }
@@ -339,7 +377,9 @@ bool khr_wl_client_roundtrip(khr_wl_client_t* client) {
             return false; /* Connection closed or error */
         }
 
-        khr_wl_client_consume_bytes(client, client->in_buf, (size_t)bytes_read);
+        size_t used = 0;
+        khr_wl_client_consume_bytes(client, client->in_buf, (size_t)bytes_read, &used);
+        (void)used;
     }
 
     return true;
@@ -352,6 +392,38 @@ void khr_wl_client_attach_pbufs(khr_wl_client_t* client, khr_pbuf_t* tier0, khr_
     client->pbuf_tier0 = tier0;
     client->pbuf_tier1 = tier1;
     client->recv_hdr = (struct msghdr){};
+}
+
+void khr_wl_client_attach_topology(khr_wl_client_t* client, khr_topology_t* topo) {
+    if (client == nullptr) {
+        return;
+    }
+    client->topo = topo;
+}
+
+/* Tag-matched send confirmation. With an attached topology the caller's
+ * buffer stays valid until OUR send completes: await KHR_TAG_WL_SEND and
+ * require the exact byte count. A short send on our blocking socket is a
+ * hard failure (never a silent partial: Wayland request streams must stay
+ * exact). Foreign completions observed during the wait are staged into the
+ * topology queues, never swallowed. Without a topology (private bare-ring
+ * tests) fall back to consuming the next CQE, sound only when nothing else
+ * is in flight on that ring. */
+static bool khr_wl_send_await(khr_wl_client_t* client, size_t len) {
+    if (client->topo != nullptr) {
+        int32_t send_res = -1;
+        if (!khr_topology_await_tag(client->topo, KHR_TAG_WL_SEND, &send_res, 1'000)) {
+            return false;
+        }
+        return send_res >= 0 && (size_t)send_res == len;
+    }
+    struct io_uring_cqe* cqe = nullptr;
+    if (!khr_uring_wait_cqe_timeout(client->ring, &cqe, 1'000)) {
+        return false;
+    }
+    int res = cqe->res;
+    khr_uring_cqe_seen(client->ring, cqe);
+    return res >= 0 && (size_t)res == len;
 }
 
 [[nodiscard]]
@@ -414,8 +486,11 @@ bool khr_wl_client_send_skip(khr_wl_client_t* client, const void* data, size_t l
         .msg_iov = &client->send_iov,
         .msg_iovlen = 1,
     };
+    /* Report completion (no SKIP_SUCCESS): the byte count in the SEND CQE
+     * is the only proof the exact request stream hit the socket. One CQE
+     * per send, no linked barrier, zero completion debt by construction. */
     struct io_uring_sqe* sqe = khr_uring_prep_sendmsg(client->ring, client->sock_fd,
-                                                      &client->send_hdr, true,
+                                                      &client->send_hdr, false,
                                                       KHR_TAG_WL_SEND);
     if (sqe == nullptr) {
         return false;
@@ -423,25 +498,83 @@ bool khr_wl_client_send_skip(khr_wl_client_t* client, const void* data, size_t l
     if (client->is_direct) {
         sqe->flags |= IOSQE_FIXED_FILE;
     }
-    sqe->flags |= IOSQE_IO_LINK;
-    if (khr_uring_prep_nop(client->ring, KHR_TAG_NOP) == nullptr) {
-        return false;
-    }
-    struct io_uring_cqe* cqe = nullptr;
-    if (!khr_uring_wait_cqe_timeout(client->ring, &cqe, 1'000)) {
-        return false;
-    }
-    int res = cqe->res;
-    khr_uring_cqe_seen(client->ring, cqe);
-    return res >= 0;
+    return khr_wl_send_await(client, len);
 }
 
-uint32_t khr_wl_client_process_cqe(khr_wl_client_t* client, uint64_t user_data,
-                                   int32_t res, uint32_t flags) {
-    if (client == nullptr || res <= 0) {
-        /* res <= 0: error, closed socket, or multishot terminal (-ENOBUFS).
-         * The engine re-arms; nothing to parse. */
+[[nodiscard]]
+bool khr_wl_client_send_with_fd(khr_wl_client_t* client, const void* data,
+                                size_t len, int fd) {
+    if (client == nullptr || client->sock_fd < 0 || client->ring == nullptr ||
+        data == nullptr || len == 0 || fd < 0) {
+        return false;
+    }
+    client->send_iov = (struct iovec){
+        .iov_base = (void*)data,
+        .iov_len = len,
+    };
+    /* Ancillary payload: exactly one FD. CMSG_SPACE covers alignment. */
+    static_assert(CMSG_SPACE(sizeof(int)) <= sizeof(client->send_cmsg),
+                  "send cmsg scratch too small for one fd");
+    client->send_hdr = (struct msghdr){
+        .msg_iov = &client->send_iov,
+        .msg_iovlen = 1,
+        .msg_control = client->send_cmsg,
+        .msg_controllen = CMSG_SPACE(sizeof(int)),
+    };
+    struct cmsghdr* cmsg = CMSG_FIRSTHDR(&client->send_hdr);
+    cmsg->cmsg_level = SOL_SOCKET;
+    cmsg->cmsg_type = SCM_RIGHTS;
+    cmsg->cmsg_len = CMSG_LEN(sizeof(int));
+    memcpy(CMSG_DATA(cmsg), &fd, sizeof(fd));
+
+    /* Same contract as send_skip: exactly one completion carrying the byte
+     * count, awaited by tag before the caller reuses its buffer. */
+    struct io_uring_sqe* sqe = khr_uring_prep_sendmsg(client->ring, client->sock_fd,
+                                                      &client->send_hdr, false,
+                                                      KHR_TAG_WL_SEND);
+    if (sqe == nullptr) {
+        return false;
+    }
+    if (client->is_direct) {
+        sqe->flags |= IOSQE_FIXED_FILE;
+    }
+    return khr_wl_send_await(client, len);
+}
+
+uint32_t khr_wl_client_feed_cqe(khr_wl_client_t* client, uint64_t user_data,
+                                int32_t res, uint32_t flags,
+                                const uint8_t** out_data, size_t* out_len,
+                                bool* need_rearm) {
+    if (out_data != nullptr) {
+        *out_data = nullptr;
+    }
+    if (out_len != nullptr) {
+        *out_len = 0;
+    }
+    if (need_rearm != nullptr) {
+        *need_rearm = false;
+    }
+    if (client == nullptr) {
         return 0;
+    }
+    if (res == -ENOBUFS &&
+        (user_data == KHR_TAG_WL_RECV || user_data == KHR_TAG_WL_RECV_T1)) {
+        client->inbound_armed = false;
+        if (need_rearm != nullptr) {
+            *need_rearm = true;
+        }
+        return 0;
+    }
+    if (res <= 0) {
+        return 0;
+    }
+    if (client->in_off > 0 && client->in_off <= client->in_len) {
+        size_t left = client->in_len - client->in_off;
+        if (left > 0) {
+            memmove(client->in_buf, client->in_buf + client->in_off, left);
+        }
+        client->in_len = left;
+        client->in_off = 0;
     }
     khr_pbuf_t* tier = nullptr;
     if (user_data == KHR_TAG_WL_RECV) {
@@ -461,8 +594,33 @@ uint32_t khr_wl_client_process_cqe(khr_wl_client_t* client, uint64_t user_data,
     }
     khr_recvmsg_view_t view = {};
     if (!khr_recvmsg_parse(raw, tier->buf_size, 0, 0, &view) ||
-        view.payload == nullptr || view.payload_len < 8) {
+        view.payload == nullptr || view.payload_len == 0) {
         return 0;
     }
-    return khr_wl_client_consume_bytes(client, view.payload, view.payload_len);
+    if (client->in_len + view.payload_len > sizeof(client->in_buf)) {
+        client->in_len = 0;
+    }
+    if (client->in_len + view.payload_len > sizeof(client->in_buf)) {
+        return 0;
+    }
+    memcpy(client->in_buf + client->in_len, view.payload, view.payload_len);
+    client->in_len += view.payload_len;
+    size_t used = 0;
+    uint32_t count = khr_wl_client_consume_bytes(client, client->in_buf,
+                                                 client->in_len, &used);
+    if (out_data != nullptr) {
+        *out_data = client->in_buf;
+    }
+    if (out_len != nullptr) {
+        *out_len = used;
+    }
+    client->in_off = used;
+    return count;
+}
+
+uint32_t khr_wl_client_process_cqe(khr_wl_client_t* client, uint64_t user_data,
+                                   int32_t res, uint32_t flags) {
+    bool rearm = false;
+    return khr_wl_client_feed_cqe(client, user_data, res, flags,
+                                  nullptr, nullptr, &rearm);
 }

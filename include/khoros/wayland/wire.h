@@ -28,6 +28,8 @@ constexpr uint16_t KHR_WL_DISPLAY_GET_REGISTRY  = 1;
 constexpr uint16_t KHR_WL_REGISTRY_BIND         = 0;
 
 /* Server Event Opcodes */
+constexpr uint16_t KHR_WL_DISPLAY_EVENT_ERROR          = 0;
+constexpr uint16_t KHR_WL_DISPLAY_EVENT_DELETE_ID      = 1;
 constexpr uint16_t KHR_WL_REGISTRY_EVENT_GLOBAL        = 0;
 constexpr uint16_t KHR_WL_REGISTRY_EVENT_GLOBAL_REMOVE = 1;
 constexpr uint16_t KHR_WL_CALLBACK_EVENT_DONE          = 0;
