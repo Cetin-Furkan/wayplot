@@ -315,6 +315,15 @@ void khr_gfx_device_unlock_queues(khr_gfx_device_t* d) {
     }
 }
 
+void khr_gfx_device_wait_idle(khr_gfx_device_t* d) {
+    if (d == nullptr || d->gfx_queue == VK_NULL_HANDLE) {
+        return;
+    }
+    khr_gfx_device_lock_queues(d);
+    (void)vkQueueWaitIdle(d->gfx_queue);
+    khr_gfx_device_unlock_queues(d);
+}
+
 bool khr_gfx_device_init(khr_gfx_device_t* d, dev_t compositor_dev) {
     if (!d) return false;
     memset(d, 0, sizeof(*d));

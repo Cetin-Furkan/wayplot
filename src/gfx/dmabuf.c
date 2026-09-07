@@ -190,7 +190,7 @@ void khr_dmabuf_image_destroy(khr_gfx_device_t* d, khr_dmabuf_image_t* img) {
     if (d == nullptr || img == nullptr) {
         return;
     }
-    if (img->dma_fd >= 0) {
+    if (img->dma_fd > 0) {
         close(img->dma_fd);
     }
     if (d->device != VK_NULL_HANDLE) {
@@ -287,42 +287,19 @@ void khr_dmabuf_slot_destroy(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot) {
 }
 
 [[nodiscard]]
-bool khr_dmabuf_slot_render(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
-                            khr_bda_arena_t* arena, uint64_t frame_no,
-                            VkSemaphore signal_sem, uint64_t signal_value) {
+bool khr_dmabuf_slot_render_cards(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
+                                  VkDeviceAddress cards_addr, uint32_t card_count,
+                                  VkSemaphore signal_sem, uint64_t signal_value) {
     if (d == nullptr || d->device == VK_NULL_HANDLE || slot == nullptr ||
-        slot->cmd == VK_NULL_HANDLE || !slot->pipe_live || arena == nullptr ||
-        signal_sem == VK_NULL_HANDLE || signal_value == 0) {
+        slot->cmd == VK_NULL_HANDLE || !slot->pipe_live ||
+        signal_sem == VK_NULL_HANDLE || signal_value == 0 ||
+        cards_addr == 0 || card_count == 0 || card_count > 16) {
         return false;
     }
     uint32_t w = slot->img.w;
     uint32_t h = slot->img.h;
-
-    /* One card instance per frame; color walks the channels so live frames
-     * visibly animate and successive commits are distinguishable. Packed
-     * RGBA: the card shader reads the same layout as the shm test pattern. */
-    khr_card_instance_t* inst = nullptr;
-    VkDeviceAddress inst_addr = 0;
-    if (!khr_bda_arena_alloc(arena, sizeof(khr_card_instance_t), 16,
-                             (void**)&inst, &inst_addr)) {
-        return false;
-    }
-    uint32_t phase = (uint32_t)(frame_no % 3U);
-    uint32_t r = (phase == 0U) ? 255U : 20U;
-    uint32_t g = (phase == 1U) ? 255U : 20U;
-    uint32_t b = (phase == 2U) ? 255U : 20U;
-    /* Shader unpack_rgba: R = low byte, A = high byte (same as frame test
-     * 0xFF0000FF). Do not put R in the high byte. */
-    uint32_t rgba = r | (g << 8) | (b << 16) | (255U << 24);
-    *inst = (khr_card_instance_t){
-        .rect = { 0.0f, 0.0f, (float)w, (float)h },
-        .bg_rgba = rgba,
-        .border_rgba = rgba,
-        .corner_radius = 0.0f,
-        .border_width = 0.0f,
-    };
     khr_card_push_t push = {
-        .cards_addr = inst_addr,
+        .cards_addr = cards_addr,
         .screen_extent = { (float)w, (float)h },
         .scale = 1.0f,
         .card_index = 0,
@@ -420,7 +397,7 @@ bool khr_dmabuf_slot_render(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
                            VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                            0, sizeof(khr_card_push_t), &push);
     }
-    vkCmdDraw(slot->cmd, 6, 1, 0, 0);
+    vkCmdDraw(slot->cmd, 6, card_count, 0, 0);
     vkCmdEndRendering(slot->cmd);
 
     /* Export layout: the compositor reads dma-buf memory directly (LINEAR),
@@ -482,4 +459,35 @@ bool khr_dmabuf_slot_render(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
     slot->layout = VK_IMAGE_LAYOUT_GENERAL;
     slot->painted++;
     return true;
+}
+
+[[nodiscard]]
+bool khr_dmabuf_slot_render(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
+                            khr_bda_arena_t* arena, uint64_t frame_no,
+                            VkSemaphore signal_sem, uint64_t signal_value) {
+    if (arena == nullptr) {
+        return false;
+    }
+    uint32_t w = (slot != nullptr) ? slot->img.w : 0;
+    uint32_t h = (slot != nullptr) ? slot->img.h : 0;
+    khr_card_instance_t* inst = nullptr;
+    VkDeviceAddress inst_addr = 0;
+    if (!khr_bda_arena_alloc(arena, sizeof(khr_card_instance_t), 16,
+                             (void**)&inst, &inst_addr)) {
+        return false;
+    }
+    uint32_t phase = (uint32_t)(frame_no % 3U);
+    uint32_t r = (phase == 0U) ? 255U : 20U;
+    uint32_t g = (phase == 1U) ? 255U : 20U;
+    uint32_t b = (phase == 2U) ? 255U : 20U;
+    uint32_t rgba = r | (g << 8) | (b << 16) | (255U << 24);
+    *inst = (khr_card_instance_t){
+        .rect = { 0.0f, 0.0f, (float)w, (float)h },
+        .bg_rgba = rgba,
+        .border_rgba = rgba,
+        .corner_radius = 0.0f,
+        .border_width = 0.0f,
+    };
+    return khr_dmabuf_slot_render_cards(d, slot, inst_addr, 1, signal_sem,
+                                        signal_value);
 }

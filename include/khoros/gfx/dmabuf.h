@@ -84,6 +84,12 @@ bool khr_dmabuf_slot_render(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
                             khr_bda_arena_t* arena, uint64_t frame_no,
                             VkSemaphore signal_sem, uint64_t signal_value);
 
+/* Draw card_count instances already in the BDA arena. Does not bump-alloc. */
+[[nodiscard]]
+bool khr_dmabuf_slot_render_cards(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
+                                  VkDeviceAddress cards_addr, uint32_t card_count,
+                                  VkSemaphore signal_sem, uint64_t signal_value);
+
 void khr_dmabuf_slot_destroy(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot);
 
 #endif /* KHOROS_GFX_DMABUF_H */

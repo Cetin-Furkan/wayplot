@@ -138,6 +138,9 @@ void khr_gfx_device_lock_queues(khr_gfx_device_t* d);
 
 void khr_gfx_device_unlock_queues(khr_gfx_device_t* d);
 
+/* Resize/teardown only: drain in-flight submits before destroying images. */
+void khr_gfx_device_wait_idle(khr_gfx_device_t* d);
+
 [[nodiscard]]
 bool khr_gfx_device_init(khr_gfx_device_t* d, dev_t compositor_dev);
 
