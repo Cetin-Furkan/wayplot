@@ -551,4 +551,22 @@ Window freeze is 11 commits on `engine` (not pushed). Then the plot step: 256-fl
 
 Gates: `make lint` PASS, `make test` 98/98 (2570 assertions). Live ~50 s SIGTERM: `Plot: 256 samples BDA=0x740000040`, `frames=1`, `alive=yes`, CPU 0.0%.
 
+---
+
+## [2026-09-07T22:39:37+03:00] - Gemini list: only the needed 1.0 cuts
+
+User asked to apply Gemini's worries that actually matter, plus cursor/double-click/right-click cart, and an honest UI next-step (not "as many 2D types as possible").
+
+Did:
+- Double-click ±6 px (`KHR_WINDOW_DBLCLICK_PX`).
+- Cursor: `POINTER` for client, shm arrow **and** cursor-shape, `set_cursor` uses enter serial.
+- Right-click in the client rect opens one extra card (the cart). Left-click outside / Esc dismisses. Not a menu yet.
+- `in_buf` 64 KiB; overflow sets `display_error`, never `in_len = 0`.
+- `ack_configure` deferred until the matching attach (`khr_xdg_ack_pending`). Resize storm acks the last serial only.
+- No 1 ms poll. After a dirty commit, wait the acquire timeline once, then 500 ms. While `RESIZING`, wait 16 ms. `wait_idle` only before `drop_retired`.
+
+Did **not**: `wl_surface.frame`, 3 slots, BDA ring allocator, atomics on `arena->head`, keep inbound FDs, dirty-on-every-motion, cmdq peek, ingest.
+
+Gates: `make lint` PASS, `make test` 98/98 (2574 assertions).
+
 
