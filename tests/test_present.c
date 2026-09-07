@@ -122,6 +122,7 @@ static void khr_test_present_pump(khr_topology_t* topo, khr_present_t* present,
                 khr_recvmsg_parse(raw, topo->pbuf_tier0.buf_size, 0, 0, &view) &&
                 view.payload != nullptr) {
                 (void)khr_xdg_consume(client, shell, view.payload, view.payload_len);
+                (void)khr_xdg_ack_pending(client, shell);
                 (void)khr_present_consume(present, view.payload, view.payload_len);
             }
         }

@@ -57,6 +57,14 @@ bool test_window_buffer_size_from_xdg(void) {
     TEST_ASSERT(KHR_WINDOW_CHROME_TOP == 32, "drag bar is 32px");
     TEST_ASSERT(KHR_WINDOW_CHROME_CORNER >= KHR_WINDOW_CHROME_EDGE,
                 "corners are extra beyond the edge strip");
+    TEST_ASSERT(khr_window_dblclick_near(100, 100, 100, 100),
+                "same pixel is a double-click");
+    TEST_ASSERT(khr_window_dblclick_near(100, 100, 104, 97),
+                "6px jitter still counts");
+    TEST_ASSERT(!khr_window_dblclick_near(100, 100, 120, 100),
+                "far click is not a double-click");
+    TEST_ASSERT(KHR_WINDOW_POPUP_W >= 64 && KHR_WINDOW_POPUP_H >= 64,
+                "right-click cart is a real panel");
     return true;
 }
 

@@ -50,6 +50,7 @@ static uint32_t khr_test_xdg_drain(khr_topology_t* topo, khr_wl_client_t* client
         khr_recvmsg_view_t view = {};
         if (khr_test_xdg_view(topo, &evt, &data, &len, &view) && data != nullptr) {
             handled += khr_xdg_consume(client, shell, data, len);
+            (void)khr_xdg_ack_pending(client, shell);
         }
         khr_topology_recycle_cqe_buffer(topo, &evt);
     }
