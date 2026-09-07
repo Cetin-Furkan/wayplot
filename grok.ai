@@ -569,4 +569,27 @@ Did **not**: `wl_surface.frame`, 3 slots, BDA ring allocator, atomics on `arena-
 
 Gates: `make lint` PASS, `make test` 98/98 (2574 assertions).
 
+---
+
+## [2026-09-07T23:38:19+03:00] - Title-bar close, hit list, double-click is set_maximized
+
+User: add a title-bar close; double-click must be the same as drag-to-top (compositor maximize, not a size we compute); a real hit list; explain ingest in detail. Do not start ingest. Do not push.
+
+### Close
+
+Third card: 24×24 rounded square inset 4 px inside a 32×32 top-right hit. Left-click `KHR_HIT_CLOSE` sets `khr_window_stop` (same exit as SIGINT). Finger cursor on close. Corners/edges still win the outer 8–16 px so NE resize remains. Hidden in exclusive fullscreen (F11).
+
+### Double-click
+
+Unchanged protocol: `xdg_toplevel.set_maximized` / `unset_maximized` toggle. Mutter fills the work area — the same configure as dragging the title bar to the top. We do not compute a pixel size and we do not call `set_fullscreen` (that stays F11).
+
+### Hit list
+
+Replaced the chrome if-ladder. `khr_hit_list_t` is a first-match table of rect+kind (`KHR_HIT_LIST_MAX` 16). Fill order: corners, edges, CLOSE, MOVE. Miss is CLIENT. Popup stays a different surface (`KHR_HIT_POPUP` from pointer focus). `khr_window_hit` is a wrapper for tests; the window loop fills and picks.
+
+### Ingest (explained, still parked)
+
+Ring B already has the 3-SQE chain (OPENAT2 → READ_FIXED into the 2 MiB hugepage → CLOSE). Tests use it. The live window does not: plot samples are 256 demo floats in the same hugepage as the cards. Ingest writes at hugepage offset 0 and would overwrite UI/plot unless the 2 MiB is partitioned first.
+
+Gates: `make lint` PASS, `make test` 99/99 (2612 assertions). Engine binary rebuilt. Not pushed.
 
