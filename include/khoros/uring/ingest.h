@@ -15,6 +15,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <linux/openat2.h>
 #include "khoros/core/attributes.h"
 #include "khoros/uring/ring.h"
 
@@ -38,6 +39,9 @@ typedef struct {
     int      read_res;
     int      close_res;
     uint32_t seen_mask;
+    /* Kernel keeps a pointer to this until the OPENAT2 SQE is issued.
+     * Must outlive submit: the worker stores it on its long-lived op. */
+    struct open_how how;
 } khr_ingest_op_t;
 
 constexpr uint32_t KHR_INGEST_SEEN_OPEN  = 1U << 0;
@@ -52,11 +56,14 @@ int khr_ingest_read_fixed(khr_uring_t* ring, const char* path,
                           size_t* out_bytes, bool try_odirect);
 
 /* Submit the 3-SQE linked chain, return immediately. 0 submitted,
- * negative -errno when nothing was queued (caller may retry later). */
+ * negative -errno when nothing was queued (caller may retry later).
+ * `op` owns `how` for the life of the chain — never a stack local of this
+ * function. All three SQEs must be claimed before any is published; a
+ * partial chain is converted to SKIP_SUCCESS NOPs and not issued. */
 [[nodiscard]]
 int khr_ingest_chain_submit(khr_uring_t* ring, const char* path,
                             void* dst, uint16_t buf_index, size_t cap,
-                            bool try_odirect);
+                            khr_ingest_op_t* op);
 
 void khr_ingest_op_begin(khr_ingest_op_t* op, bool odirect);
 

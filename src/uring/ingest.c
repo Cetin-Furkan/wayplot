@@ -2,6 +2,7 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <stdio.h>
+#include <string.h>
 #include <linux/openat2.h>
 
 #ifdef _STDBOOL_H
@@ -12,11 +13,22 @@
 #error "<stdalign.h> is strictly banned. In C23, alignas and alignof are native language keywords."
 #endif
 
+static void khr_ingest_sqe_become_nop(struct io_uring_sqe* sqe) {
+    if (sqe == nullptr) {
+        return;
+    }
+    memset(sqe, 0, sizeof(*sqe));
+    sqe->opcode = IORING_OP_NOP;
+    sqe->user_data = KHR_TAG_NOP;
+    sqe->flags = IOSQE_CQE_SKIP_SUCCESS;
+}
+
 [[nodiscard]]
 int khr_ingest_chain_submit(khr_uring_t* ring, const char* path,
                             void* dst, uint16_t buf_index, size_t cap,
-                            bool try_odirect) {
-    if (ring == nullptr || path == nullptr || dst == nullptr || cap == 0) {
+                            khr_ingest_op_t* op) {
+    if (ring == nullptr || path == nullptr || dst == nullptr || cap == 0 ||
+        op == nullptr || !op->active) {
         return -EINVAL;
     }
     /* Ensure ring has sparse file table registered for direct descriptor slot */
@@ -27,8 +39,8 @@ int khr_ingest_chain_submit(khr_uring_t* ring, const char* path,
     }
 
     constexpr uint32_t direct_slot = KHR_DIRECT_SLOT_INGEST;
-    struct open_how how = {
-        .flags = (uint64_t)(O_RDONLY | (try_odirect ? O_DIRECT : 0)),
+    op->how = (struct open_how){
+        .flags = (uint64_t)(O_RDONLY | (op->odirect ? O_DIRECT : 0)),
         .mode = 0,
         .resolve = 0,
     };
@@ -38,10 +50,12 @@ int khr_ingest_chain_submit(khr_uring_t* ring, const char* path,
      * SQE 0: OPENAT2 directly into fixed file slot direct_slot (IOSQE_IO_LINK)
      * SQE 1: READ_FIXED from direct_slot into registered hugepage buffer (IOSQE_IO_HARDLINK)
      * SQE 2: CLOSE direct_slot releasing the fixed file inside kernel.
-     * HARDLINK guarantees CLOSE runs (and frees slot 0) even when READ_FIXED
-     * fails on O_DIRECT alignment, so no userspace cleanup roundtrip is needed.
+     * HARDLINK guarantees CLOSE runs (and frees slot 0) even if READ_FIXED
+     * fails on O_DIRECT alignment. All three SQEs are claimed before any
+     * is published: a missing SQE becomes a SKIP_SUCCESS NOP and we return
+     * -EAGAIN without issuing OPENAT2 into a slot we cannot CLOSE.
      */
-    struct io_uring_sqe* sqe0 = khr_uring_prep_openat2(ring, AT_FDCWD, path, &how,
+    struct io_uring_sqe* sqe0 = khr_uring_prep_openat2(ring, AT_FDCWD, path, &op->how,
                                                        direct_slot, true,
                                                        KHR_TAG_INGEST_OPEN);
     if (sqe0 == nullptr) {
@@ -54,8 +68,7 @@ int khr_ingest_chain_submit(khr_uring_t* ring, const char* path,
                                                           buf_index, true,
                                                           KHR_TAG_INGEST_READ);
     if (sqe1 == nullptr) {
-        sqe0->flags &= (uint8_t)~IOSQE_IO_LINK;
-        (void)khr_uring_submit(ring, 0);
+        khr_ingest_sqe_become_nop(sqe0);
         return -EAGAIN;
     }
     sqe1->flags |= IOSQE_IO_HARDLINK;
@@ -63,8 +76,8 @@ int khr_ingest_chain_submit(khr_uring_t* ring, const char* path,
     struct io_uring_sqe* sqe2 = khr_uring_prep_close(ring, (int)direct_slot,
                                                      true, KHR_TAG_INGEST_CLOSE);
     if (sqe2 == nullptr) {
-        sqe1->flags &= (uint8_t)~IOSQE_IO_HARDLINK;
-        (void)khr_uring_submit(ring, 0);
+        khr_ingest_sqe_become_nop(sqe0);
+        khr_ingest_sqe_become_nop(sqe1);
         return -EAGAIN;
     }
 
@@ -137,13 +150,12 @@ int khr_ingest_op_finalize(const khr_ingest_op_t* op, size_t* out_bytes) {
 static int khr_ingest_submit_chain(khr_uring_t* ring, const char* path,
                                    void* dst, uint16_t buf_index, size_t cap,
                                    bool try_odirect, size_t* out_bytes) {
-    int sub = khr_ingest_chain_submit(ring, path, dst, buf_index, cap, try_odirect);
+    khr_ingest_op_t op = {};
+    khr_ingest_op_begin(&op, try_odirect);
+    int sub = khr_ingest_chain_submit(ring, path, dst, buf_index, cap, &op);
     if (sub != 0) {
         return (sub == -EINVAL) ? -EINVAL : -1;
     }
-
-    khr_ingest_op_t op = {};
-    khr_ingest_op_begin(&op, try_odirect);
 
     for (;;) {
         struct io_uring_cqe* cqe = nullptr;
