@@ -1,184 +1,15 @@
 #include "engine.h"
 #include "khoros/core/topology.h"
-#include "khoros/uring/pbuf.h"
-#include "khoros/wayland/client.h"
-#include "khoros/wayland/xdg.h"
-#include "khoros/wayland/dmabuf_present.h"
-#include "khoros/wayland/wire.h"
+#include "khoros/wayland/window.h"
 #include "khoros/gfx/device.h"
 #include "khoros/gfx/bda_arena.h"
 
 #include <stdio.h>
-#include <string.h>
-#include <time.h>
-
-constexpr uint32_t KHR_ENGINE_PRESENT_W      = 320;
-constexpr uint32_t KHR_ENGINE_PRESENT_H      = 240;
-constexpr uint32_t KHR_ENGINE_PRESENT_FRAMES = 24;
-constexpr uint32_t KHR_ENGINE_PRESENT_MS     = 8'000;
 
 [[nodiscard]]
 const char* engine_get_banner(void) {
     static const char banner[] = "=== Khoros Engine (Linux 7.2 / C23 / io_uring / Vulkan 1.4) ===";
     return banner;
-}
-
-[[nodiscard]]
-static uint64_t khr_engine_now_ms(void) {
-    struct timespec ts = {};
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (uint64_t)ts.tv_sec * 1000ULL + (uint64_t)ts.tv_nsec / 1'000'000ULL;
-}
-
-static void khr_engine_feed(khr_topology_t* topo, khr_wl_client_t* client,
-                            khr_xdg_shell_t* shell, khr_dmabuf_present_t* dp,
-                            bool have_dp, uint32_t wait_ms) {
-    (void)khr_topology_pump(topo, wait_ms);
-    bool rearm = false;
-    for (;;) {
-        khr_cqe_event_t evt = {};
-        if (!khr_topology_pop_cqe(topo, &evt)) {
-            break;
-        }
-        const uint8_t* data = nullptr;
-        size_t len = 0;
-        bool need_rearm = false;
-        uint32_t n = khr_wl_client_feed_cqe(client, evt.user_data, evt.res,
-                                            evt.flags, &data, &len, &need_rearm);
-        (void)n;
-        if (need_rearm) {
-            rearm = true;
-        }
-        if (data != nullptr && len >= 8) {
-            (void)khr_xdg_consume(client, shell, data, len);
-            if (have_dp) {
-                (void)khr_dmabuf_present_consume(dp, data, len);
-            }
-        }
-        khr_topology_recycle_cqe_buffer(topo, &evt);
-    }
-    if (rearm || !client->inbound_armed) {
-        (void)khr_wl_client_arm_inbound(client);
-    }
-}
-
-[[nodiscard]]
-static bool khr_engine_present(khr_topology_t* topo, khr_gfx_device_t* dev,
-                               khr_bda_arena_t* arena) {
-    khr_wl_client_t client = {};
-    if (!khr_wl_client_connect(&client, &topo->ring_a, nullptr)) {
-        printf("  Present:      skipped (no compositor socket)\n");
-        return true;
-    }
-    khr_wl_client_attach_pbufs(&client, &topo->pbuf_tier0, &topo->pbuf_tier1);
-    khr_wl_client_attach_topology(&client, topo);
-    if (!khr_wl_client_roundtrip(&client)) {
-        printf("  Present:      FAILED registry roundtrip\n");
-        khr_wl_client_disconnect(&client);
-        return false;
-    }
-    bool have_globals =
-        khr_wl_client_find_global(&client, "wl_compositor") != nullptr &&
-        khr_wl_client_find_global(&client, "xdg_wm_base") != nullptr &&
-        khr_wl_client_find_global(&client, "zwp_linux_dmabuf_v1") != nullptr &&
-        khr_wl_client_find_global(&client, "wp_linux_drm_syncobj_manager_v1") != nullptr;
-    printf("  Registry:     %u globals (compositor=%s xdg=%s dmabuf=%s syncobj=%s)\n",
-           client.globals_count,
-           client.compositor_name ? "yes" : "no",
-           client.xdg_wm_base_name ? "yes" : "no",
-           client.dmabuf_name ? "yes" : "no",
-           client.syncobj_manager_name ? "yes" : "no");
-    if (!have_globals) {
-        printf("  Present:      skipped (missing required globals)\n");
-        khr_wl_client_disconnect(&client);
-        return true;
-    }
-
-    khr_xdg_shell_t shell = {};
-    khr_xdg_init(&shell);
-    if (!khr_xdg_bind(&client, &shell) ||
-        !khr_xdg_create_toplevel(&client, &shell, "Khoros", "khoros-engine") ||
-        !khr_wl_client_arm_inbound(&client)) {
-        printf("  Present:      FAILED xdg setup\n");
-        khr_wl_client_disconnect(&client);
-        return false;
-    }
-
-    uint64_t deadline = khr_engine_now_ms() + 5'000;
-    while (!shell.configured && !shell.closed && !client.display_error &&
-           khr_engine_now_ms() < deadline) {
-        khr_engine_feed(topo, &client, &shell, nullptr, false, 200);
-    }
-    if (client.display_error) {
-        printf("  Present:      DISPLAY ERROR object=%u code=%u '%s'\n",
-               client.error_object, client.error_code, client.error_msg);
-        khr_wl_client_disconnect(&client);
-        return false;
-    }
-    if (!khr_xdg_can_attach(&shell)) {
-        printf("  Present:      FAILED attach gate (configured=%d closed=%d)\n",
-               shell.configured, shell.closed);
-        khr_wl_client_disconnect(&client);
-        return false;
-    }
-    printf("  XDG:          configured %dx%d serial=%u\n",
-           shell.width, shell.height, shell.last_ack_serial);
-
-    khr_dmabuf_present_t dp = {};
-    if (!khr_dmabuf_present_init(dev, &client, shell.surface_id,
-                                 KHR_ENGINE_PRESENT_W, KHR_ENGINE_PRESENT_H,
-                                 &dp)) {
-        printf("  Present:      FAILED dmabuf present init\n");
-        khr_wl_client_disconnect(&client);
-        return false;
-    }
-
-    deadline = khr_engine_now_ms() + KHR_ENGINE_PRESENT_MS;
-    while (khr_engine_now_ms() < deadline && !shell.closed &&
-           !client.display_error && dp.frames < KHR_ENGINE_PRESENT_FRAMES) {
-        khr_engine_feed(topo, &client, &shell, &dp, true, 8);
-        (void)khr_dmabuf_present_sync(dev, &dp);
-        if (khr_dmabuf_present_next_free(&dp) != UINT32_MAX) {
-            khr_bda_arena_reset(arena);
-            (void)khr_dmabuf_present_commit_frame(dev, &dp, arena, dp.frames + 1);
-        }
-    }
-    khr_engine_feed(topo, &client, &shell, &dp, true, 50);
-
-    bool alive = false;
-    if (!shell.closed && !client.display_error) {
-        uint32_t cb = khr_wl_client_alloc_id(&client);
-        khr_wl_msg_buf_t sync = {};
-        khr_wl_buf_init(&sync);
-        if (khr_wl_encode_header(&sync, KHR_WL_DISPLAY_ID, KHR_WL_DISPLAY_SYNC, 12) &&
-            khr_wl_encode_u32(&sync, cb) &&
-            khr_wl_client_send_skip(&client, sync.data, sync.size)) {
-            uint64_t dl = khr_engine_now_ms() + 1'000;
-            while (khr_engine_now_ms() < dl && !shell.closed &&
-                   !client.display_error) {
-                khr_engine_feed(topo, &client, &shell, &dp, true, 50);
-            }
-            alive = !shell.closed && !client.display_error;
-        }
-    }
-
-    printf("  Present:      frames=%llu releases=%u created=%u failed=%u "
-           "pushed=%llu alive=%s%s%s\n",
-           (unsigned long long)dp.frames, dp.releases, dp.created_count,
-           dp.failed_count, (unsigned long long)dp.last_signaled,
-           alive ? "yes" : "no",
-           client.display_error ? " DISPLAY_ERROR" : "",
-           shell.closed ? " closed" : "");
-    if (client.display_error) {
-        printf("  Error:        object=%u code=%u '%s'\n",
-               client.error_object, client.error_code, client.error_msg);
-    }
-
-    bool ok = dp.frames >= 1 && dp.failed_count == 0 && !client.display_error &&
-              alive;
-    khr_dmabuf_present_destroy(dev, &dp);
-    khr_wl_client_disconnect(&client);
-    return ok;
 }
 
 [[nodiscard]]
@@ -253,7 +84,7 @@ bool engine_init(void) {
 
     bool present_ok = true;
     if (ipc_ok && have_gpu && arena.gpu_address != 0) {
-        present_ok = khr_engine_present(&topo, &dev, &arena);
+        present_ok = khr_window_run(&topo, &dev, &arena);
     } else if (ipc_ok) {
         printf("  Present:      skipped (need GPU for DMA-BUF loop)\n");
     }
