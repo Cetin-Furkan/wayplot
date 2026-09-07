@@ -48,11 +48,42 @@ constexpr uint16_t KHR_XDG_SURFACE_GET_TOPLEVEL   = 1;
 constexpr uint16_t KHR_XDG_SURFACE_ACK_CONFIGURE  = 4;
 constexpr uint16_t KHR_XDG_SURFACE_EVENT_CONFIGURE = 0;
 
+/* xdg_surface extra: set_window_geometry=3 */
+constexpr uint16_t KHR_XDG_SURFACE_SET_WINDOW_GEOMETRY = 3;
+
 /* xdg_toplevel: set_title=2, set_app_id=3, events configure=0, close=1 */
-constexpr uint16_t KHR_XDG_TOPLEVEL_SET_TITLE     = 2;
-constexpr uint16_t KHR_XDG_TOPLEVEL_SET_APP_ID    = 3;
-constexpr uint16_t KHR_XDG_TOPLEVEL_EVENT_CONFIGURE = 0;
-constexpr uint16_t KHR_XDG_TOPLEVEL_EVENT_CLOSE   = 1;
+constexpr uint16_t KHR_XDG_TOPLEVEL_SET_TITLE        = 2;
+constexpr uint16_t KHR_XDG_TOPLEVEL_SET_APP_ID       = 3;
+constexpr uint16_t KHR_XDG_TOPLEVEL_MOVE             = 5;
+constexpr uint16_t KHR_XDG_TOPLEVEL_RESIZE           = 6;
+constexpr uint16_t KHR_XDG_TOPLEVEL_SET_MAX_SIZE     = 7;
+constexpr uint16_t KHR_XDG_TOPLEVEL_SET_MIN_SIZE     = 8;
+constexpr uint16_t KHR_XDG_TOPLEVEL_SET_MAXIMIZED    = 9;
+constexpr uint16_t KHR_XDG_TOPLEVEL_UNSET_MAXIMIZED  = 10;
+constexpr uint16_t KHR_XDG_TOPLEVEL_SET_FULLSCREEN   = 11;
+constexpr uint16_t KHR_XDG_TOPLEVEL_UNSET_FULLSCREEN = 12;
+constexpr uint16_t KHR_XDG_TOPLEVEL_EVENT_CONFIGURE  = 0;
+constexpr uint16_t KHR_XDG_TOPLEVEL_EVENT_CLOSE      = 1;
+
+constexpr uint32_t KHR_XDG_RESIZE_NONE          = 0;
+constexpr uint32_t KHR_XDG_RESIZE_TOP           = 1;
+constexpr uint32_t KHR_XDG_RESIZE_BOTTOM        = 2;
+constexpr uint32_t KHR_XDG_RESIZE_LEFT          = 4;
+constexpr uint32_t KHR_XDG_RESIZE_TOP_LEFT      = 5;
+constexpr uint32_t KHR_XDG_RESIZE_BOTTOM_LEFT   = 6;
+constexpr uint32_t KHR_XDG_RESIZE_RIGHT         = 8;
+constexpr uint32_t KHR_XDG_RESIZE_TOP_RIGHT     = 9;
+constexpr uint32_t KHR_XDG_RESIZE_BOTTOM_RIGHT  = 10;
+
+constexpr uint32_t KHR_XDG_STATE_MAXIMIZED  = 1;
+constexpr uint32_t KHR_XDG_STATE_FULLSCREEN = 2;
+constexpr uint32_t KHR_XDG_STATE_RESIZING   = 3;
+constexpr uint32_t KHR_XDG_STATE_ACTIVATED  = 4;
+
+/* zxdg_decoration_manager_v1 / zxdg_toplevel_decoration_v1 */
+constexpr uint16_t KHR_XDG_DECO_MGR_GET_TOPLEVEL = 1;
+constexpr uint16_t KHR_XDG_DECO_SET_MODE         = 1;
+constexpr uint32_t KHR_XDG_DECO_CLIENT_SIDE      = 1;
 
 typedef enum {
     KHR_XDG_UNBOUND = 0,
@@ -73,8 +104,14 @@ typedef struct {
     uint32_t        configure_count;
     int32_t         width;           /* latest toplevel configure (0 = unset) */
     int32_t         height;
+    uint32_t        states;          /* bitmask of KHR_XDG_STATE_* */
+    uint32_t        deco_mgr_id;
+    uint32_t        deco_id;
     bool            configured;      /* first ack_configure sent */
     bool            closed;          /* close event received */
+    bool            maximized;
+    bool            fullscreen;
+    uint32_t        size_seq;        /* bumped when width/height/states change */
     khr_xdg_state_t state;
 } khr_xdg_shell_t;
 
@@ -104,5 +141,34 @@ uint32_t khr_xdg_consume(khr_wl_client_t* client, khr_xdg_shell_t* shell,
 static inline bool khr_xdg_can_attach(const khr_xdg_shell_t* shell) {
     return shell != nullptr && shell->configured && !shell->closed;
 }
+
+/* Client-side decorations when zxdg_decoration_manager_v1 is advertised. */
+[[nodiscard]]
+bool khr_xdg_request_csd(khr_wl_client_t* client, khr_xdg_shell_t* shell);
+
+[[nodiscard]]
+bool khr_xdg_set_min_size(khr_wl_client_t* client, const khr_xdg_shell_t* shell,
+                          int32_t w, int32_t h);
+
+[[nodiscard]]
+bool khr_xdg_set_window_geometry(khr_wl_client_t* client,
+                                 const khr_xdg_shell_t* shell,
+                                 int32_t x, int32_t y, int32_t w, int32_t h);
+
+[[nodiscard]]
+bool khr_xdg_move(khr_wl_client_t* client, const khr_xdg_shell_t* shell,
+                  uint32_t seat_id, uint32_t serial);
+
+[[nodiscard]]
+bool khr_xdg_resize(khr_wl_client_t* client, const khr_xdg_shell_t* shell,
+                    uint32_t seat_id, uint32_t serial, uint32_t edges);
+
+[[nodiscard]]
+bool khr_xdg_set_maximized(khr_wl_client_t* client, const khr_xdg_shell_t* shell,
+                           bool on);
+
+[[nodiscard]]
+bool khr_xdg_set_fullscreen(khr_wl_client_t* client, const khr_xdg_shell_t* shell,
+                            bool on);
 
 #endif /* KHOROS_WAYLAND_XDG_H */
