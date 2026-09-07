@@ -93,3 +93,48 @@ User granted full project permission with constraints: no simplifications, lates
 - `make all` clean, `make lint` PASSED, sanitizer binary links.
 - `make test`: all **81** run (was aborting mid-Suite-5): 36 pass / 45 fail, every failure at a hw gate. Frame test SKIP-passes. On real hw the target is 81/81 — MUST be re-run there.
 - NOT done: XDG/DMA-BUF/syncobj glue (no compositor here; mocks would repeat the facade), cold path, AVX parsing.
+
+---
+
+## [2026-09-07T16:10:00+03:00] - Hardware gate green, XDG shell live on Mutter
+
+Sandbox removed (user relaunch): /dev/dri visible, io_uring_setup live. Ran everything locally.
+
+- `make test` 81/81 + `make sanitize` 81/81 on hardware. Burst timing 1.879ms/20 roundtrips proves doorbells fire (backstop would cost ~1000ms).
+- Found + fixed a real crash the sandbox hid: `vkCopyImageToMemoryEXT` segfaulted in the Xe driver. Root cause was mine, twice: image lacked `HOST_TRANSFER_BIT` usage, and I claimed `MEMCPY` on an optimal-tiling image without the layout-query path. Fixed (usage bit conditional on host-copy path, `flags=0` general copy); frame test now prints `[readback=host-copy]` and passes. Lesson restated: unexecuted paths are unproven paths.
+- XDG slice (approved plan unit 3): `xdg.h`/`xdg.c` (bind, toplevel, ping/pong, configure/ack, attach gate), opcodes extracted from installed `wayland.xml`/`xdg-shell.xml`, `xdg.h` made single source (mock includes it). `test_xdg_shell_lifecycle` passes on mock through production paths.
+- Live Mutter probe (/tmp, not committed): 40 globals, bind + toplevel created, configure acked (serial 393), no protocol error, clean disconnect, no buffer attached. pings=0 in 4s (Mutter didn't ask); pong path proven on mock. Exit criterion noted as probe-strictness, not engine failure.
+- Suite now **82/82** (`make test` + `make sanitize` on hardware, 1736 assertions). Docs updated (wayland.md, TEST_READY addendum).
+- Left uncommitted for user push: topology aliasing hardening, host-copy ext enablement + frame fix, full XDG unit (xdg.h/c, client alloc_id, mock dedup, test_xdg.c, runner, docs).
+
+---
+
+## [2026-09-07T17:10:00+03:00] - DMA-BUF zero-copy, 84/84; live import stalls on Xe stack
+
+- `send_with_fd` (SCM_RIGHTS over io_uring, incl. fixed-file sockets — proven identical in a /tmp check), `wayland/dmabuf` import (params/add/create_immed), `gfx/dmabuf` export image. Opcodes from linux-dmabuf-v1.xml; `dmabuf.h` owns shared names (mock deduped again).
+- Driver reality on Xe experimental (live-probed): DMA_BUF export works for LINEAR tiling only (all OPTIMAL combos ERROR_FORMAT_NOT_SUPPORTED) → optimal-first probe with linear fallback in init. Modifier query returns INVALID on linear → normalized to LINEAR with a comment (only for linear tiling).
+- Mock drain hardened: FD attaches to the 'h'-arg message across coalesced batches (shadow-ID learning incl. bind), not the batch head. This was a real mock bug my coalesced sends exposed; existing tests unaffected (single-message batches behave identically).
+- `test_dmabuf_wire_import_fd_passing` proves zero-copy by dev/ino identity; `test_dmabuf_vulkan_export_and_import` proves real export crosses verbatim.
+- Live Mutter via socket tap: our bytes exact; missing FD errors promptly (and caught a probe verdict bug: opcode-only matching mistook wl_display.error for created — fixed to check object). Valid import: 12 s silence, connection alive, fd ioctl-valid. Conclusion: compositor GPU-stack import stall on this experimental stack, documented as an open gap in wayland.md — not a wire defect.
+- Suite **84/84** test + sanitize on hardware. Uncommitted set grows (user pushes): all of the above.
+
+---
+
+## [2026-09-07T18:30:00+03:00] - Steps 1-2 done: send-await fix, first live mapped window, 90/90, awaiting approval
+
+Step 1 (io_uring socket layer proves itself): the MSG_RING self-delivery fix from earlier held; the new work proved the SEND side with `test_send_await_no_debt_no_steal` + `test_await_tag_match_and_timeout` (both with runtime negative controls). Step 2 (shm present loop + live window): seal-ordering fix (`ftruncate` before `F_SEAL_GROW`), `wayland/present` double-buffer loop, live Mutter probe 60 frames / 60 releases / alive-check exit 0.
+
+Two real bugs found and fixed this pass (details: doc/wayland.md, TEST_READY addendum):
+1. Memfd seal ordering — `F_SEAL_GROW` before `ftruncate` froze size at 0 (mock timed out the same way; would have been silent SIGBUS live).
+2. Send-await unsoundness — `SKIP_SUCCESS` + linked-NOP + blind next-CQE wait confirmed the NOP, not the send; armed inbound made it eat RECV completions. Live Mutter kill `invalid arguments for wl_shm_pool.create_buffer` was the proof. Fixed with `khr_topology_await_tag` + exact byte counts, one CQE per send, no barrier.
+3. Test-cascade hardening — all 11 topology tests wrapped so a red test always destroys (forced-fail control: 1 FAIL, no SEGV).
+
+Gates on hardware: `make test` 90/90 (1938 assertions), `make sanitize` 90/90, `make lint` pass. New files: `tests/test_send_await.c`, `src/wayland/shm.c`, `src/wayland/present.c` (+headers), `khr_topology_await_tag`, `khr_wl_client_attach_topology`. Live probe stays in /tmp (not committed). NOT started: steps 3-4 (DMA-BUF cutover, syncobj acquire/release) — waiting for user approve.
+
+---
+
+## [2026-09-07T19:30:00+03:00] - Steps 3-4 done: live dmabuf zero-copy + explicit sync, 93/93, awaiting approval
+
+Step 3 (dmabuf present): `gfx/dmabuf` render slots + `wayland/dmabuf_present` loop, GPU paints directly into exported LINEAR images, import-once per slot, release recycling. Step 4 (explicit sync): acquire timeline + per-slot release timelines imported once each, points on every commit, stall-free counter-query bridge (direct SYNC_FD bridge proven impossible on Xe: timeline export fails, IMPORT_SYNC_FILE on real sync_file gives ENOENT — probed, documented).
+Live Mutter: 16 frames / 15 releases (last still displayed), pushed point 116, no errors, exit 0. Gating proof: future-point commit stalled 2.5 s at 0 releases, released on supersede — compositor waits on our timeline. `created` silence confirmed as Mutter quirk (imports work regardless); old "import stall" verdict retracted (was the step-2 send bug).
+Gates: test 93/93 (2005 assertions), sanitize 93/93, lint pass. New: dmabuf_present.{h,c}, gfx slots, import_full, mock created/failed senders, test_dmabuf_present.c (3 tests, negative-controlled). Probes in tmp/ (gitignored). Nothing committed (user pushes). Awaiting approve; no further steps defined — next would be your call (dmabuf feedback negotiation, GPU-side release-wait import).

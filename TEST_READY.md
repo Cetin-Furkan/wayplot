@@ -13,6 +13,20 @@ The 71/71 snapshot below is the pre-rework checkpoint. Since then:
 - 4 enumeration tests fixed to FAIL cleanly instead of aborting the runner on GPU-less hosts.
 - Runner total: 76 + 5 = **81**. On Vulkan + io_uring hardware the target is 81/81; in containers without `/dev/dri` and blocked `io_uring_setup` the hw-gated tests fail at init by design.
 
+## Addendum (later same day): XDG shell, 82/82 on hardware
+
+- `xdg.h`/`xdg.c`: bind, toplevel creation, ping/pong, configure/ack, attach gate. `test_xdg_shell_lifecycle` covers the full handshake on the mock through production paths (batched sends, multishot PBUF, pump).
+- Validated live against Mutter: 40 globals discovered, surface+toplevel created, configure acked (serial 393), no protocol error, clean disconnect, no buffer attached (nothing mapped).
+- Runner total: **82**. `make test` 82/82, `make sanitize` 82/82 on hardware.
+
+## Addendum: DMA-BUF zero-copy, 84/84 on hardware
+
+- `send_with_fd` (SCM_RIGHTS over io_uring fixed-file sockets, proven identical over direct fds), `wayland/dmabuf` wire import, `gfx/dmabuf` export image with tiling fallback + modifier normalization.
+- `test_dmabuf_wire_import_fd_passing` (dev/ino identity across the socket) + `test_dmabuf_vulkan_export_and_import` (real export, verbatim modifier/pitch).
+- Mock drain fixed twice: FD now attaches to the message owning the 'h' arg across coalesced batches (bind+params+add in one recv resolves via shadow IDs).
+- Live: bytes tap-verified, real dma-buf fd valid, Mutter import verdict stalls on Xe experimental (documented in wayland.md).
+- Runner total: **84**. `make test` 84/84, `make sanitize` 84/84 on hardware.
+
 ## Status (2026-09-05): READY & 100% PASSING
 
 The independent, opaque-box E2E test suite for the Khoros Engine has been fully implemented, verified, and integrated into the project build system.
@@ -183,3 +197,20 @@ Suite 7: Cross-Feature Interactions & Real-World Scenarios (Tiers 3 & 4)
   - [x] Window resize dynamic swapchain recreation and timeline teardown.
   - [x] End-to-end cold-path ingestion through to Wayland commit.
 - [x] **Zero Memory Leaks & Zero UB**: Verified under AddressSanitizer and UndefinedBehaviorSanitizer via `make sanitize`.
+
+## Addendum (2026-09-07 evening): send-await soundness, first live mapped window, 90/90
+
+- Root-caused the first live-window kill (`invalid arguments for wl_shm_pool.create_buffer` from Mutter, captured from the `wl_display.error` wire event): the send path confirmed the linked NOP instead of the send (`SKIP_SUCCESS` suppresses success CQEs) and consumed the next CQE blindly — sound while quiet, unsound with armed inbound (eats RECV completions: false success + dropped packet + send in flight over freed stack). The mock's timing masked it.
+- Fix: one reported `SENDMSG` per send, `khr_topology_await_tag` extracts our `KHR_TAG_WL_SEND` (exact byte count required) while foreign completions stage normally; `khr_wl_client_attach_topology` wires it up; `roundtrip` documented bootstrap-only (mid-session use races the multishot PBUF).
+- Live re-probe: configure received, 60 frames committed, 60 releases recycled, sync alive-check passed, exit 0. First mapped window on Mutter.
+- Leak-safe test wrappers: all 11 topology-owning tests run bodies under a wrapper that always destroys (a red test can no longer strand the worker on freed stack — proven by forced-fail control: exactly 1 FAIL, suite completes, no cascade).
+- New `tests/test_send_await.c`: `test_send_await_no_debt_no_steal` (deterministic interleave, 15/15 inbound bytes, zero strays, exact peer stream + FD) and `test_await_tag_match_and_timeout` — both with runtime negative controls against the legacy path.
+- Runner total: **90**. `make test` 90/90, `make sanitize` 90/90, `make lint` pass, all on hardware.
+
+## Addendum (2026-09-07 night): steps 3-4 live — dmabuf zero-copy present + explicit sync, 93/93
+
+- Step 3: `wayland/dmabuf_present` loop over `gfx/dmabuf` render slots (exportable LINEAR images, per-slot pipeline/view/cmd, GENERAL export layout, frame-varying card colors). Import once per slot; `create_immed` buffers usable immediately, created/failed informational (mock emits both; Mutter stays silent on both — silence, not refusal).
+- Step 4: one DRM acquire timeline (imported once) + per-slot release timelines (imported once each); every commit names both points. Acquire bridge = counter query + TIMELINE_SIGNAL per lap, zero host waits anywhere. Direct Vulkan SYNC_FD→syncobj bridge proven impossible on Xe experimental (timeline SYNC_FD export fails; IMPORT_SYNC_FILE on a real sync_file → ENOENT) — documented with probe.
+- Live Mutter: 16 GPU frames, 15 releases (16th still displayed), pushed acquire point 116, no errors, exit 0. Gating proof: future-point commit stalled 2.5 s with 0 releases, released on supersede — compositor honors the timeline.
+- Tests: created/failed/release consume (GPU-free), mock loop (13-send init accounting, advancing points, busy refusal, retire), acquire bridge (GPU signal → DRM point via non-blocking query). Negative control (forced render fail) hits exactly the 2 GPU tests.
+- Runner total: **93**. `make test` 93/93, `make sanitize` 93/93, `make lint` pass, all on hardware. Probes live in `tmp/` (gitignored) per user instruction.

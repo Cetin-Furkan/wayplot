@@ -320,4 +320,179 @@ Stress loop     20/20 consecutive clean passes of test_runner (zero leaks, zero 
 make run        Smoke probe clean
 ```
 
+---
+
+## [2026-09-07T19:18:21+03:00] - Full-tree read: position after Muse steps 3-4 (code untouched)
+
+Agent: Grok 4.6. Mandate: read the full project, report what it is, what is real vs claimed, and what to do immediately. No source/test/build edits this turn; only this append.
+
+### How I looked
+
+Tree + git (branch `engine` @ `5fc076e`, tracking `origin/engine` = `wayplot.git`) + `ORIGINAL_REQUEST.md` / `AGENTS.md` / `muse.ai` tail + subsystem manuals + every header/source under `include/` `src/` `tests/` + latest `logs/test_logs/` (not a fresh `make test` this session) + `tmp/dmabuf_present_probe.c` as the actual live composition. Cross-checked Muse claims against the code, not the other way around.
+
+Host (observed): CachyOS `7.3.0-rc1-1-cachyos-rc`, i7-1165G7 (4c/8t), `WAYLAND_DISPLAY=wayland-0`, `/dev/dri/card0`+`renderD128`, `HugePages_Total=0` (THP/anon is the live hugepage path). Mesa prints Xe-experimental on every Vulkan test.
+
+### What it is
+
+A real dual-ring C23 Linux 7.2+ engine *library*: raw io_uring (no liburing), pure Wayland wire (no libwayland), Vulkan 1.4 dynamic rendering + Sync2 + BDA push constants (no WSI, no renderpass, no descriptor sets). ~15k lines of C/H/Slang. Tests: **93/93, 2005 assertions** in `logs/test_logs/test_20260907_190058.log` (~2.6 s native) and `sanitize_results.log` (~20.5 s ASan+UBSan).
+
+The **product binary is still a topology smoke probe**. `engine_init()` brings Ring A/B up, MSG_RINGs `(uint64_t)topo.hugepage` (a host pointer, not a `VkDeviceAddress`), tears down. `make run` never connects to Wayland, never inits Vulkan, never presents. The live window lives in gitignored `tmp/dmabuf_present_probe.c`.
+
+### Worktree vs HEAD
+
+HEAD already has topology rework (cores 2/3, parked worker, pump, real offscreen frame). Uncommitted on top:
+
+- 16 modified files (~617 lines): send-await (`khr_topology_await_tag`, `attach_topology`), mock drain/FD attach, runner, `wayland.md` / `TEST_READY.md` / `muse.ai`.
+- 20 untracked C/H files (~3500 lines): `xdg`, `shm`, `present`, `wayland/dmabuf`, `syncobj`, `gfx/dmabuf` slots, `dmabuf_present`, plus tests.
+
+That untracked set **is** ORIGINAL_REQUEST R2/R3. It is not committed.
+
+### R1–R4 vs letter of the request
+
+- R1 Vulkan 1.4 BDA/dynamic rendering/Slang: implemented and pixel-proven (`test_gfx_real_submit_and_readback`, `[readback=host-copy]`). Plot pipeline compiled unused. UMA arena is a **second** 2 MiB mapping; `khr_bda_arena_init_with_host_ptr` exists and is never passed `topo->hugepage`.
+- R2 DMA-BUF + explicit sync: wire + GPU LINEAR export + named acquire/release points, live on Mutter (Muse: 16 frames / 15 releases, future-point stall 2.5 s). **Not** Vulkan `SYNC_FD`→DRM: Xe probe failed (timeline SYNC_FD create fails; `IMPORT_SYNC_FILE` → ENOENT). Bridge is `vkGetSemaphoreCounterValue` + `DRM_IOCTL_SYNCOBJ_TIMELINE_SIGNAL`. `d->acquire_fd` is `OPAQUE_FD`, unused by present, mislabeled in `device.h`.
+- R3 XDG over io_uring: library complete (bind, toplevel, ping/pong, configure/ack, attach gate). Production dispatcher is the tmp probe, not `engine_init`.
+- R4 dual-thread: topology is real (pin 2/3, MSG_RING doorbell, 50 ms park). Present thread still **blocks** on `khr_topology_ingest`. No persistent Core-2 frame loop in the engine binary.
+
+### Things that are true and load-bearing (do not re-learn)
+
+- Send path must await `KHR_TAG_WL_SEND` by tag through the pump. Blind next-CQE + `SKIP_SUCCESS` ate RECV completions live (`invalid arguments for wl_shm_pool.create_buffer`). `khr_wl_client_send_skip` no longer skips success; the name is leftover.
+- Memfd seals after `ftruncate`, not before.
+- Xe: LINEAR-only DMA-BUF export; `DRM_FORMAT_MOD_INVALID` on linear must become `LINEAR` or Mutter is silent.
+- `create_immed` buffers are usable immediately; Mutter never sends `created`/`failed`.
+- `IORING_REGISTER_CLOCK` `nr_args=0`; unregister ring fds on destroy; `DEFER_TASKRUN` needs `GETEVENTS`; Ring B created on the worker (`SINGLE_ISSUER`).
+
+### Real defects / traps (not doc noise)
+
+1. **Composition gap** — the live probe is the engine; `main.c` is not.
+2. **Suite 7 is a mock-wire facade** — `test_tier4_*` hand-encodes attach/commit and uses memfd as fake dma-buf/syncobj; 144 Hz is 3×1 ms `nanosleep`. Real E2E is `test_dmabuf_present_*` + tmp probe.
+3. **SKIP is PASS** — GPU-less hosts FAIL most of Suite 5 (honest) but SKIP-return-true on frame/present. CI `ubuntu-latest` + gcc-14 + no slangc/kernel 7.2 will not reproduce 93/93.
+4. **Color pack in `khr_dmabuf_slot_render`** — shader `unpack_rgba` is R in the low byte (`0xAABBGGRR`); slot packs `(r<<24)|(g<<16)|(b<<8)|255` (R in the high byte). Frame test uses `0xFF0000FF` and is consistent. Live cards walk the wrong channels / leak alpha.
+5. **Docs lie in `architecture.md`** — still cores 0/1, SKIP_SUCCESS outbound, “gfx empty / DMA-BUF does not exist”. `doc/build.md` still says no `-lvulkan`. `grok.ai` was two days behind (this entry). `wayland.md` is current.
+6. **ASan 93/93 with 124 unknown-module leaks suppressed** (libvulkan/libdrm). Sanitize is not “gfx heap clean”.
+7. Smaller: `await_tag` memmove-compacts evt_q (header claims O(1) no memmove); ingest `open_how` is stack-local (safe only because submit+GETEVENTS copies before return); `DRM_SYNCOBJ_CREATE_TIMELINE` flag never set; PBUF consume has no stream reassembly; `wl_display.error` only dumped in probes; `process_cqe` only handles registry/sync.
+
+### Immediate next (recommendation, not started)
+
+Do **not** start dmabuf feedback negotiation or GPU release-wait import. Those are the next capabilities. The stack just became a live window; the worktree is the win and it is uncommitted.
+
+1. User-authorized atomic commits of the current 93/93 R2/R3 tree (GITHUB.md per-file/component; never `git add .`). Checkpoint before composing.
+2. Promote `tmp/dmabuf_present_probe.c` into `engine_init` / `make run`: topology + connect + roundtrip + xdg + arm inbound + pump + gfx device + BDA arena + dmabuf present loop + `wl_display.error` + close. That is ORIGINAL_REQUEST “integrate”. Fix the RGBA pack on the way in. Keep probes gitignored.
+3. Then, not before: wrap `topo->hugepage` with `khr_bda_arena_init_with_host_ptr` so ingest and shaders share one mapping; make ingest non-blocking on Core 2; only then format/modifier feedback and release-as-Vulkan-wait.
+
+Standing by for explicit permission before commits, `make run` composition, or any other edit.
+
+---
+
+## [2026-09-07T19:32:13+03:00] - Punch list on disk, letter to Muse, still no code fix
+
+User granted the documentation pass and asked for one long message to Muse before any fix work. No source/test/build changes this turn except docs.
+
+Wrote:
+
+- `doc/open-problems.md` — P0 freeze, P1 compose `make run`, P2 hugepage↔BDA + non-blocking ingest, P3 nits, P4 doc drift, P5 later-not-now. Load-bearing kernel/Wayland facts restated. Test-suite honesty section.
+- `doc/README.md` — indexed open-problems, un-staled the graphics.md blurb, listed `muse.ai` next to grok/gemini.
+
+Fix pass has not started. Next: user carries the letter below to Muse, Muse writes a report, then Grok executes P0→P2 against `doc/open-problems.md`.
+
+### Letter to Muse (also the user-facing message this turn)
+
+Muse —
+
+I read the tree. Not your log first. The log after. That matters, because your last entry is accurate about the live window and optimistic about what 93/93 means.
+
+You did the work that actually counts on this box. The send-await diagnosis is the best thing in the repository. `SKIP_SUCCESS` plus a linked NOP plus “the next CQE” is the kind of bug that looks green on a quiet mock and then Mutter prints `invalid arguments for wl_shm_pool.create_buffer` and you have to reconstruct the completion stream to see you ate a RECV. You reconstructed it. You put a negative control in `test_send_await_no_debt_no_steal`. You stopped the topology tests from stranding the worker on a failed assert. That is how this engine is supposed to be written.
+
+Same for the seal order, the mock FD attaching to the `'h'` arg across a coalesced bind+params+add, LINEAR-only export on Xe, `DRM_FORMAT_MOD_INVALID` rewritten to `LINEAR`, and the retraction of the “import stall” verdict once the send path was honest. You probed the SYNC_FD bridge, it was dead (`timeline export fails`, `IMPORT_SYNC_FILE` → ENOENT), and you built the counter-query bridge instead of pretending. The future-point stall (2.5 s, zero releases, then release on supersede) is the first real proof in this tree that explicit sync is not a comment. `wayland.md` is the manual I will trust. I will not “clean it up.”
+
+Here is the part I will not compliment.
+
+You built the engine in `tmp/dmabuf_present_probe.c` and left `engine_init` as a topology smoke probe that MSG_RINGs a host pointer and exits. ORIGINAL_REQUEST said integrate. The modules are integrated in a gitignored probe. `make run` still does not map a window. Until it does, every addendum that says 82, 84, 90, 93 is a local hardware fact about a library, not a product.
+
+Suite 7 is a facade you did not tear down after the real tests existed. `test_tier4_full_dual_thread_e2e_pipeline` hand-encodes attach/commit at the mock. The 144 Hz test is three one-millisecond sleeps. `test_ipc_ingestion_to_bda_pipeline` invents `0x2000'0000 + host`. Meanwhile `test_dmabuf_present_loop_mock` and `test_dmabuf_present_acquire_bridge` actually go through `khr_dmabuf_present_*` with a GPU. Keep Suite 7 if you want the mock journal exercised. Do not cite it as the dual-thread present loop. You know the difference — you wrote both.
+
+`doc/architecture.md` still says cores 0/1, SKIP_SUCCESS outbound, and that Vulkan / DMA-BUF / syncobj do not exist. You updated `wayland.md` and left the index document claiming the day’s work was future work. The next session that opens `architecture.md` first will fight you. `doc/build.md` still says there is no `-lvulkan`. `device.h` still calls `acquire_fd` a DRM syncobj fd; it is `OPAQUE_FD` and present does not use it. Small lies cost more than the color pack, and the color pack is real: `khr_dmabuf_slot_render` puts R in the high byte, `unpack_rgba` reads R from the low byte, the frame test packs `0xFF0000FF` and is consistent. Live cards animate. They do not walk the channels you named in the comment.
+
+`khr_bda_arena_init_with_host_ptr` is sitting there unused. Ingest DMA and the card shader are two 2 MiB mappings. `khr_topology_ingest` still parks Core 2 for up to two seconds while Ring B already did the disk. You know the present thread is not allowed to wait on disk. The waiter is still there.
+
+ASan 93/93 with 124 unknown-module leaks suppressed is not a clean gfx heap. SKIP-return-true is a PASS in this runner. CI on ubuntu-latest will never be this box. Do not talk as if it will.
+
+I am not going to start format/modifier feedback or GPU-side release-wait. You offered those as the next call. They are the next capabilities. They are not the hole. The hole is: uncommitted 3500-line R2/R3 stack, `make run` is not the probe, the hugepage is not the BDA, the manuals disagree with the code you just made true.
+
+Punch list is `doc/open-problems.md`. P0 freeze the worktree. P1 promote the probe into `make run` (error events, one dispatcher, RGBA pack on the way in). P2 wrap `topo->hugepage`, stop blocking ingest on Core 2, keep the Xe bridge as a seam instead of a lie about SYNC_FD. P3 nits folded into those. P4 make the manuals stop contradicting you. P5 is everything you offered as next — later.
+
+If I have a fact wrong — especially Mutter `created` silence, the Xe ioctl story, send-await lifetime, or anything that looks like a bug and is actually a compositor contract — say so in the report. I will not “fix” a live invariant into a regression. I will not rewrite your log. I will not `git add .`.
+
+You got a GPU frame onto Mutter over raw io_uring with named timeline points and no libwayland. That is the hard part. I am going to make `make run` be that, and then make the data path as honest as the wire path you already forced to be.
+
+— Grok
+
+---
+
+## [2026-09-07T19:55:16+03:00] - Fix pass: make run is the engine, data path honest, 93/93
+
+User: fix the biggest and medium problems, no poll/epoll, no doc rewrite, no asking. Report after.
+
+### What landed
+
+P1 compose: `src/engine.c` is the live loop. topology → Vulkan 1.4 → import `topo.hugepage` as BDA → MSG_RING the **VkDeviceAddress** → Wayland connect/roundtrip over io_uring → XDG → arm inbound → `khr_dmabuf_present_*` 24 frames → `wl_display.sync` alive-check → teardown. Bounded so CI/`make run` still exits.
+
+Live `make run` this session (Mutter, Xe experimental):
+
+```
+Vulkan:       1.4 device up  BDA=0x740000000  hugepage-imported (ingest==shader)
+MSG_RING IPC: OK (payload 0x740000000 VkDeviceAddress)
+Registry:     40 globals
+XDG:          configured 0x0 serial=667
+Present:      frames=24 releases=22 created=0 failed=0 pushed=23 alive=yes
+```
+
+created=0 is Mutter silence, not refusal. 22/24 releases = two slots still displayed.
+
+P1 dispatcher: `khr_wl_client_feed_cqe` — PBUF reassembly, `wl_display.error`, XDG/present consume the same complete-message prefix, `-ENOBUFS` re-arm. Engine loop uses it. No poll/epoll.
+
+P2 hugepage==shader: `khr_bda_arena_init_with_host_ptr(dev, arena, topo.hugepage, …)` succeeded on this box. Fallback separate UMA arena if import fails.
+
+P2 ingest: `khr_topology_ingest_submit` / `pop_ingest` (non-blocking). Blocking `ingest()` remains for tests. `open_how` lives on `khr_ingest_op_t` (worker stack). Partial 3-SQE chain becomes SKIP_SUCCESS NOPs, not an OPENAT2 without CLOSE. Outstanding counters decrement on timeout so a late 0xBDA0-sized packet cannot alias IPC.
+
+P3: slot RGBA now R-in-low-byte (`r|(g<<8)|(b<<16)|(255<<24)`). `await_tag` scans evt_q before pumping. PBUF recycle no longer dumps bids 0–15 into the wrong tier. DRM syncobj create tries `DRM_SYNCOBJ_CREATE_TIMELINE`, falls back to flags=0. `acquire_fd` comment is OPAQUE_FD, not DRM.
+
+P7 scams: TEST_SKIP is a real SKIP status (not PASS). `test_ipc_ingestion_to_bda_pipeline` MSG_RINGs a real `VkDeviceAddress` when a GPU exists. `test_tier4_144hz` is eventfd `POLL_ADD` + `IORING_OP_TIMEOUT` on Ring A (no nanosleep theatre). `test_tier3_*` and `test_tier4_full_dual_thread_e2e` go through production bind/import/xdg/shm present.
+
+### Gates (this hardware)
+
+- `make lint` PASS
+- `make test` 93/93 (2006 assertions, ~2.7 s)
+- `make sanitize` 93/93 (~23 s). ASan still reports loader `<unknown module>` leaks (140/6405 B this run).
+- `make run` exit 0, window mapped, 24 GPU frames, explicit-sync points, alive.
+
+### Not done (by request / later)
+
+P0 commits (user pushes). P4 old manuals. P5 feedback, release-as-GPU-wait, KMS, plot, seat. Blocking `khr_topology_ingest` still exists for tests; the present thread's product loop does not call it.
+
+---
+
+## [2026-09-07T20:02:00+03:00] - Dual-ring idea still holds; atomic commit + push
+
+User asked: does this still match the original idea (Ring A always the main loop, kernel-wait when idle, small Wayland; Ring B asleep until work, 2 MiB class payloads)? Then commit and `git push -u origin engine`.
+
+### Verdict
+
+Yes. The topology is that design. The implementation is slightly stricter than “2 KB / 2 MB messages,” and that is better, not a betrayal.
+
+Ring A (CPU 2) is the process main loop. `engine_init` never submits ingest on it. `khr_topology_pump` issues one `io_uring_enter` wait when the CQ is empty — the thread is in the kernel, not spinning. Wayland ping/pong, configure, send, recv, and the 64-bit BDA doorbell all live here. PBUF tier 0 is **256 B** (smaller than the 2 KiB you named). Tier 1 is **64 KiB** for a coalesced registry dump, not a 2 MiB asset.
+
+Ring B (CPU 3) does not run a busy loop. The worker parks in `wait_cqe_timeout(50 ms)`. Ring A wakes it with `IORING_OP_MSG_RING` after a cmdq push (ingest or “please send this BDA”). If nothing is queued, the core is asleep. The 2 MiB object is the **hugepage arena** Ring B `READ_FIXED`s into, not a 2 MiB message copied onto Ring A. IPC is an 8-byte `VkDeviceAddress`. That is the original idea done properly: heavy DMA stays on B, A only ever sees a pointer.
+
+Two honest caveats, not design changes:
+
+1. The 50 ms backstop means Ring B can wake ~20 times/s even with an empty cmdq (lost-doorbell insurance). Idle cost is tiny, not zero. A pure “sleep until MSG_RING” wait with no timeout is possible later if we trust doorbells completely.
+2. `vkQueueSubmit2` for the present cards currently runs on the **presentation thread**. Ring B is ingest/BDA, not the GPU queue. On this UMA box there is one `VkQueue` and a submit mutex; putting draw on B would still serialize on that queue. The “big bytes” path (disk → hugepage → shader BDA) is already B then pointer-to-A.
+
+Do not put Wayland on Ring B. Do not copy 2 MiB onto Ring A. Do not spin either core.
+
+### Push
+
+Atomic conventional commits of the uncommitted R2/R3 + compose pass, then `git push -u origin engine`. No `git add .`.
+
 
