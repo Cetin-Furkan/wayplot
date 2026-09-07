@@ -24,3 +24,5 @@ Agent memory lives at the repository root, **not** in this directory. All three 
 - [`../gemini.ai`](../gemini.ai) — Gemini session log.
 
 Operating rules for agents: [`../AGENTS.md`](../AGENTS.md).
+
+Post-1.0 parking lot (not a subsystem manual, not current work): [`../DEVELOPER_NOTE.md`](../DEVELOPER_NOTE.md) — present slots now; reinvent our own swapchain much later; never WSI / libwayland.
