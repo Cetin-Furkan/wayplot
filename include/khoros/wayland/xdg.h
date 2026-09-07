@@ -100,6 +100,7 @@ typedef struct {
     uint32_t        xdg_toplevel_id; /* xdg_toplevel */
     uint32_t        last_ping_serial;
     uint32_t        last_ack_serial;
+    uint32_t        pending_ack_serial; /* 0 = none; ack with the matching commit */
     uint32_t        ping_count;
     uint32_t        configure_count;
     int32_t         width;           /* latest toplevel configure (0 = unset) */
@@ -107,7 +108,7 @@ typedef struct {
     uint32_t        states;          /* bitmask of KHR_XDG_STATE_* */
     uint32_t        deco_mgr_id;
     uint32_t        deco_id;
-    bool            configured;      /* first ack_configure sent */
+    bool            configured;      /* first xdg_surface.configure seen */
     bool            closed;          /* close event received */
     bool            maximized;
     bool            fullscreen;
@@ -129,14 +130,20 @@ bool khr_xdg_create_toplevel(khr_wl_client_t* client, khr_xdg_shell_t* shell,
 
 /*
  * Steady-state event consumer over a wire byte stream (same pattern as the
- * registry parser): ping -> immediate pong, xdg_surface.configure -> immediate
- * ack_configure, toplevel configure -> store w/h, close -> mark closed.
+ * registry parser): ping -> immediate pong, xdg_surface.configure -> store
+ * pending serial (ack is khr_xdg_ack_pending, with the matching attach),
+ * toplevel configure -> store w/h, close -> mark closed.
  * Unknown object IDs are ignored. Returns XDG messages handled.
  */
 uint32_t khr_xdg_consume(khr_wl_client_t* client, khr_xdg_shell_t* shell,
                          const uint8_t* data, size_t len);
 
-/* Attach gate: true only after the first configure was acknowledged. */
+/* Send ack_configure for the latest pending serial. Call immediately
+ * before the attach+commit that matches that configure. */
+[[nodiscard]]
+bool khr_xdg_ack_pending(khr_wl_client_t* client, khr_xdg_shell_t* shell);
+
+/* Attach gate: true after the first configure (ack before the buffer). */
 [[nodiscard]]
 static inline bool khr_xdg_can_attach(const khr_xdg_shell_t* shell) {
     return shell != nullptr && shell->configured && !shell->closed;

@@ -618,9 +618,13 @@ uint32_t khr_wl_client_feed_cqe(khr_wl_client_t* client, uint64_t user_data,
         }
     }
     if (client->in_len + view.payload_len > sizeof(client->in_buf)) {
-        client->in_len = 0;
-    }
-    if (client->in_len + view.payload_len > sizeof(client->in_buf)) {
+        /* Never wipe leftover: that desynchronizes the stream. A payload
+         * that still does not fit after compacting is fatal. */
+        client->display_error = true;
+        client->error_code = (uint32_t)ENOBUFS;
+        snprintf(client->error_msg, sizeof(client->error_msg),
+                 "inbound reassembly overflow (%zu+%u)",
+                 client->in_len, view.payload_len);
         return 0;
     }
     memcpy(client->in_buf + client->in_len, view.payload, view.payload_len);

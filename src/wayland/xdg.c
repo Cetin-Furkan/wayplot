@@ -132,6 +132,22 @@ static bool khr_xdg_send_ack(khr_wl_client_t* client, const khr_xdg_shell_t* she
     return khr_wl_client_send_skip(client, out.data, out.size);
 }
 
+[[nodiscard]]
+bool khr_xdg_ack_pending(khr_wl_client_t* client, khr_xdg_shell_t* shell) {
+    if (client == nullptr || shell == nullptr || shell->xdg_surface_id == 0) {
+        return false;
+    }
+    if (shell->pending_ack_serial == 0) {
+        return true;
+    }
+    if (!khr_xdg_send_ack(client, shell, shell->pending_ack_serial)) {
+        return false;
+    }
+    shell->last_ack_serial = shell->pending_ack_serial;
+    shell->pending_ack_serial = 0;
+    return true;
+}
+
 uint32_t khr_xdg_consume(khr_wl_client_t* client, khr_xdg_shell_t* shell,
                          const uint8_t* data, size_t len) {
     if (client == nullptr || shell == nullptr || data == nullptr) {
@@ -164,9 +180,11 @@ uint32_t khr_xdg_consume(khr_wl_client_t* client, khr_xdg_shell_t* shell,
                    hdr.opcode == KHR_XDG_SURFACE_EVENT_CONFIGURE && payload_len >= 4) {
             size_t off = 0;
             uint32_t serial = 0;
-            if (khr_wl_decode_u32(payload, payload_len, &off, &serial) &&
-                khr_xdg_send_ack(client, shell, serial)) {
-                shell->last_ack_serial = serial;
+            if (khr_wl_decode_u32(payload, payload_len, &off, &serial)) {
+                /* Do not ack here. Intermediate configures during a resize
+                 * storm are replaced by the latest serial; ack goes out with
+                 * the matching attach. */
+                shell->pending_ack_serial = serial;
                 shell->configure_count++;
                 shell->configured = true;
                 shell->state = KHR_XDG_CONFIGURED;

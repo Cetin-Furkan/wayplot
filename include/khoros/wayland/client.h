@@ -67,7 +67,7 @@ typedef struct {
     uint32_t dmabuf_version;
 
     /* Inbound protocol stream buffer (bootstrap roundtrip + PBUF reassembly) */
-    alignas(64) uint8_t in_buf[16'384];
+    alignas(64) uint8_t in_buf[65'536];
     size_t              in_len; /* bytes currently in in_buf */
     size_t              in_off; /* consumed prefix; leftover is [in_off, in_len) */
 
