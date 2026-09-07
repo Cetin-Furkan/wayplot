@@ -57,7 +57,11 @@ bool khr_gfx_frame_init(khr_gfx_device_t* d, khr_gfx_frame_t* f,
         .arrayLayers = 1,
         .samples = VK_SAMPLE_COUNT_1_BIT,
         .tiling = VK_IMAGE_TILING_OPTIMAL,
-        .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+        /* HOST_TRANSFER is mandatory for vkCopyImageToMemoryEXT: without it
+         * the call is illegal and the experimental Xe driver answers with a
+         * null dereference instead of a validation error (observed). */
+        .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+                 (f->use_host_copy ? VK_IMAGE_USAGE_HOST_TRANSFER_BIT : 0U),
         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
         .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
     };
@@ -477,9 +481,14 @@ bool khr_gfx_frame_render_red_card(khr_gfx_device_t* d, khr_gfx_frame_t* f,
             .imageOffset = { 0, 0, 0 },
             .imageExtent = { f->w, f->h, 1 },
         };
+        /* flags = 0: the driver performs the tiled-to-linear copy itself.
+         * MEMCPY_BIT would assert identical host/device layout, which needs
+         * the VkSubresourceHostMemcpySize query path and linear-tiling
+         * images; claiming it on this optimal-tiling image is illegal and,
+         * on the experimental Xe driver, fatal. */
         VkCopyImageToMemoryInfo info = {
             .sType = VK_STRUCTURE_TYPE_COPY_IMAGE_TO_MEMORY_INFO,
-            .flags = VK_HOST_IMAGE_COPY_MEMCPY_BIT,
+            .flags = 0,
             .srcImage = f->image,
             .srcImageLayout = VK_IMAGE_LAYOUT_GENERAL,
             .regionCount = 1,

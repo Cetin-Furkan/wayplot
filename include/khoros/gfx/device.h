@@ -40,6 +40,7 @@ typedef struct {
     bool                             has_drm_properties;
     bool                             is_vulkan_1_4;
     bool                             exportable_timeline;
+    bool                             has_host_copy_ext;
     bool                             has_ext_mem_fd;
     bool                             has_ext_sem_fd;
     bool                             has_drm_modifier;
@@ -81,9 +82,13 @@ typedef struct khr_gfx_device {
         VkCommandPool cmd_pool;
     };
 
-    /* Global acquire timeline semaphore */
+    /* Device timeline the GPU signals per frame. acquire_fd is an
+     * OPAQUE_FD export of that semaphore when the driver allows it — not a
+     * DRM syncobj fd. Present uses a separate native DRM timeline plus the
+     * counter-query bridge in khr_dmabuf_present_sync(); this fd is the
+     * mature-stack seam, unused on Xe. */
     VkSemaphore      acquire_sem;
-    int              acquire_fd;     /* Exported DRM syncobj file descriptor */
+    int              acquire_fd;
     uint64_t         acquire_point;
 
     /* DRM render node file descriptor */

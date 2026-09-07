@@ -62,6 +62,8 @@ static void khr_check_device_extensions(VkPhysicalDevice phy, khr_device_candida
             c->has_dma_buf = true;
         } else if (strcmp(name, VK_EXT_PHYSICAL_DEVICE_DRM_EXTENSION_NAME) == 0) {
             c->has_drm_properties = true;
+        } else if (strcmp(name, VK_EXT_HOST_IMAGE_COPY_EXTENSION_NAME) == 0) {
+            c->has_host_copy_ext = true;
         }
     }
 }
@@ -502,6 +504,12 @@ bool khr_gfx_device_init(khr_gfx_device_t* d, dev_t compositor_dev) {
     device_extensions[num_exts++] = VK_EXT_PHYSICAL_DEVICE_DRM_EXTENSION_NAME;
     if (supports_host_import) {
         device_extensions[num_exts++] = VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME;
+    }
+    /* EXT-suffixed host-copy entry points only resolve via ProcAddr when the
+     * extension is enabled. Without it the frame silently falls back to the
+     * transfer engine despite the feature bit being on (observed on HW). */
+    if (best_cand.has_host_copy_ext) {
+        device_extensions[num_exts++] = VK_EXT_HOST_IMAGE_COPY_EXTENSION_NAME;
     }
 
     VkDeviceCreateInfo dci = {
