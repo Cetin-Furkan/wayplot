@@ -128,6 +128,18 @@ static void khr_window_paint_cards(khr_card_instance_t* cards, uint32_t w,
     };
 }
 
+static void khr_window_popup_teardown(khr_wl_client_t* client,
+                                      khr_xdg_shell_t* shell,
+                                      khr_shm_pool_t* pool,
+                                      uint32_t* buffer_id) {
+    khr_xdg_popup_destroy(client, shell);
+    if (buffer_id != nullptr && *buffer_id != 0) {
+        (void)khr_shm_buffer_destroy(client, *buffer_id);
+        *buffer_id = 0;
+    }
+    khr_shm_pool_destroy(client, pool);
+}
+
 static void khr_window_wait_acquire(khr_gfx_device_t* dev) {
     if (dev == nullptr || dev->device == VK_NULL_HANDLE ||
         dev->acquire_sem == VK_NULL_HANDLE || dev->acquire_point == 0) {
@@ -323,11 +335,15 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
     uint32_t popup_shm_id = 0;
     khr_shm_pool_t popup_pool = { .fd = -1 };
     uint32_t popup_buffer_id = 0;
+    uint32_t popup_parent_seq = 0;
 
     while (!shell.closed && !client.display_error && !khr_window_stop) {
         bool resizing =
             (shell.states & (1U << KHR_XDG_STATE_RESIZING)) != 0;
-        uint32_t wait_ms = dirty ? (resizing ? 16U : 0U) : 500U;
+        /* A mapped grab popup must notice popup_done / parent clicks promptly.
+         * Outside-app clicks only arrive as popup_done, and only if grab stuck. */
+        uint32_t wait_ms = dirty ? (resizing ? 16U : 0U)
+                                 : (shell.popup_live ? 16U : 500U);
         khr_window_feed(topo, &client, &shell, &seat, have_dp ? &dp : nullptr,
                         have_dp, wait_ms);
         (void)khr_seat_offer_devices(&client, &seat);
@@ -386,13 +402,15 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
 
         khr_hit_t hit = khr_window_hit(seat.x, seat.y, buf_w, buf_h,
                                        shell.fullscreen);
-        if (shell.popup_done) {
-            khr_xdg_popup_destroy(&client, &shell);
-            if (popup_buffer_id != 0) {
-                (void)khr_shm_buffer_destroy(&client, popup_buffer_id);
-                popup_buffer_id = 0;
-            }
-            khr_shm_pool_destroy(&client, &popup_pool);
+        /* xdg_popup.grab only auto-dismisses clicks *outside our surfaces*.
+         * Clicks on the parent, move/resize, and parent configure are ours:
+         * destroy the popup (same rule GTK/Chromium apply, our loop). */
+        bool parent_moved = shell.popup_live &&
+                            (shell.size_seq != popup_parent_seq ||
+                             want_w != buf_w || want_h != buf_h || resizing);
+        if (shell.popup_done || parent_moved) {
+            khr_window_popup_teardown(&client, &shell, &popup_pool,
+                                      &popup_buffer_id);
         }
         bool on_popup = shell.popup_live &&
                         seat.pointer_surface == shell.popup_surface_id;
@@ -407,23 +425,28 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
             if (on_popup) {
                 /* Future: menu item. Keep the cart open. */
             } else if (hit == KHR_HIT_CLIENT) {
-                if (popup_buffer_id != 0) {
-                    (void)khr_shm_buffer_destroy(&client, popup_buffer_id);
-                    popup_buffer_id = 0;
+                khr_window_popup_teardown(&client, &shell, &popup_pool,
+                                          &popup_buffer_id);
+                uint32_t serial = seat.button_serial != 0 ? seat.button_serial
+                                                          : khr_seat_serial(&seat);
+                if (khr_xdg_popup_open(&client, &shell, seat.seat_id, serial,
+                                       seat.x, seat.y,
+                                       (int32_t)KHR_WINDOW_POPUP_W,
+                                       (int32_t)KHR_WINDOW_POPUP_H)) {
+                    popup_parent_seq = shell.size_seq;
                 }
-                khr_shm_pool_destroy(&client, &popup_pool);
-                uint32_t serial = khr_seat_serial(&seat);
-                (void)khr_xdg_popup_open(&client, &shell, seat.seat_id, serial,
-                                         seat.x, seat.y,
-                                         (int32_t)KHR_WINDOW_POPUP_W,
-                                         (int32_t)KHR_WINDOW_POPUP_H);
             } else if (shell.popup_live) {
-                khr_xdg_popup_destroy(&client, &shell);
+                khr_window_popup_teardown(&client, &shell, &popup_pool,
+                                          &popup_buffer_id);
             }
             seat.right_down = false;
         }
-        if (seat.double_click && hit == KHR_HIT_MOVE && !shell.fullscreen &&
-            !on_popup) {
+        if (seat.left_down && shell.popup_live && !on_popup) {
+            khr_window_popup_teardown(&client, &shell, &popup_pool,
+                                      &popup_buffer_id);
+            seat.left_down = false;
+        } else if (seat.double_click && hit == KHR_HIT_MOVE &&
+                   !shell.fullscreen && !on_popup) {
             (void)khr_xdg_set_maximized(&client, &shell, !shell.maximized);
             seat.left_down = false;
         } else if (seat.left_down && on_popup) {
@@ -439,11 +462,16 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
             seat.left_down = false;
         }
         if (seat.f11_pressed) {
+            if (shell.popup_live) {
+                khr_window_popup_teardown(&client, &shell, &popup_pool,
+                                          &popup_buffer_id);
+            }
             (void)khr_xdg_set_fullscreen(&client, &shell, !shell.fullscreen);
         }
         if (seat.esc_pressed) {
             if (shell.popup_live) {
-                khr_xdg_popup_destroy(&client, &shell);
+                khr_window_popup_teardown(&client, &shell, &popup_pool,
+                                          &popup_buffer_id);
             } else if (shell.fullscreen) {
                 (void)khr_xdg_set_fullscreen(&client, &shell, false);
             }
@@ -517,11 +545,7 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
     if (have_dp) {
         khr_dmabuf_present_destroy(dev, &dp);
     }
-    khr_xdg_popup_destroy(&client, &shell);
-    if (popup_buffer_id != 0) {
-        (void)khr_shm_buffer_destroy(&client, popup_buffer_id);
-    }
-    khr_shm_pool_destroy(&client, &popup_pool);
+    khr_window_popup_teardown(&client, &shell, &popup_pool, &popup_buffer_id);
     khr_plot_pipeline_destroy(&plot);
     khr_cursor_destroy(&client, &cursor);
     khr_wl_client_disconnect(&client);
