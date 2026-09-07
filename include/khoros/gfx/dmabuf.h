@@ -90,6 +90,16 @@ bool khr_dmabuf_slot_render_cards(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
                                   VkDeviceAddress cards_addr, uint32_t card_count,
                                   VkSemaphore signal_sem, uint64_t signal_value);
 
+/* Cards plus an optional BDA plot ribbon. plot_top_px insets the plot
+ * viewport under the title bar (0 = full slot). plot may be null. */
+[[nodiscard]]
+bool khr_dmabuf_slot_render_scene(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
+                                  VkDeviceAddress cards_addr, uint32_t card_count,
+                                  const khr_plot_pipeline_t* plot,
+                                  const khr_plot_push_t* plot_push,
+                                  uint32_t plot_top_px,
+                                  VkSemaphore signal_sem, uint64_t signal_value);
+
 void khr_dmabuf_slot_destroy(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot);
 
 #endif /* KHOROS_GFX_DMABUF_H */

@@ -290,6 +290,18 @@ void khr_dmabuf_slot_destroy(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot) {
 bool khr_dmabuf_slot_render_cards(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
                                   VkDeviceAddress cards_addr, uint32_t card_count,
                                   VkSemaphore signal_sem, uint64_t signal_value) {
+    return khr_dmabuf_slot_render_scene(d, slot, cards_addr, card_count,
+                                        nullptr, nullptr, 0, signal_sem,
+                                        signal_value);
+}
+
+[[nodiscard]]
+bool khr_dmabuf_slot_render_scene(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
+                                  VkDeviceAddress cards_addr, uint32_t card_count,
+                                  const khr_plot_pipeline_t* plot,
+                                  const khr_plot_push_t* plot_push,
+                                  uint32_t plot_top_px,
+                                  VkSemaphore signal_sem, uint64_t signal_value) {
     if (d == nullptr || d->device == VK_NULL_HANDLE || slot == nullptr ||
         slot->cmd == VK_NULL_HANDLE || !slot->pipe_live ||
         signal_sem == VK_NULL_HANDLE || signal_value == 0 ||
@@ -398,6 +410,33 @@ bool khr_dmabuf_slot_render_cards(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
                            0, sizeof(khr_card_push_t), &push);
     }
     vkCmdDraw(slot->cmd, 6, card_count, 0, 0);
+    if (plot != nullptr && plot->pipeline != VK_NULL_HANDLE &&
+        plot_push != nullptr && plot_push->count >= 2U &&
+        plot_push->samples_addr != 0) {
+        uint32_t top = plot_top_px;
+        if (top >= h) {
+            top = 0;
+        }
+        uint32_t ph = h - top;
+        if (ph < 1U) {
+            ph = 1;
+        }
+        VkViewport pvp = {
+            .x = 0.0f,
+            .y = (float)top,
+            .width = (float)w,
+            .height = (float)ph,
+            .minDepth = 0.0f,
+            .maxDepth = 1.0f,
+        };
+        vkCmdSetViewport(slot->cmd, 0, 1, &pvp);
+        VkRect2D psc = {
+            .offset = { 0, (int32_t)top },
+            .extent = { w, ph },
+        };
+        vkCmdSetScissor(slot->cmd, 0, 1, &psc);
+        khr_plot_draw(plot, slot->cmd, plot_push, plot_push->count - 1U);
+    }
     vkCmdEndRendering(slot->cmd);
 
     /* Export layout: the compositor reads dma-buf memory directly (LINEAR),

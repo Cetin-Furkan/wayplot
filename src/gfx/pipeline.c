@@ -1,6 +1,7 @@
 #include "khoros/gfx/pipeline.h"
 
 #include <string.h>
+#include <math.h>
 
 alignas(uint32_t) static const uint8_t khr_card_vert_spv[] = {
 #embed "shaders/card.vert.spv"
@@ -378,4 +379,30 @@ void khr_plot_draw(const khr_plot_pipeline_t *p, VkCommandBuffer cmd, const khr_
     vkCmdPushConstants(cmd, p->layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                        0, sizeof(khr_plot_push_t), push);
     vkCmdDraw(cmd, 12, segment_count, 0, 0);
+}
+
+void khr_plot_fill_demo_samples(float* samples, uint32_t count) {
+    if (samples == nullptr || count == 0) {
+        return;
+    }
+    if (count == 1) {
+        samples[0] = 0.5f;
+        return;
+    }
+    const float two_pi = 6.283185307179586f;
+    const float denom = (float)(count - 1U);
+    for (uint32_t i = 0; i < count; i++) {
+        float t = (float)i / denom;
+        float s = 0.50f
+                + 0.28f * sinf(t * two_pi * 2.0f)
+                + 0.12f * sinf(t * two_pi * 5.0f)
+                + 0.06f * sinf(t * two_pi * 11.0f);
+        if (s < 0.05f) {
+            s = 0.05f;
+        }
+        if (s > 0.95f) {
+            s = 0.95f;
+        }
+        samples[i] = s;
+    }
 }

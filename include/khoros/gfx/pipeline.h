@@ -55,6 +55,11 @@ static_assert(sizeof(khr_card_push_t) == 24, "CardPush size must be 24 bytes");
 static_assert(sizeof(khr_plot_push_t) == 112, "PlotPush size must be 112 bytes");
 static_assert(sizeof(khr_plot_push_t) <= 128, "PlotPush must fit 128-byte hardware limit");
 
+/* Demo series living in the BDA arena. File ingest is a later step. */
+constexpr uint32_t KHR_PLOT_SAMPLE_COUNT = 256;
+constexpr float    KHR_PLOT_AMP          = 0.72f;
+constexpr float    KHR_PLOT_HALF_W       = 0.05f;
+
 typedef struct khr_shader_bytecode {
     const uint32_t *code;
     size_t size_bytes;
@@ -126,5 +131,8 @@ void khr_card_draw(const khr_card_pipeline_t *p, VkCommandBuffer cmd, const khr_
 [[nodiscard]] bool khr_plot_pipeline_init(khr_plot_pipeline_t *p, const khr_gfx_device_t *d, VkFormat color_format);
 void khr_plot_pipeline_destroy(khr_plot_pipeline_t *p);
 void khr_plot_draw(const khr_plot_pipeline_t *p, VkCommandBuffer cmd, const khr_plot_push_t *push, uint32_t segment_count);
+
+/* Host-side demo series. Values stay in (0, 1) so the shader color ramp is used. */
+void khr_plot_fill_demo_samples(float* samples, uint32_t count);
 
 #endif /* KHOROS_GFX_PIPELINE_H */
