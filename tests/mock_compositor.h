@@ -91,6 +91,8 @@ typedef struct {
     uint32_t xdg_surface_id;
     uint32_t xdg_toplevel_id;
     uint32_t syncobj_surface_id;
+    uint32_t get_surface_count;
+    uint32_t dmabuf_bind_count;
     uint32_t timeline_id;
     uint32_t dmabuf_params_id;
     uint32_t dmabuf_buffer_id;
@@ -336,8 +338,12 @@ static inline void mock_compositor_process_message(mock_compositor_t* comp,
                 khr_wl_decode_u32(payload, payload_len, &off, &new_id)) {
                 if (strcmp(iface, "wl_compositor") == 0) comp->client_compositor_id = new_id;
                 else if (strcmp(iface, "xdg_wm_base") == 0) comp->client_wm_base_id = new_id;
-                else if (strcmp(iface, "zwp_linux_dmabuf_v1") == 0) comp->client_dmabuf_id = new_id;
-                else if (strcmp(iface, "wp_linux_drm_syncobj_manager_v1") == 0) comp->client_syncobj_mgr_id = new_id;
+                else if (strcmp(iface, "zwp_linux_dmabuf_v1") == 0) {
+                    comp->client_dmabuf_id = new_id;
+                    comp->dmabuf_bind_count++;
+                } else if (strcmp(iface, "wp_linux_drm_syncobj_manager_v1") == 0) {
+                    comp->client_syncobj_mgr_id = new_id;
+                }
                 else if (strcmp(iface, "wl_shm") == 0) comp->client_shm_id = new_id;
                 else if (strcmp(iface, "wl_seat") == 0) comp->client_seat_id = new_id;
             }
@@ -484,6 +490,7 @@ static inline void mock_compositor_process_message(mock_compositor_t* comp,
 
     /* 13. wp_linux_drm_syncobj_manager_v1.get_surface */
     if (comp->client_syncobj_mgr_id > 0 && hdr->object_id == comp->client_syncobj_mgr_id && hdr->opcode == KHR_SYNCOBJ_MGR_GET_SURFACE) {
+        comp->get_surface_count++;
         if (payload_len >= 8) {
             size_t off = 0;
             (void)khr_wl_decode_u32(payload, payload_len, &off, &comp->syncobj_surface_id);

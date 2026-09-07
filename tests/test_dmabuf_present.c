@@ -361,3 +361,98 @@ bool test_dmabuf_present_acquire_bridge(void) {
     khr_topology_destroy(&topo);
     return ok;
 }
+
+[[nodiscard]]
+bool test_dmabuf_present_resize_rejects_unbound(void) {
+    khr_dmabuf_present_t dp = {};
+    khr_gfx_device_t dev = {};
+    TEST_ASSERT(!khr_dmabuf_present_resize(&dev, &dp, 100, 100),
+                "unbound present must not resize");
+    TEST_ASSERT(!khr_dmabuf_present_resize(nullptr, &dp, 640, 360),
+                "null device must not resize");
+    khr_dmabuf_present_drop_retired(nullptr, nullptr);
+    return true;
+}
+
+/* Resize must not bind dmabuf/syncobj or get_surface again: a second
+ * get_surface on the same wl_surface is already_constructed and is what
+ * killed the live window on cursor-resize and side-tile. */
+static bool test_dmabuf_present_resize_keeps_sync_surface_body(
+    khr_topology_t* topo_ctx) {
+#define topo (*topo_ctx)
+    mock_compositor_t comp = {};
+    khr_wl_client_t client = {};
+    khr_xdg_shell_t shell = {};
+    khr_gfx_device_t dev = {};
+    khr_bda_arena_t arena = {};
+    khr_dmabuf_present_t dp = {};
+    bool brought = khr_test_dmp_bringup(&topo, &comp, &client, &shell, &dev,
+                                        &arena, &dp);
+    TEST_ASSERT(brought, "dmabuf present bringup failed");
+    if (dev.device == VK_NULL_HANDLE) {
+        mock_compositor_destroy(&comp);
+        return true;
+    }
+    TEST_ASSERT_EQ(mock_compositor_drain(&comp), 13U, "exact init send count");
+    TEST_ASSERT_EQ(comp.get_surface_count, 1U, "get_surface once at init");
+    TEST_ASSERT_EQ(comp.dmabuf_bind_count, 1U, "dmabuf bind once at init");
+    uint32_t surf = comp.syncobj_surface_id;
+    uint32_t mgr = comp.client_syncobj_mgr_id;
+    uint32_t dmabuf = comp.client_dmabuf_id;
+    uint32_t acq = dp.acquire_tl_id;
+    uint32_t buf0 = dp.slots[0].buffer_id;
+    uint32_t buf1 = dp.slots[1].buffer_id;
+    TEST_ASSERT(surf != 0 && acq != 0 && buf0 != 0 && buf1 != 0,
+                "init endpoints missing");
+
+    khr_gfx_device_wait_idle(&dev);
+    TEST_ASSERT(khr_dmabuf_present_resize(&dev, &dp, 640, 360),
+                "resize to 640x360 failed");
+    TEST_ASSERT_EQ(dp.width, 640U, "resized width");
+    TEST_ASSERT_EQ(dp.height, 360U, "resized height");
+    TEST_ASSERT(dp.has_retiring, "old slots must retire after swap");
+    TEST_ASSERT(dp.slots[0].buffer_id != buf0 && dp.slots[1].buffer_id != buf1,
+                "new wl_buffers required");
+    TEST_ASSERT_EQ(dp.acquire_tl_id, acq, "acquire timeline must be reused");
+    TEST_ASSERT_EQ(mock_compositor_drain(&comp), 8U, "resize slot import count");
+    TEST_ASSERT_EQ(comp.get_surface_count, 1U,
+                   "resize must not get_surface again");
+    TEST_ASSERT_EQ(comp.dmabuf_bind_count, 1U, "resize must not rebind dmabuf");
+    TEST_ASSERT_EQ(comp.syncobj_surface_id, surf, "syncobj surface reused");
+    TEST_ASSERT_EQ(comp.client_syncobj_mgr_id, mgr, "syncobj manager reused");
+    TEST_ASSERT_EQ(comp.client_dmabuf_id, dmabuf, "dmabuf manager reused");
+    TEST_ASSERT_EQ((uint32_t)comp.dma_width, 640U, "imported width");
+    TEST_ASSERT_EQ((uint32_t)comp.dma_height, 360U, "imported height");
+
+    TEST_ASSERT(khr_dmabuf_present_commit_frame(&dev, &dp, &arena, 1),
+                "commit after resize failed");
+    TEST_ASSERT_EQ(mock_compositor_drain(&comp), 5U, "commit send count");
+    TEST_ASSERT_EQ(comp.last_attached_buffer, dp.slots[0].buffer_id,
+                   "new-size buffer must attach");
+    khr_dmabuf_present_drop_retired(&dev, &dp);
+    TEST_ASSERT(!dp.has_retiring, "retired slots dropped");
+    TEST_ASSERT_EQ(mock_compositor_drain(&comp), 4U, "retire send count");
+    TEST_ASSERT_EQ(comp.get_surface_count, 1U, "drop must not get_surface");
+
+    TEST_ASSERT(khr_dmabuf_present_resize(&dev, &dp, 640, 360),
+                "same-size resize is a no-op success");
+    TEST_ASSERT_EQ(mock_compositor_drain(&comp), 0U, "same-size sends nothing");
+
+    khr_dmabuf_present_destroy(&dev, &dp);
+    khr_bda_arena_destroy(&dev, &arena);
+    khr_gfx_device_destroy(&dev);
+    mock_compositor_destroy(&comp);
+#undef topo
+    return true;
+}
+
+[[nodiscard]]
+bool test_dmabuf_present_resize_keeps_sync_surface(void) {
+    khr_topology_t topo = {};
+    if (!khr_topology_init(&topo)) {
+        return false;
+    }
+    bool ok = test_dmabuf_present_resize_keeps_sync_surface_body(&topo);
+    khr_topology_destroy(&topo);
+    return ok;
+}

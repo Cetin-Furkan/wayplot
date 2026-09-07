@@ -23,6 +23,8 @@ extern bool test_wayland_direct_socket_connect_and_roundtrip(void);
 extern bool test_wayland_pure_ring_native_socket_and_connect(void);
 extern bool test_wayland_raw_uring_roundtrip(void);
 extern bool test_xdg_shell_lifecycle(void);
+extern bool test_window_hit_chrome_regions(void);
+extern bool test_window_buffer_size_from_xdg(void);
 
 /* Suite 3: Dual-Ring Topology & PBUF Architecture */
 extern bool test_ring_a_clock_and_no_iowait(void);
@@ -100,6 +102,8 @@ extern bool test_syncobj_drm_fd_import(void);
 extern bool test_dmabuf_present_created_failed_consume(void);
 extern bool test_dmabuf_present_loop_mock(void);
 extern bool test_dmabuf_present_acquire_bridge(void);
+extern bool test_dmabuf_present_resize_rejects_unbound(void);
+extern bool test_dmabuf_present_resize_keeps_sync_surface(void);
 extern bool test_shm_wire_pool_and_buffer(void);
 extern bool test_present_loop_release_recycling(void);
 extern bool test_send_await_no_debt_no_steal(void);
@@ -140,6 +144,8 @@ int main(void) {
     RUN_TEST(&stats, test_wayland_pure_ring_native_socket_and_connect);
     RUN_TEST(&stats, test_wayland_raw_uring_roundtrip);
     RUN_TEST(&stats, test_xdg_shell_lifecycle);
+    RUN_TEST(&stats, test_window_hit_chrome_regions);
+    RUN_TEST(&stats, test_window_buffer_size_from_xdg);
     RUN_TEST(&stats, test_shm_wire_pool_and_buffer);
 
     printf("\n" KHR_CLR_BOLD "Suite 3: Dual-Ring Topology & PBUF Architecture\n" KHR_CLR_RESET);
@@ -220,6 +226,8 @@ int main(void) {
     RUN_TEST(&stats, test_dmabuf_present_created_failed_consume);
     RUN_TEST(&stats, test_dmabuf_present_loop_mock);
     RUN_TEST(&stats, test_dmabuf_present_acquire_bridge);
+    RUN_TEST(&stats, test_dmabuf_present_resize_rejects_unbound);
+    RUN_TEST(&stats, test_dmabuf_present_resize_keeps_sync_surface);
 
     printf("\n" KHR_CLR_BOLD "Suite 7: Cross-Feature Interactions & Real-World Scenarios (Tiers 3 & 4)\n" KHR_CLR_RESET);
     RUN_TEST(&stats, test_ipc_bda_stream_cross_core);
