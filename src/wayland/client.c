@@ -7,6 +7,7 @@
 #include <errno.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <sys/types.h>
 
 [[nodiscard]]
 bool khr_wl_client_connect(khr_wl_client_t* client, khr_uring_t* ring, const char* override_path) {
@@ -593,9 +594,28 @@ uint32_t khr_wl_client_feed_cqe(khr_wl_client_t* client, uint64_t user_data,
         return 0;
     }
     khr_recvmsg_view_t view = {};
-    if (!khr_recvmsg_parse(raw, tier->buf_size, 0, 0, &view) ||
+    uint32_t namelen = (uint32_t)client->recv_hdr.msg_namelen;
+    uint32_t controllen = (uint32_t)client->recv_hdr.msg_controllen;
+    if (!khr_recvmsg_parse(raw, tier->buf_size, namelen, controllen, &view) ||
         view.payload == nullptr || view.payload_len == 0) {
         return 0;
+    }
+    if (view.control != nullptr && controllen > 0) {
+        struct msghdr fake = {
+            .msg_control = (void*)view.control,
+            .msg_controllen = controllen,
+        };
+        for (struct cmsghdr* c = CMSG_FIRSTHDR(&fake); c != nullptr;
+             c = CMSG_NXTHDR(&fake, c)) {
+            if (c->cmsg_level == SOL_SOCKET && c->cmsg_type == SCM_RIGHTS &&
+                c->cmsg_len >= CMSG_LEN(sizeof(int))) {
+                int fd = -1;
+                memcpy(&fd, CMSG_DATA(c), sizeof(fd));
+                if (fd >= 0) {
+                    close(fd);
+                }
+            }
+        }
     }
     if (client->in_len + view.payload_len > sizeof(client->in_buf)) {
         client->in_len = 0;
