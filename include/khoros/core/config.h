@@ -27,6 +27,9 @@ constexpr uint32_t KHR_WINDOW_DEFAULT_H        = 540;
 constexpr uint32_t KHR_WINDOW_CHROME_TOP       = 32; /* drag bar, pixels */
 constexpr uint32_t KHR_WINDOW_CHROME_EDGE      = 8;  /* edge resize strip */
 constexpr uint32_t KHR_WINDOW_CHROME_CORNER    = 16; /* extra corner hit */
+constexpr uint32_t KHR_WINDOW_CHROME_CLOSE     = 32; /* title-bar close square */
+constexpr uint32_t KHR_WINDOW_CARD_COUNT       = 3;  /* body, bar, close */
+constexpr uint32_t KHR_HIT_LIST_MAX            = 16; /* first-match chrome */
 constexpr uint32_t KHR_WINDOW_MAX_W            = 4'096;
 constexpr uint32_t KHR_WINDOW_MAX_H            = 4'096;
 constexpr bool     KHR_WINDOW_START_MAXIMIZED  = false;
@@ -46,6 +49,7 @@ constexpr uint32_t KHR_WINDOW_POPUP_H     = 148;
 typedef enum {
     KHR_HIT_CLIENT = 0,
     KHR_HIT_POPUP,
+    KHR_HIT_CLOSE,
     KHR_HIT_MOVE,
     KHR_HIT_N,
     KHR_HIT_S,
@@ -56,6 +60,19 @@ typedef enum {
     KHR_HIT_SE,
     KHR_HIT_SW,
 } khr_hit_t;
+
+typedef struct {
+    uint32_t  x;
+    uint32_t  y;
+    uint32_t  w;
+    uint32_t  h;
+    khr_hit_t kind;
+} khr_hit_rect_t;
+
+typedef struct {
+    khr_hit_rect_t rects[KHR_HIT_LIST_MAX];
+    uint32_t       count;
+} khr_hit_list_t;
 
 [[nodiscard]]
 static inline uint32_t khr_window_clamp_w(uint32_t w) {
@@ -110,6 +127,81 @@ static inline void khr_window_buffer_size(const khr_xdg_shell_t* shell,
     }
 }
 
+static inline void khr_hit_list_clear(khr_hit_list_t* list) {
+    if (list != nullptr) {
+        list->count = 0;
+    }
+}
+
+[[nodiscard]]
+static inline bool khr_hit_list_add(khr_hit_list_t* list, uint32_t x, uint32_t y,
+                                    uint32_t w, uint32_t h, khr_hit_t kind) {
+    if (list == nullptr || w == 0 || h == 0 || list->count >= KHR_HIT_LIST_MAX) {
+        return false;
+    }
+    list->rects[list->count] = (khr_hit_rect_t){
+        .x = x,
+        .y = y,
+        .w = w,
+        .h = h,
+        .kind = kind,
+    };
+    list->count++;
+    return true;
+}
+
+[[nodiscard]]
+static inline khr_hit_t khr_hit_list_pick(const khr_hit_list_t* list,
+                                          int32_t x, int32_t y) {
+    if (list == nullptr || x < 0 || y < 0) {
+        return KHR_HIT_CLIENT;
+    }
+    const uint32_t ux = (uint32_t)x;
+    const uint32_t uy = (uint32_t)y;
+    for (uint32_t i = 0; i < list->count; i++) {
+        const khr_hit_rect_t* r = &list->rects[i];
+        if (ux >= r->x && uy >= r->y &&
+            ux < r->x + r->w && uy < r->y + r->h) {
+            return r->kind;
+        }
+    }
+    return KHR_HIT_CLIENT;
+}
+
+/*
+ * First match wins. Corners and edges are inserted before CLOSE so the
+ * outer 8–16 px stay resize (NE on the top-right extra). CLOSE sits on
+ * the remaining title-bar square; MOVE is the rest of the 32 px bar.
+ */
+static inline void khr_window_hit_list_fill(khr_hit_list_t* list, uint32_t w,
+                                            uint32_t h, bool fullscreen) {
+    khr_hit_list_clear(list);
+    if (list == nullptr || fullscreen || w == 0 || h == 0) {
+        return;
+    }
+    const uint32_t c = KHR_WINDOW_CHROME_CORNER;
+    const uint32_t e = KHR_WINDOW_CHROME_EDGE;
+    const uint32_t t = KHR_WINDOW_CHROME_TOP;
+    const uint32_t z = KHR_WINDOW_CHROME_CLOSE;
+    if (w >= c && h >= c) {
+        (void)khr_hit_list_add(list, 0, 0, c, c, KHR_HIT_NW);
+        (void)khr_hit_list_add(list, w - c, 0, c, c, KHR_HIT_NE);
+        (void)khr_hit_list_add(list, 0, h - c, c, c, KHR_HIT_SW);
+        (void)khr_hit_list_add(list, w - c, h - c, c, c, KHR_HIT_SE);
+    }
+    if (w >= e && h >= e) {
+        (void)khr_hit_list_add(list, 0, 0, e, h, KHR_HIT_W);
+        (void)khr_hit_list_add(list, w - e, 0, e, h, KHR_HIT_E);
+        (void)khr_hit_list_add(list, 0, h - e, w, e, KHR_HIT_S);
+    }
+    if (w >= z && t > 0) {
+        (void)khr_hit_list_add(list, w - z, 0, z, t, KHR_HIT_CLOSE);
+    }
+    if (t > 0) {
+        (void)khr_hit_list_add(list, 0, 0, w, t, KHR_HIT_MOVE);
+    }
+}
+
 [[nodiscard]]
 static inline khr_hit_t khr_window_hit(int32_t x, int32_t y, uint32_t w, uint32_t h,
                                        bool fullscreen) {
@@ -117,40 +209,9 @@ static inline khr_hit_t khr_window_hit(int32_t x, int32_t y, uint32_t w, uint32_
         (uint32_t)x >= w || (uint32_t)y >= h) {
         return KHR_HIT_CLIENT;
     }
-    const uint32_t ux = (uint32_t)x;
-    const uint32_t uy = (uint32_t)y;
-    const uint32_t c = KHR_WINDOW_CHROME_CORNER;
-    const uint32_t e = KHR_WINDOW_CHROME_EDGE;
-    const uint32_t t = KHR_WINDOW_CHROME_TOP;
-    const bool near_l = ux < c;
-    const bool near_r = ux >= w - c;
-    const bool near_t = uy < c;
-    const bool near_b = uy >= h - c;
-    if (near_l && near_t) {
-        return KHR_HIT_NW;
-    }
-    if (near_r && near_t) {
-        return KHR_HIT_NE;
-    }
-    if (near_l && near_b) {
-        return KHR_HIT_SW;
-    }
-    if (near_r && near_b) {
-        return KHR_HIT_SE;
-    }
-    if (ux < e) {
-        return KHR_HIT_W;
-    }
-    if (ux >= w - e) {
-        return KHR_HIT_E;
-    }
-    if (uy >= h - e) {
-        return KHR_HIT_S;
-    }
-    if (uy < t) {
-        return KHR_HIT_MOVE;
-    }
-    return KHR_HIT_CLIENT;
+    khr_hit_list_t list = {};
+    khr_window_hit_list_fill(&list, w, h, fullscreen);
+    return khr_hit_list_pick(&list, x, y);
 }
 
 [[nodiscard]]

@@ -126,6 +126,23 @@ static void khr_window_paint_cards(khr_card_instance_t* cards, uint32_t w,
         .corner_radius = 0.0f,
         .border_width = fullscreen ? 0.0f : 1.0f,
     };
+    float close_x = 0.0f;
+    float close_y = 0.0f;
+    float close_w = 0.0f;
+    float close_h = 0.0f;
+    if (!fullscreen && w >= KHR_WINDOW_CHROME_CLOSE) {
+        close_x = (float)(w - KHR_WINDOW_CHROME_CLOSE) + 4.0f;
+        close_y = 4.0f;
+        close_w = (float)KHR_WINDOW_CHROME_CLOSE - 8.0f;
+        close_h = (float)KHR_WINDOW_CHROME_TOP - 8.0f;
+    }
+    cards[2] = (khr_card_instance_t){
+        .rect = { close_x, close_y, close_w, close_h },
+        .bg_rgba = khr_rgba8(168, 56, 56, 255),
+        .border_rgba = khr_rgba8(200, 88, 88, 255),
+        .corner_radius = fullscreen ? 0.0f : 4.0f,
+        .border_width = fullscreen ? 0.0f : 1.0f,
+    };
 }
 
 static void khr_window_popup_teardown(khr_wl_client_t* client,
@@ -297,8 +314,9 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
 
     khr_card_instance_t* cards = nullptr;
     VkDeviceAddress cards_addr = 0;
-    if (!khr_bda_arena_alloc(arena, sizeof(khr_card_instance_t) * 2U, 16,
-                             (void**)&cards, &cards_addr)) {
+    if (!khr_bda_arena_alloc(arena,
+                             sizeof(khr_card_instance_t) * KHR_WINDOW_CARD_COUNT,
+                             16, (void**)&cards, &cards_addr)) {
         printf("  Present:      FAILED card BDA alloc\n");
         khr_cursor_destroy(&client, &cursor);
         khr_wl_client_disconnect(&client);
@@ -401,8 +419,13 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
             printf("  Present:      slots %ux%u\n", buf_w, buf_h);
         }
 
-        khr_hit_t hit = khr_window_hit(seat.x, seat.y, buf_w, buf_h,
-                                       shell.fullscreen);
+        khr_hit_list_t hits = {};
+        khr_window_hit_list_fill(&hits, buf_w, buf_h, shell.fullscreen);
+        khr_hit_t hit = KHR_HIT_CLIENT;
+        if (seat.x >= 0 && seat.y >= 0 &&
+            (uint32_t)seat.x < buf_w && (uint32_t)seat.y < buf_h) {
+            hit = khr_hit_list_pick(&hits, seat.x, seat.y);
+        }
         /* Dismiss only when the parent buffer size actually changes.
          * The RESIZING state bit can stick after an edge drag; using it
          * here made every new cart die until a later move configure
@@ -448,10 +471,17 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
             khr_window_popup_teardown(&client, &shell, &popup_pool,
                                       &popup_buffer_id);
             seat.left_down = false;
+        } else if (seat.left_down && hit == KHR_HIT_CLOSE && !on_popup) {
+            khr_window_stop = 1;
+            seat.left_down = false;
         } else if (seat.double_click && hit == KHR_HIT_MOVE &&
                    !shell.fullscreen && !on_popup) {
+            /* Same request as dragging the title bar to the top of the
+             * output: xdg_toplevel.set_maximized. The compositor picks
+             * the work-area size. Do not compute a pixel size here. */
             (void)khr_xdg_set_maximized(&client, &shell, !shell.maximized);
             seat.left_down = false;
+            seat.double_click = false;
         } else if (seat.left_down && on_popup) {
             seat.left_down = false;
         } else if (seat.left_down && !shell.fullscreen) {
@@ -470,6 +500,7 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
                                           &popup_buffer_id);
             }
             (void)khr_xdg_set_fullscreen(&client, &shell, !shell.fullscreen);
+            seat.f11_pressed = false;
         }
         if (seat.esc_pressed) {
             if (shell.popup_live) {
@@ -478,6 +509,7 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
             } else if (shell.fullscreen) {
                 (void)khr_xdg_set_fullscreen(&client, &shell, false);
             }
+            seat.esc_pressed = false;
         }
         if (shell.popup_live && shell.popup_configured && !shell.popup_mapped) {
             uint32_t pw = (uint32_t)shell.popup_w;
@@ -521,7 +553,8 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
             khr_window_paint_cards(cards, buf_w, buf_h, shell.fullscreen);
             uint32_t top = shell.fullscreen ? 0U : KHR_WINDOW_CHROME_TOP;
             (void)khr_xdg_ack_pending(&client, &shell);
-            if (khr_dmabuf_present_commit_scene(dev, &dp, cards_addr, 2,
+            if (khr_dmabuf_present_commit_scene(dev, &dp, cards_addr,
+                                                KHR_WINDOW_CARD_COUNT,
                                                 &plot, &plot_push, top)) {
                 dirty = false;
                 khr_window_wait_acquire(dev);

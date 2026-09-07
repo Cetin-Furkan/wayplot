@@ -24,6 +24,7 @@ extern bool test_wayland_pure_ring_native_socket_and_connect(void);
 extern bool test_wayland_raw_uring_roundtrip(void);
 extern bool test_xdg_shell_lifecycle(void);
 extern bool test_window_hit_chrome_regions(void);
+extern bool test_window_hit_list_first_match(void);
 extern bool test_window_buffer_size_from_xdg(void);
 extern bool test_plot_demo_samples_in_range(void);
 
@@ -146,6 +147,7 @@ int main(void) {
     RUN_TEST(&stats, test_wayland_raw_uring_roundtrip);
     RUN_TEST(&stats, test_xdg_shell_lifecycle);
     RUN_TEST(&stats, test_window_hit_chrome_regions);
+    RUN_TEST(&stats, test_window_hit_list_first_match);
     RUN_TEST(&stats, test_window_buffer_size_from_xdg);
     RUN_TEST(&stats, test_plot_demo_samples_in_range);
     RUN_TEST(&stats, test_shm_wire_pool_and_buffer);

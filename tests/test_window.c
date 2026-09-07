@@ -20,6 +20,10 @@ bool test_window_hit_chrome_regions(void) {
                    (uint32_t)KHR_HIT_SE, "bottom-right extra is SE resize");
     TEST_ASSERT_EQ((uint32_t)khr_window_hit((int32_t)w / 2, 4, w, h, false),
                    (uint32_t)KHR_HIT_MOVE, "top 32px bar is drag");
+    TEST_ASSERT_EQ((uint32_t)khr_window_hit((int32_t)(w - 24), 20, w, h, false),
+                   (uint32_t)KHR_HIT_CLOSE, "title-bar close square is CLOSE");
+    TEST_ASSERT_EQ((uint32_t)khr_window_hit((int32_t)(w - 24), 4, w, h, false),
+                   (uint32_t)KHR_HIT_CLOSE, "close above the edge still CLOSE");
     TEST_ASSERT_EQ((uint32_t)khr_window_hit(2, 80, w, h, false),
                    (uint32_t)KHR_HIT_W, "left edge resize");
     TEST_ASSERT_EQ((uint32_t)khr_window_hit((int32_t)(w - 2), 80, w, h, false),
@@ -32,12 +36,61 @@ bool test_window_hit_chrome_regions(void) {
                    "empty client uses the default arrow, not the finger");
     TEST_ASSERT_EQ(khr_hit_cursor_shape(KHR_HIT_POPUP), KHR_CURSOR_SHAPE_POINTER,
                    "popup uses the pointer finger");
+    TEST_ASSERT_EQ(khr_hit_cursor_shape(KHR_HIT_CLOSE), KHR_CURSOR_SHAPE_POINTER,
+                   "close uses the pointer finger");
     TEST_ASSERT_EQ((uint32_t)khr_window_hit(0, 0, w, h, true),
                    (uint32_t)KHR_HIT_CLIENT, "fullscreen has no chrome");
+    TEST_ASSERT_EQ((uint32_t)khr_window_hit((int32_t)(w - 24), 20, w, h, true),
+                   (uint32_t)KHR_HIT_CLIENT, "fullscreen has no close");
     TEST_ASSERT_EQ(khr_hit_resize_edge(KHR_HIT_SE), KHR_XDG_RESIZE_BOTTOM_RIGHT,
                    "SE maps to xdg edge");
     TEST_ASSERT_EQ(khr_hit_resize_edge(KHR_HIT_MOVE), KHR_XDG_RESIZE_NONE,
                    "move is not a resize edge");
+    TEST_ASSERT_EQ(khr_hit_resize_edge(KHR_HIT_CLOSE), KHR_XDG_RESIZE_NONE,
+                   "close is not a resize edge");
+    return true;
+}
+
+[[nodiscard]]
+bool test_window_hit_list_first_match(void) {
+    khr_hit_list_t list = {};
+    TEST_ASSERT(khr_hit_list_add(&list, 0, 0, 10, 10, KHR_HIT_CLOSE),
+                "first rect inserts");
+    TEST_ASSERT(khr_hit_list_add(&list, 0, 0, 100, 100, KHR_HIT_MOVE),
+                "overlapping later rect inserts");
+    TEST_ASSERT_EQ(list.count, 2U, "two rects live in the list");
+    TEST_ASSERT_EQ((uint32_t)khr_hit_list_pick(&list, 5, 5),
+                   (uint32_t)KHR_HIT_CLOSE, "first match wins the overlap");
+    TEST_ASSERT_EQ((uint32_t)khr_hit_list_pick(&list, 50, 50),
+                   (uint32_t)KHR_HIT_MOVE, "later rect wins outside the first");
+    TEST_ASSERT_EQ((uint32_t)khr_hit_list_pick(&list, 200, 200),
+                   (uint32_t)KHR_HIT_CLIENT, "miss is client");
+    TEST_ASSERT_EQ((uint32_t)khr_hit_list_pick(&list, -1, 0),
+                   (uint32_t)KHR_HIT_CLIENT, "negative is client");
+
+    khr_hit_list_t chrome = {};
+    khr_window_hit_list_fill(&chrome, 400, 300, false);
+    TEST_ASSERT(chrome.count >= 9U, "chrome fills corners, edges, close, move");
+    TEST_ASSERT_EQ((uint32_t)khr_hit_list_pick(&chrome, 399, 0),
+                   (uint32_t)KHR_HIT_NE, "outer top-right extra is still NE");
+    TEST_ASSERT_EQ((uint32_t)khr_hit_list_pick(&chrome, 392, 20),
+                   (uint32_t)KHR_HIT_E, "right 8px of the close square is E");
+    TEST_ASSERT_EQ((uint32_t)khr_hit_list_pick(&chrome, 376, 20),
+                   (uint32_t)KHR_HIT_CLOSE, "inset of the close square is CLOSE");
+    TEST_ASSERT_EQ((uint32_t)khr_hit_list_pick(&chrome, 200, 4),
+                   (uint32_t)KHR_HIT_MOVE, "rest of the title bar is MOVE");
+    khr_window_hit_list_fill(&chrome, 400, 300, true);
+    TEST_ASSERT_EQ(chrome.count, 0U, "fullscreen chrome list is empty");
+
+    khr_hit_list_t full = {};
+    for (uint32_t i = 0; i < KHR_HIT_LIST_MAX; i++) {
+        TEST_ASSERT(khr_hit_list_add(&full, i, 0, 1, 1, KHR_HIT_CLIENT),
+                    "list accepts up to MAX");
+    }
+    TEST_ASSERT(!khr_hit_list_add(&full, 0, 0, 1, 1, KHR_HIT_MOVE),
+                "list rejects overflow");
+    TEST_ASSERT(!khr_hit_list_add(&list, 0, 0, 0, 10, KHR_HIT_MOVE),
+                "zero-size rect is rejected");
     return true;
 }
 
