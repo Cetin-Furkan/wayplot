@@ -45,6 +45,7 @@ constexpr uint32_t KHR_WINDOW_POPUP_H     = 148;
 
 typedef enum {
     KHR_HIT_CLIENT = 0,
+    KHR_HIT_POPUP,
     KHR_HIT_MOVE,
     KHR_HIT_N,
     KHR_HIT_S,

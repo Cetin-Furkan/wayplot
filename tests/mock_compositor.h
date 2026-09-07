@@ -35,10 +35,7 @@
 constexpr uint16_t KHR_WL_SURFACE_FRAME               = 3;
 
 constexpr uint16_t KHR_XDG_WM_BASE_DESTROY            = 0;
-constexpr uint16_t KHR_XDG_WM_BASE_CREATE_POSITIONER  = 1;
 
-constexpr uint16_t KHR_XDG_SURFACE_DESTROY            = 0;
-constexpr uint16_t KHR_XDG_SURFACE_GET_POPUP          = 2;
 constexpr uint16_t KHR_XDG_SURFACE_SET_WINDOW_GEOM    = 3;
 
 constexpr uint16_t KHR_XDG_TOPLEVEL_DESTROY           = 0;

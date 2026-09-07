@@ -5,6 +5,7 @@
 #include "khoros/wayland/seat.h"
 #include "khoros/wayland/cursor.h"
 #include "khoros/wayland/dmabuf_present.h"
+#include "khoros/wayland/shm.h"
 #include "khoros/wayland/wire.h"
 #include "khoros/gfx/pipeline.h"
 #include "khoros/uring/pbuf.h"
@@ -62,41 +63,46 @@ static void khr_window_feed(khr_topology_t* topo, khr_wl_client_t* client,
     }
 }
 
-static void khr_window_clamp_popup(int32_t* x, int32_t* y, uint32_t w, uint32_t h,
-                                   bool fullscreen) {
-    int32_t pw = (int32_t)KHR_WINDOW_POPUP_W;
-    int32_t ph = (int32_t)KHR_WINDOW_POPUP_H;
-    int32_t top = fullscreen ? 0 : (int32_t)KHR_WINDOW_CHROME_TOP;
-    if (*x < 8) {
-        *x = 8;
-    }
-    if (*y < top + 8) {
-        *y = top + 8;
-    }
-    if (*x + pw > (int32_t)w - 8) {
-        *x = (int32_t)w - 8 - pw;
-    }
-    if (*y + ph > (int32_t)h - 8) {
-        *y = (int32_t)h - 8 - ph;
-    }
-    if (*x < 0) {
-        *x = 0;
-    }
-    if (*y < 0) {
-        *y = 0;
-    }
+static uint32_t khr_window_shm_argb(uint32_t r, uint32_t g, uint32_t b, uint32_t a) {
+    return b | (g << 8) | (r << 16) | (a << 24);
 }
 
-[[nodiscard]]
-static bool khr_window_in_popup(int32_t x, int32_t y, int32_t px, int32_t py) {
-    return x >= px && y >= py &&
-           x < px + (int32_t)KHR_WINDOW_POPUP_W &&
-           y < py + (int32_t)KHR_WINDOW_POPUP_H;
+static void khr_window_paint_popup_shm(uint32_t* px, uint32_t w, uint32_t h) {
+    const uint32_t bg = khr_window_shm_argb(28, 30, 38, 255);
+    const uint32_t br = khr_window_shm_argb(90, 110, 150, 255);
+    const int32_t r = 8;
+    for (uint32_t y = 0; y < h; y++) {
+        for (uint32_t x = 0; x < w; x++) {
+            int32_t cx = (int32_t)x;
+            int32_t cy = (int32_t)y;
+            int32_t dx = 0;
+            int32_t dy = 0;
+            if (cx < r && cy < r) {
+                dx = r - cx;
+                dy = r - cy;
+            } else if (cx >= (int32_t)w - r && cy < r) {
+                dx = cx - ((int32_t)w - 1 - r);
+                dy = r - cy;
+            } else if (cx < r && cy >= (int32_t)h - r) {
+                dx = r - cx;
+                dy = cy - ((int32_t)h - 1 - r);
+            } else if (cx >= (int32_t)w - r && cy >= (int32_t)h - r) {
+                dx = cx - ((int32_t)w - 1 - r);
+                dy = cy - ((int32_t)h - 1 - r);
+            }
+            if (dx > 0 && dy > 0 && dx * dx + dy * dy > r * r) {
+                px[y * w + x] = 0;
+                continue;
+            }
+            bool edge = x < 1 || y < 1 || x >= w - 1 || y >= h - 1 ||
+                        (dx > 0 && dy > 0 && dx * dx + dy * dy > (r - 1) * (r - 1));
+            px[y * w + x] = edge ? br : bg;
+        }
+    }
 }
 
 static void khr_window_paint_cards(khr_card_instance_t* cards, uint32_t w,
-                                   uint32_t h, bool fullscreen, bool popup,
-                                   int32_t popup_x, int32_t popup_y) {
+                                   uint32_t h, bool fullscreen) {
     /* Stable colors. The old frame_no % 3 strobe looked like a fault
      * (near-black frames). */
     uint32_t body = khr_rgba8(48, 52, 64, 255);
@@ -120,24 +126,6 @@ static void khr_window_paint_cards(khr_card_instance_t* cards, uint32_t w,
         .corner_radius = 0.0f,
         .border_width = fullscreen ? 0.0f : 1.0f,
     };
-    if (popup) {
-        cards[2] = (khr_card_instance_t){
-            .rect = { (float)popup_x, (float)popup_y,
-                      (float)KHR_WINDOW_POPUP_W, (float)KHR_WINDOW_POPUP_H },
-            .bg_rgba = khr_rgba8(28, 30, 38, 255),
-            .border_rgba = khr_rgba8(90, 110, 150, 255),
-            .corner_radius = 8.0f,
-            .border_width = 1.0f,
-        };
-    } else {
-        cards[2] = (khr_card_instance_t){
-            .rect = { 0.0f, 0.0f, 0.0f, 0.0f },
-            .bg_rgba = 0,
-            .border_rgba = 0,
-            .corner_radius = 0.0f,
-            .border_width = 0.0f,
-        };
-    }
 }
 
 static void khr_window_wait_acquire(khr_gfx_device_t* dev) {
@@ -297,7 +285,7 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
 
     khr_card_instance_t* cards = nullptr;
     VkDeviceAddress cards_addr = 0;
-    if (!khr_bda_arena_alloc(arena, sizeof(khr_card_instance_t) * 3U, 16,
+    if (!khr_bda_arena_alloc(arena, sizeof(khr_card_instance_t) * 2U, 16,
                              (void**)&cards, &cards_addr)) {
         printf("  Present:      FAILED card BDA alloc\n");
         khr_cursor_destroy(&client, &cursor);
@@ -332,9 +320,9 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
     bool ok = true;
     bool dirty = true;
     bool was_fullscreen = shell.fullscreen;
-    bool popup = false;
-    int32_t popup_x = 0;
-    int32_t popup_y = 0;
+    uint32_t popup_shm_id = 0;
+    khr_shm_pool_t popup_pool = { .fd = -1 };
+    uint32_t popup_buffer_id = 0;
 
     while (!shell.closed && !client.display_error && !khr_window_stop) {
         bool resizing =
@@ -398,12 +386,20 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
 
         khr_hit_t hit = khr_window_hit(seat.x, seat.y, buf_w, buf_h,
                                        shell.fullscreen);
-        bool on_popup = popup && khr_window_in_popup(seat.x, seat.y,
-                                                     popup_x, popup_y);
+        if (shell.popup_done) {
+            khr_xdg_popup_destroy(&client, &shell);
+            if (popup_buffer_id != 0) {
+                (void)khr_shm_buffer_destroy(&client, popup_buffer_id);
+                popup_buffer_id = 0;
+            }
+            khr_shm_pool_destroy(&client, &popup_pool);
+        }
+        bool on_popup = shell.popup_live &&
+                        seat.pointer_surface == shell.popup_surface_id;
         if (seat.pointer_in) {
             uint32_t cserial = seat.enter_serial != 0 ? seat.enter_serial
                                                       : khr_seat_serial(&seat);
-            khr_hit_t chit = on_popup ? KHR_HIT_CLIENT : hit;
+            khr_hit_t chit = on_popup ? KHR_HIT_POPUP : hit;
             (void)khr_cursor_apply(&client, &cursor, seat.pointer_id,
                                    cserial, chit, false);
         }
@@ -411,15 +407,18 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
             if (on_popup) {
                 /* Future: menu item. Keep the cart open. */
             } else if (hit == KHR_HIT_CLIENT) {
-                popup = true;
-                popup_x = seat.x;
-                popup_y = seat.y;
-                khr_window_clamp_popup(&popup_x, &popup_y, buf_w, buf_h,
-                                       shell.fullscreen);
-                dirty = true;
-            } else if (popup) {
-                popup = false;
-                dirty = true;
+                if (popup_buffer_id != 0) {
+                    (void)khr_shm_buffer_destroy(&client, popup_buffer_id);
+                    popup_buffer_id = 0;
+                }
+                khr_shm_pool_destroy(&client, &popup_pool);
+                uint32_t serial = khr_seat_serial(&seat);
+                (void)khr_xdg_popup_open(&client, &shell, seat.seat_id, serial,
+                                         seat.x, seat.y,
+                                         (int32_t)KHR_WINDOW_POPUP_W,
+                                         (int32_t)KHR_WINDOW_POPUP_H);
+            } else if (shell.popup_live) {
+                khr_xdg_popup_destroy(&client, &shell);
             }
             seat.right_down = false;
         }
@@ -428,10 +427,6 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
             (void)khr_xdg_set_maximized(&client, &shell, !shell.maximized);
             seat.left_down = false;
         } else if (seat.left_down && on_popup) {
-            seat.left_down = false;
-        } else if (seat.left_down && popup && !on_popup) {
-            popup = false;
-            dirty = true;
             seat.left_down = false;
         } else if (seat.left_down && !shell.fullscreen) {
             uint32_t serial = khr_seat_serial(&seat);
@@ -447,11 +442,39 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
             (void)khr_xdg_set_fullscreen(&client, &shell, !shell.fullscreen);
         }
         if (seat.esc_pressed) {
-            if (popup) {
-                popup = false;
-                dirty = true;
+            if (shell.popup_live) {
+                khr_xdg_popup_destroy(&client, &shell);
             } else if (shell.fullscreen) {
                 (void)khr_xdg_set_fullscreen(&client, &shell, false);
+            }
+        }
+        if (shell.popup_live && shell.popup_configured && !shell.popup_mapped) {
+            uint32_t pw = (uint32_t)shell.popup_w;
+            uint32_t ph = (uint32_t)shell.popup_h;
+            if (pw == 0) {
+                pw = KHR_WINDOW_POPUP_W;
+            }
+            if (ph == 0) {
+                ph = KHR_WINDOW_POPUP_H;
+            }
+            if (popup_shm_id == 0) {
+                (void)khr_shm_bind(&client, &popup_shm_id);
+            }
+            size_t bytes = (size_t)pw * (size_t)ph * 4U;
+            if (popup_pool.addr != nullptr && popup_pool.size < bytes) {
+                khr_shm_pool_destroy(&client, &popup_pool);
+            }
+            if (popup_pool.addr == nullptr && popup_shm_id != 0) {
+                (void)khr_shm_pool_init(&client, popup_shm_id, bytes, &popup_pool);
+            }
+            if (popup_pool.addr != nullptr &&
+                khr_shm_buffer_create(&client, &popup_pool, 0, pw, ph, pw * 4U,
+                                      &popup_buffer_id)) {
+                khr_window_paint_popup_shm((uint32_t*)popup_pool.addr, pw, ph);
+                (void)khr_xdg_popup_ack(&client, &shell);
+                (void)khr_shm_attach_commit(&client, shell.popup_surface_id,
+                                            popup_buffer_id, pw, ph);
+                shell.popup_mapped = true;
             }
         }
         if (was_fullscreen != shell.fullscreen) {
@@ -464,11 +487,10 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
         }
         bool size_ok = have_dp && dp.width == want_w && dp.height == want_h;
         if (size_ok && dirty && khr_dmabuf_present_next_free(&dp) != UINT32_MAX) {
-            khr_window_paint_cards(cards, buf_w, buf_h, shell.fullscreen,
-                                   popup, popup_x, popup_y);
+            khr_window_paint_cards(cards, buf_w, buf_h, shell.fullscreen);
             uint32_t top = shell.fullscreen ? 0U : KHR_WINDOW_CHROME_TOP;
             (void)khr_xdg_ack_pending(&client, &shell);
-            if (khr_dmabuf_present_commit_scene(dev, &dp, cards_addr, 3,
+            if (khr_dmabuf_present_commit_scene(dev, &dp, cards_addr, 2,
                                                 &plot, &plot_push, top)) {
                 dirty = false;
                 khr_window_wait_acquire(dev);
@@ -495,6 +517,11 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
     if (have_dp) {
         khr_dmabuf_present_destroy(dev, &dp);
     }
+    khr_xdg_popup_destroy(&client, &shell);
+    if (popup_buffer_id != 0) {
+        (void)khr_shm_buffer_destroy(&client, popup_buffer_id);
+    }
+    khr_shm_pool_destroy(&client, &popup_pool);
     khr_plot_pipeline_destroy(&plot);
     khr_cursor_destroy(&client, &cursor);
     khr_wl_client_disconnect(&client);

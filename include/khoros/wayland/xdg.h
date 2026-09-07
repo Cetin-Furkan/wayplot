@@ -39,14 +39,35 @@ constexpr uint16_t KHR_WL_SURFACE_DAMAGE         = 2;
 constexpr uint16_t KHR_WL_SURFACE_COMMIT         = 6;
 
 /* xdg_wm_base (xdg-shell.xml): get_xdg_surface=2, pong=3, event ping=0 */
+constexpr uint16_t KHR_XDG_WM_BASE_CREATE_POSITIONER = 1;
 constexpr uint16_t KHR_XDG_WM_BASE_GET_XDG_SURFACE = 2;
 constexpr uint16_t KHR_XDG_WM_BASE_PONG           = 3;
 constexpr uint16_t KHR_XDG_WM_BASE_EVENT_PING     = 0;
 
-/* xdg_surface: get_toplevel=1, ack_configure=4, event configure=0 */
+/* xdg_surface: get_toplevel=1, get_popup=2, ack_configure=4, event configure=0 */
+constexpr uint16_t KHR_XDG_SURFACE_DESTROY        = 0;
 constexpr uint16_t KHR_XDG_SURFACE_GET_TOPLEVEL   = 1;
+constexpr uint16_t KHR_XDG_SURFACE_GET_POPUP      = 2;
 constexpr uint16_t KHR_XDG_SURFACE_ACK_CONFIGURE  = 4;
 constexpr uint16_t KHR_XDG_SURFACE_EVENT_CONFIGURE = 0;
+
+/* xdg_positioner / xdg_popup (context menus that may hang outside the parent). */
+constexpr uint16_t KHR_XDG_POS_DESTROY            = 0;
+constexpr uint16_t KHR_XDG_POS_SET_SIZE           = 1;
+constexpr uint16_t KHR_XDG_POS_SET_ANCHOR_RECT    = 2;
+constexpr uint16_t KHR_XDG_POS_SET_ANCHOR         = 3;
+constexpr uint16_t KHR_XDG_POS_SET_GRAVITY        = 4;
+constexpr uint16_t KHR_XDG_POS_SET_CONSTRAINT     = 5;
+constexpr uint16_t KHR_XDG_POPUP_DESTROY          = 0;
+constexpr uint16_t KHR_XDG_POPUP_GRAB             = 1;
+constexpr uint16_t KHR_XDG_POPUP_EVENT_CONFIGURE  = 0;
+constexpr uint16_t KHR_XDG_POPUP_EVENT_DONE       = 1;
+constexpr uint32_t KHR_XDG_ANCHOR_TOP_LEFT        = 5;
+constexpr uint32_t KHR_XDG_GRAVITY_BOTTOM_RIGHT   = 10;
+constexpr uint32_t KHR_XDG_CONSTRAINT_SLIDE_X     = 1;
+constexpr uint32_t KHR_XDG_CONSTRAINT_SLIDE_Y     = 2;
+constexpr uint32_t KHR_XDG_CONSTRAINT_FLIP_X      = 4;
+constexpr uint32_t KHR_XDG_CONSTRAINT_FLIP_Y      = 8;
 
 /* xdg_surface extra: set_window_geometry=3 */
 constexpr uint16_t KHR_XDG_SURFACE_SET_WINDOW_GEOMETRY = 3;
@@ -114,6 +135,20 @@ typedef struct {
     bool            fullscreen;
     uint32_t        size_seq;        /* bumped when width/height/states change */
     khr_xdg_state_t state;
+
+    /* Right-click cart: separate xdg_popup surface, may hang outside parent. */
+    uint32_t        popup_surface_id;
+    uint32_t        popup_xdg_id;
+    uint32_t        popup_id;
+    uint32_t        popup_ack_serial;
+    int32_t         popup_x;
+    int32_t         popup_y;
+    int32_t         popup_w;
+    int32_t         popup_h;
+    bool            popup_live;
+    bool            popup_configured;
+    bool            popup_mapped;
+    bool            popup_done;
 } khr_xdg_shell_t;
 
 void khr_xdg_init(khr_xdg_shell_t* shell);
@@ -177,5 +212,18 @@ bool khr_xdg_set_maximized(khr_wl_client_t* client, const khr_xdg_shell_t* shell
 [[nodiscard]]
 bool khr_xdg_set_fullscreen(khr_wl_client_t* client, const khr_xdg_shell_t* shell,
                             bool on);
+
+/* Context-menu popup: new surface + positioner + grab. Hangs outside the
+ * parent window; compositor may flip/slide to stay on the output. */
+[[nodiscard]]
+bool khr_xdg_popup_open(khr_wl_client_t* client, khr_xdg_shell_t* shell,
+                        uint32_t seat_id, uint32_t serial,
+                        int32_t anchor_x, int32_t anchor_y,
+                        int32_t w, int32_t h);
+
+[[nodiscard]]
+bool khr_xdg_popup_ack(khr_wl_client_t* client, khr_xdg_shell_t* shell);
+
+void khr_xdg_popup_destroy(khr_wl_client_t* client, khr_xdg_shell_t* shell);
 
 #endif /* KHOROS_WAYLAND_XDG_H */

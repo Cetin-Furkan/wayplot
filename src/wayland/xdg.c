@@ -233,6 +233,37 @@ uint32_t khr_xdg_consume(khr_wl_client_t* client, khr_xdg_shell_t* shell,
                    hdr.opcode == KHR_XDG_TOPLEVEL_EVENT_CLOSE) {
             shell->closed = true;
             count++;
+        } else if (shell->popup_xdg_id != 0 && hdr.object_id == shell->popup_xdg_id &&
+                   hdr.opcode == KHR_XDG_SURFACE_EVENT_CONFIGURE && payload_len >= 4) {
+            size_t off = 0;
+            uint32_t serial = 0;
+            if (khr_wl_decode_u32(payload, payload_len, &off, &serial)) {
+                shell->popup_ack_serial = serial;
+                shell->popup_configured = true;
+                count++;
+            }
+        } else if (shell->popup_id != 0 && hdr.object_id == shell->popup_id &&
+                   hdr.opcode == KHR_XDG_POPUP_EVENT_CONFIGURE && payload_len >= 16) {
+            size_t off = 0;
+            int32_t x = 0, y = 0, w = 0, h = 0;
+            if (khr_wl_decode_i32(payload, payload_len, &off, &x) &&
+                khr_wl_decode_i32(payload, payload_len, &off, &y) &&
+                khr_wl_decode_i32(payload, payload_len, &off, &w) &&
+                khr_wl_decode_i32(payload, payload_len, &off, &h)) {
+                shell->popup_x = x;
+                shell->popup_y = y;
+                if (w > 0) {
+                    shell->popup_w = w;
+                }
+                if (h > 0) {
+                    shell->popup_h = h;
+                }
+                count++;
+            }
+        } else if (shell->popup_id != 0 && hdr.object_id == shell->popup_id &&
+                   hdr.opcode == KHR_XDG_POPUP_EVENT_DONE) {
+            shell->popup_done = true;
+            count++;
         }
         offset += hdr.size;
     }
@@ -371,4 +402,139 @@ bool khr_xdg_set_fullscreen(khr_wl_client_t* client, const khr_xdg_shell_t* shel
     return khr_wl_encode_header(&out, shell->xdg_toplevel_id,
                                 KHR_XDG_TOPLEVEL_UNSET_FULLSCREEN, 8) &&
            khr_wl_client_send_skip(client, out.data, out.size);
+}
+
+void khr_xdg_popup_destroy(khr_wl_client_t* client, khr_xdg_shell_t* shell) {
+    if (shell == nullptr) {
+        return;
+    }
+    if (client != nullptr && shell->popup_live) {
+        khr_wl_msg_buf_t out = {};
+        khr_wl_buf_init(&out);
+        if (shell->popup_id != 0) {
+            (void)khr_wl_encode_header(&out, shell->popup_id, KHR_XDG_POPUP_DESTROY, 8);
+        }
+        if (shell->popup_xdg_id != 0) {
+            (void)khr_wl_encode_header(&out, shell->popup_xdg_id, KHR_XDG_SURFACE_DESTROY, 8);
+        }
+        if (shell->popup_surface_id != 0) {
+            (void)khr_wl_encode_header(&out, shell->popup_surface_id, KHR_WL_SURFACE_DESTROY, 8);
+        }
+        if (out.size > 0) {
+            (void)khr_wl_client_send_skip(client, out.data, out.size);
+        }
+    }
+    shell->popup_surface_id = 0;
+    shell->popup_xdg_id = 0;
+    shell->popup_id = 0;
+    shell->popup_ack_serial = 0;
+    shell->popup_x = 0;
+    shell->popup_y = 0;
+    shell->popup_w = 0;
+    shell->popup_h = 0;
+    shell->popup_live = false;
+    shell->popup_configured = false;
+    shell->popup_mapped = false;
+    shell->popup_done = false;
+}
+
+[[nodiscard]]
+bool khr_xdg_popup_ack(khr_wl_client_t* client, khr_xdg_shell_t* shell) {
+    if (client == nullptr || shell == nullptr || shell->popup_xdg_id == 0) {
+        return false;
+    }
+    if (shell->popup_ack_serial == 0) {
+        return true;
+    }
+    khr_wl_msg_buf_t out = {};
+    khr_wl_buf_init(&out);
+    if (!khr_wl_encode_header(&out, shell->popup_xdg_id, KHR_XDG_SURFACE_ACK_CONFIGURE, 12) ||
+        !khr_wl_encode_u32(&out, shell->popup_ack_serial) ||
+        !khr_wl_client_send_skip(client, out.data, out.size)) {
+        return false;
+    }
+    shell->popup_ack_serial = 0;
+    return true;
+}
+
+[[nodiscard]]
+bool khr_xdg_popup_open(khr_wl_client_t* client, khr_xdg_shell_t* shell,
+                        uint32_t seat_id, uint32_t serial,
+                        int32_t anchor_x, int32_t anchor_y,
+                        int32_t w, int32_t h) {
+    if (client == nullptr || shell == nullptr || shell->compositor_id == 0 ||
+        shell->wm_base_id == 0 || shell->xdg_surface_id == 0 || w <= 0 || h <= 0) {
+        return false;
+    }
+    if (shell->popup_live) {
+        khr_xdg_popup_destroy(client, shell);
+    }
+    uint32_t surf = khr_wl_client_alloc_id(client);
+    uint32_t pos = khr_wl_client_alloc_id(client);
+    uint32_t xdg = khr_wl_client_alloc_id(client);
+    uint32_t pop = khr_wl_client_alloc_id(client);
+    if (surf == 0 || pos == 0 || xdg == 0 || pop == 0) {
+        return false;
+    }
+    uint32_t adj = KHR_XDG_CONSTRAINT_SLIDE_X | KHR_XDG_CONSTRAINT_SLIDE_Y |
+                   KHR_XDG_CONSTRAINT_FLIP_X | KHR_XDG_CONSTRAINT_FLIP_Y;
+    khr_wl_msg_buf_t out = {};
+    khr_wl_buf_init(&out);
+    if (!khr_wl_encode_header(&out, shell->compositor_id, KHR_WL_COMPOSITOR_CREATE_SURFACE, 12) ||
+        !khr_wl_encode_u32(&out, surf) ||
+        !khr_wl_encode_header(&out, shell->wm_base_id, KHR_XDG_WM_BASE_CREATE_POSITIONER, 12) ||
+        !khr_wl_encode_u32(&out, pos) ||
+        !khr_wl_encode_header(&out, pos, KHR_XDG_POS_SET_SIZE, 16) ||
+        !khr_wl_encode_i32(&out, w) ||
+        !khr_wl_encode_i32(&out, h) ||
+        !khr_wl_encode_header(&out, pos, KHR_XDG_POS_SET_ANCHOR_RECT, 24) ||
+        !khr_wl_encode_i32(&out, anchor_x) ||
+        !khr_wl_encode_i32(&out, anchor_y) ||
+        !khr_wl_encode_i32(&out, 1) ||
+        !khr_wl_encode_i32(&out, 1) ||
+        !khr_wl_encode_header(&out, pos, KHR_XDG_POS_SET_ANCHOR, 12) ||
+        !khr_wl_encode_u32(&out, KHR_XDG_ANCHOR_TOP_LEFT) ||
+        !khr_wl_encode_header(&out, pos, KHR_XDG_POS_SET_GRAVITY, 12) ||
+        !khr_wl_encode_u32(&out, KHR_XDG_GRAVITY_BOTTOM_RIGHT) ||
+        !khr_wl_encode_header(&out, pos, KHR_XDG_POS_SET_CONSTRAINT, 12) ||
+        !khr_wl_encode_u32(&out, adj) ||
+        !khr_wl_encode_header(&out, shell->wm_base_id, KHR_XDG_WM_BASE_GET_XDG_SURFACE, 16) ||
+        !khr_wl_encode_u32(&out, xdg) ||
+        !khr_wl_encode_u32(&out, surf) ||
+        !khr_wl_encode_header(&out, xdg, KHR_XDG_SURFACE_GET_POPUP, 20) ||
+        !khr_wl_encode_u32(&out, pop) ||
+        !khr_wl_encode_u32(&out, shell->xdg_surface_id) ||
+        !khr_wl_encode_u32(&out, pos) ||
+        !khr_wl_encode_header(&out, xdg, KHR_XDG_SURFACE_SET_WINDOW_GEOMETRY, 24) ||
+        !khr_wl_encode_i32(&out, 0) ||
+        !khr_wl_encode_i32(&out, 0) ||
+        !khr_wl_encode_i32(&out, w) ||
+        !khr_wl_encode_i32(&out, h)) {
+        return false;
+    }
+    if (seat_id != 0 && serial != 0) {
+        if (!khr_wl_encode_header(&out, pop, KHR_XDG_POPUP_GRAB, 16) ||
+            !khr_wl_encode_u32(&out, seat_id) ||
+            !khr_wl_encode_u32(&out, serial)) {
+            return false;
+        }
+    }
+    if (!khr_wl_encode_header(&out, pos, KHR_XDG_POS_DESTROY, 8) ||
+        !khr_wl_encode_header(&out, surf, KHR_WL_SURFACE_COMMIT, 8) ||
+        !khr_wl_client_send_skip(client, out.data, out.size)) {
+        return false;
+    }
+    shell->popup_surface_id = surf;
+    shell->popup_xdg_id = xdg;
+    shell->popup_id = pop;
+    shell->popup_ack_serial = 0;
+    shell->popup_x = anchor_x;
+    shell->popup_y = anchor_y;
+    shell->popup_w = w;
+    shell->popup_h = h;
+    shell->popup_live = true;
+    shell->popup_configured = false;
+    shell->popup_mapped = false;
+    shell->popup_done = false;
+    return true;
 }

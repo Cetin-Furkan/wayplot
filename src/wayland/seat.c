@@ -107,6 +107,7 @@ uint32_t khr_seat_consume(khr_wl_client_t* client, khr_seat_t* seat,
                     khr_wl_decode_i32(payload, payload_len, &off, &fx) &&
                     khr_wl_decode_i32(payload, payload_len, &off, &fy)) {
                     seat->enter_serial = serial;
+                    seat->pointer_surface = surf;
                     seat->x = khr_fixed_to_px(fx);
                     seat->y = khr_fixed_to_px(fy);
                     seat->pointer_in = true;
@@ -114,6 +115,7 @@ uint32_t khr_seat_consume(khr_wl_client_t* client, khr_seat_t* seat,
                 }
             } else if (hdr.opcode == KHR_WL_POINTER_EVENT_LEAVE) {
                 seat->pointer_in = false;
+                seat->pointer_surface = 0;
                 count++;
             } else if (hdr.opcode == KHR_WL_POINTER_EVENT_MOTION &&
                        payload_len >= 12) {

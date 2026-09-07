@@ -42,6 +42,7 @@ typedef struct {
     uint32_t keyboard_id;
     uint32_t caps;
     uint32_t enter_serial;
+    uint32_t pointer_surface;
     uint32_t button_serial;
     int32_t  x;
     int32_t  y;

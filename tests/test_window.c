@@ -1,6 +1,7 @@
 #include "test_framework.h"
 #include "khoros/core/config.h"
 #include "khoros/wayland/xdg.h"
+#include "khoros/wayland/cursor.h"
 #include "khoros/gfx/pipeline.h"
 #include <math.h>
 #include <string.h>
@@ -27,6 +28,10 @@ bool test_window_hit_chrome_regions(void) {
                    (uint32_t)KHR_HIT_S, "bottom edge resize");
     TEST_ASSERT_EQ((uint32_t)khr_window_hit(80, 80, w, h, false),
                    (uint32_t)KHR_HIT_CLIENT, "interior is client");
+    TEST_ASSERT_EQ(khr_hit_cursor_shape(KHR_HIT_CLIENT), KHR_CURSOR_SHAPE_DEFAULT,
+                   "empty client uses the default arrow, not the finger");
+    TEST_ASSERT_EQ(khr_hit_cursor_shape(KHR_HIT_POPUP), KHR_CURSOR_SHAPE_POINTER,
+                   "popup uses the pointer finger");
     TEST_ASSERT_EQ((uint32_t)khr_window_hit(0, 0, w, h, true),
                    (uint32_t)KHR_HIT_CLIENT, "fullscreen has no chrome");
     TEST_ASSERT_EQ(khr_hit_resize_edge(KHR_HIT_SE), KHR_XDG_RESIZE_BOTTOM_RIGHT,
