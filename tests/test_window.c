@@ -1,6 +1,9 @@
 #include "test_framework.h"
 #include "khoros/core/config.h"
 #include "khoros/wayland/xdg.h"
+#include "khoros/gfx/pipeline.h"
+#include <math.h>
+#include <string.h>
 
 [[nodiscard]]
 bool test_window_hit_chrome_regions(void) {
@@ -54,5 +57,31 @@ bool test_window_buffer_size_from_xdg(void) {
     TEST_ASSERT(KHR_WINDOW_CHROME_TOP == 32, "drag bar is 32px");
     TEST_ASSERT(KHR_WINDOW_CHROME_CORNER >= KHR_WINDOW_CHROME_EDGE,
                 "corners are extra beyond the edge strip");
+    return true;
+}
+
+[[nodiscard]]
+bool test_plot_demo_samples_in_range(void) {
+    TEST_ASSERT(KHR_PLOT_SAMPLE_COUNT >= 2U, "ribbon needs at least two samples");
+    float s[KHR_PLOT_SAMPLE_COUNT];
+    memset(s, 0, sizeof(s));
+    khr_plot_fill_demo_samples(nullptr, KHR_PLOT_SAMPLE_COUNT);
+    khr_plot_fill_demo_samples(s, 0);
+    khr_plot_fill_demo_samples(s, KHR_PLOT_SAMPLE_COUNT);
+    float min_v = s[0];
+    float max_v = s[0];
+    for (uint32_t i = 0; i < KHR_PLOT_SAMPLE_COUNT; i++) {
+        TEST_ASSERT(isfinite(s[i]), "sample must be finite");
+        TEST_ASSERT(s[i] > 0.0f && s[i] < 1.0f, "demo series stays in (0,1)");
+        if (s[i] < min_v) {
+            min_v = s[i];
+        }
+        if (s[i] > max_v) {
+            max_v = s[i];
+        }
+    }
+    TEST_ASSERT(max_v - min_v > 0.2f, "demo series is not a flat line");
+    TEST_ASSERT(s[0] != s[KHR_PLOT_SAMPLE_COUNT / 4U],
+                "series varies across the window");
     return true;
 }
