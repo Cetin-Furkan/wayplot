@@ -31,6 +31,12 @@ Do not commit `build/`, `logs/`, or `*.log`. `.gitignore` already excludes them.
 | `test_wayland_direct_socket_connect_and_roundtrip` | atomic pure io_uring direct descriptor socket creation + connect (`IOSQE_IO_LINK` + `IOSQE_FIXED_FILE`), zero POSIX fd allocation, fixed-file send/recv, and direct close |
 | `test_wayland_pure_ring_native_socket_and_connect` | end-to-end direct descriptor socket lifecycle (socket + connect + accept + direct send/recv + direct close), failure resilience and slot cleanup |
 | `test_wayland_raw_uring_roundtrip` | live compositor registry via uring; skips cleanly if no GUI socket |
+| `test_xdg_shell_lifecycle` | bind, toplevel, configure, deferred ack, close |
+| `test_window_hit_chrome_regions` | corners, edges, move bar, close square, cursor shapes, no chrome in fullscreen |
+| `test_window_hit_list_first_match` | first-match rect table, chrome fill order (NE/E beat close), overflow reject |
+| `test_window_buffer_size_from_xdg` | 0×0 → default, compositor size used verbatim, double-click jitter |
+| `test_plot_demo_samples_in_range` | 256 demo floats in (0,1), not a flat line |
+| `test_shm_wire_pool_and_buffer` | shm pool + buffer create, page-aligned size, FD identity |
 
 ### Suite 3 — Wayplot topology
 
