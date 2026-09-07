@@ -72,6 +72,75 @@ static bool khr_dmp_signal(int drm_fd, uint32_t handle, uint64_t point) {
     return ioctl(drm_fd, DRM_IOCTL_SYNCOBJ_TIMELINE_SIGNAL, &arr) == 0;
 }
 
+static void khr_dmp_retire_slot(khr_gfx_device_t* dev, khr_wl_client_t* client,
+                                khr_dmabuf_pslot_t* slot) {
+    if (slot == nullptr) {
+        return;
+    }
+    if (client != nullptr) {
+        if (slot->buffer_id != 0) {
+            (void)khr_shm_buffer_destroy(client, slot->buffer_id);
+        }
+        if (slot->release_tl_id != 0) {
+            (void)khr_syncobj_destroy_timeline(client, slot->release_tl_id);
+        }
+    }
+    int drm_fd = (dev != nullptr) ? dev->drm_fd : -1;
+    khr_dmp_destroy_timeline(drm_fd, slot->release_handle);
+    if (dev != nullptr) {
+        khr_dmabuf_slot_destroy(dev, &slot->gfx);
+    }
+    *slot = (khr_dmabuf_pslot_t){};
+}
+
+[[nodiscard]]
+static bool khr_dmp_init_slot(khr_gfx_device_t* dev, khr_wl_client_t* client,
+                              uint32_t dmabuf_id, uint32_t mgr_id,
+                              uint32_t w, uint32_t h, khr_dmabuf_pslot_t* slot) {
+    if (dev == nullptr || client == nullptr || slot == nullptr ||
+        dmabuf_id == 0 || mgr_id == 0) {
+        return false;
+    }
+    *slot = (khr_dmabuf_pslot_t){};
+    if (!khr_dmabuf_slot_init(dev, &slot->gfx, w, h)) {
+        return false;
+    }
+    const khr_dmabuf_image_t* img = &slot->gfx.img;
+    if (!khr_dmabuf_import_full(client, dmabuf_id, img->dma_fd, w, h,
+                                img->drm_format, img->stride, img->offset,
+                                img->modifier, &slot->params_id,
+                                &slot->buffer_id)) {
+        khr_dmp_retire_slot(dev, client, slot);
+        return false;
+    }
+    slot->release_handle = khr_dmp_create_timeline(dev->drm_fd);
+    int rel_fd = -1;
+    uint32_t rel_tl = 0;
+    if (slot->release_handle == 0 ||
+        !khr_dmp_export_fd(dev->drm_fd, slot->release_handle, &rel_fd) ||
+        !khr_syncobj_import_timeline(client, mgr_id, rel_fd, &rel_tl)) {
+        if (rel_fd >= 0) {
+            close(rel_fd);
+        }
+        khr_dmp_retire_slot(dev, client, slot);
+        return false;
+    }
+    close(rel_fd);
+    slot->release_tl_id = rel_tl;
+    return true;
+}
+
+void khr_dmabuf_present_drop_retired(khr_gfx_device_t* dev,
+                                     khr_dmabuf_present_t* p) {
+    if (p == nullptr || !p->has_retiring) {
+        return;
+    }
+    for (uint32_t i = 0; i < KHR_DMABUF_PRESENT_SLOTS; i++) {
+        khr_dmp_retire_slot(dev, p->client, &p->retiring[i]);
+    }
+    p->has_retiring = false;
+}
+
 [[nodiscard]]
 bool khr_dmabuf_present_init(khr_gfx_device_t* dev, khr_wl_client_t* client,
                              uint32_t surface_id, uint32_t w, uint32_t h,
@@ -112,35 +181,43 @@ bool khr_dmabuf_present_init(khr_gfx_device_t* dev, khr_wl_client_t* client,
     out->acquire_tl_id = acq_tl;
 
     for (uint32_t i = 0; i < KHR_DMABUF_PRESENT_SLOTS; i++) {
-        khr_dmabuf_pslot_t* slot = &out->slots[i];
-        if (!khr_dmabuf_slot_init(dev, &slot->gfx, w, h)) {
+        if (!khr_dmp_init_slot(dev, client, out->dmabuf_id, out->mgr_id, w, h,
+                               &out->slots[i])) {
             khr_dmabuf_present_destroy(dev, out);
             return false;
         }
-        const khr_dmabuf_image_t* img = &slot->gfx.img;
-        if (!khr_dmabuf_import_full(client, out->dmabuf_id, img->dma_fd, w, h,
-                                    img->drm_format, img->stride, img->offset,
-                                    img->modifier, &slot->params_id,
-                                    &slot->buffer_id)) {
-            khr_dmabuf_present_destroy(dev, out);
-            return false;
-        }
-        slot->release_handle = khr_dmp_create_timeline(dev->drm_fd);
-        int rel_fd = -1;
-        uint32_t rel_tl = 0;
-        if (slot->release_handle == 0 ||
-            !khr_dmp_export_fd(dev->drm_fd, slot->release_handle, &rel_fd) ||
-            !khr_syncobj_import_timeline(client, out->mgr_id, rel_fd,
-                                         &rel_tl)) {
-            if (rel_fd >= 0) {
-                close(rel_fd);
-            }
-            khr_dmabuf_present_destroy(dev, out);
-            return false;
-        }
-        close(rel_fd);
-        slot->release_tl_id = rel_tl;
     }
+    return true;
+}
+
+[[nodiscard]]
+bool khr_dmabuf_present_resize(khr_gfx_device_t* dev, khr_dmabuf_present_t* p,
+                               uint32_t w, uint32_t h) {
+    if (dev == nullptr || p == nullptr || p->client == nullptr ||
+        p->dmabuf_id == 0 || p->mgr_id == 0 || p->sync_surface_id == 0 ||
+        w == 0 || h == 0 || w > 4'096 || h > 4'096) {
+        return false;
+    }
+    if (p->width == w && p->height == h) {
+        return true;
+    }
+    khr_dmabuf_pslot_t neu[KHR_DMABUF_PRESENT_SLOTS] = {};
+    for (uint32_t i = 0; i < KHR_DMABUF_PRESENT_SLOTS; i++) {
+        if (!khr_dmp_init_slot(dev, p->client, p->dmabuf_id, p->mgr_id, w, h,
+                               &neu[i])) {
+            for (uint32_t j = 0; j < i; j++) {
+                khr_dmp_retire_slot(dev, p->client, &neu[j]);
+            }
+            return false;
+        }
+    }
+    khr_dmabuf_present_drop_retired(dev, p);
+    memcpy(p->retiring, p->slots, sizeof(p->slots));
+    memcpy(p->slots, neu, sizeof(neu));
+    p->has_retiring = true;
+    p->width = w;
+    p->height = h;
+    p->next_slot = 0;
     return true;
 }
 
@@ -222,6 +299,43 @@ bool khr_dmabuf_present_commit_frame(khr_gfx_device_t* dev,
     return true;
 }
 
+[[nodiscard]]
+bool khr_dmabuf_present_commit_cards(khr_gfx_device_t* dev,
+                                     khr_dmabuf_present_t* p,
+                                     VkDeviceAddress cards_addr,
+                                     uint32_t card_count) {
+    if (dev == nullptr || p == nullptr || p->client == nullptr ||
+        cards_addr == 0 || card_count == 0) {
+        return false;
+    }
+    uint32_t idx = khr_dmabuf_present_next_free(p);
+    if (idx == UINT32_MAX) {
+        return false;
+    }
+    khr_dmabuf_pslot_t* slot = &p->slots[idx];
+    uint64_t point = dev->acquire_point + 1U;
+    if (!khr_dmabuf_slot_render_cards(dev, &slot->gfx, cards_addr, card_count,
+                                      dev->acquire_sem, point)) {
+        return false;
+    }
+    dev->acquire_point = point;
+    (void)khr_dmabuf_present_sync(dev, p);
+    if (!khr_syncobj_set_points(p->client, p->sync_surface_id,
+                                p->acquire_tl_id, point,
+                                slot->release_tl_id, slot->release_point + 1U)) {
+        return false;
+    }
+    slot->release_point++;
+    if (!khr_shm_attach_commit(p->client, p->surface_id, slot->buffer_id,
+                               p->width, p->height)) {
+        return false;
+    }
+    slot->busy = true;
+    p->next_slot = (idx + 1U) % KHR_DMABUF_PRESENT_SLOTS;
+    p->frames++;
+    return true;
+}
+
 uint32_t khr_dmabuf_present_consume(khr_dmabuf_present_t* p,
                                     const uint8_t* data, size_t len) {
     if (p == nullptr || data == nullptr) {
@@ -240,13 +354,26 @@ uint32_t khr_dmabuf_present_consume(khr_dmabuf_present_t* p,
         const uint8_t* body = data + offset + 8;
         size_t body_len = hdr.size - 8;
         if (hdr.opcode == KHR_WL_BUFFER_EVENT_RELEASE && hdr.size == 8) {
+            bool hit = false;
             for (uint32_t i = 0; i < KHR_DMABUF_PRESENT_SLOTS; i++) {
                 if (p->slots[i].buffer_id == hdr.object_id &&
                     p->slots[i].busy) {
                     p->slots[i].busy = false;
                     p->releases++;
                     count++;
+                    hit = true;
                     break;
+                }
+            }
+            if (!hit && p->has_retiring) {
+                for (uint32_t i = 0; i < KHR_DMABUF_PRESENT_SLOTS; i++) {
+                    if (p->retiring[i].buffer_id == hdr.object_id &&
+                        p->retiring[i].busy) {
+                        p->retiring[i].busy = false;
+                        p->releases++;
+                        count++;
+                        break;
+                    }
                 }
             }
         } else if (hdr.opcode == KHR_DMABUF_PARAMS_EVENT_CREATED &&
@@ -284,28 +411,15 @@ void khr_dmabuf_present_destroy(khr_gfx_device_t* dev,
     if (p == nullptr) {
         return;
     }
-    if (p->client != nullptr) {
-        for (uint32_t i = 0; i < KHR_DMABUF_PRESENT_SLOTS; i++) {
-            if (p->slots[i].buffer_id != 0) {
-                (void)khr_shm_buffer_destroy(p->client,
-                                             p->slots[i].buffer_id);
-            }
-            if (p->slots[i].release_tl_id != 0) {
-                (void)khr_syncobj_destroy_timeline(p->client,
-                                                   p->slots[i].release_tl_id);
-            }
-        }
-        if (p->acquire_tl_id != 0) {
-            (void)khr_syncobj_destroy_timeline(p->client, p->acquire_tl_id);
-        }
+    khr_dmabuf_present_drop_retired(dev, p);
+    khr_wl_client_t* client = p->client;
+    for (uint32_t i = 0; i < KHR_DMABUF_PRESENT_SLOTS; i++) {
+        khr_dmp_retire_slot(dev, client, &p->slots[i]);
+    }
+    if (client != nullptr && p->acquire_tl_id != 0) {
+        (void)khr_syncobj_destroy_timeline(client, p->acquire_tl_id);
     }
     int drm_fd = (dev != nullptr) ? dev->drm_fd : -1;
-    for (uint32_t i = 0; i < KHR_DMABUF_PRESENT_SLOTS; i++) {
-        khr_dmp_destroy_timeline(drm_fd, p->slots[i].release_handle);
-        if (dev != nullptr) {
-            khr_dmabuf_slot_destroy(dev, &p->slots[i].gfx);
-        }
-    }
     khr_dmp_destroy_timeline(drm_fd, p->acquire_handle);
     *p = (khr_dmabuf_present_t){};
 }

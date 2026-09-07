@@ -70,6 +70,11 @@ typedef struct {
     uint32_t acquire_handle;    /* DRM handle of the acquire timeline */
     uint64_t last_signaled;     /* last point pushed to the DRM timeline */
     khr_dmabuf_pslot_t slots[KHR_DMABUF_PRESENT_SLOTS];
+    /* Previous-size slots kept until the new buffer is committed. Destroying
+     * them before attach is legal on the wire; holding them avoids dropping
+     * the compositor's dma-buf while it still scans the last frame. */
+    khr_dmabuf_pslot_t retiring[KHR_DMABUF_PRESENT_SLOTS];
+    bool     has_retiring;
     uint32_t next_slot;
     uint32_t width;
     uint32_t height;
@@ -81,11 +86,27 @@ typedef struct {
 
 /* Bind dmabuf + syncobj manager, create the syncobj endpoint, the DRM
  * timelines (one acquire + one per slot, all imported once), and both GPU
- * slots with their wl_buffers. Needs a configured surface (attach gate). */
+ * slots with their wl_buffers. Needs a configured surface (attach gate).
+ * get_surface is once per wl_surface: calling this again on a mapped
+ * surface is a compositor protocol error (already_constructed). */
 [[nodiscard]]
 bool khr_dmabuf_present_init(khr_gfx_device_t* dev, khr_wl_client_t* client,
                              uint32_t surface_id, uint32_t w, uint32_t h,
                              khr_dmabuf_present_t* out);
+
+/*
+ * Recreate only the GPU slots + wl_buffers at a new size. Reuses the dmabuf
+ * bind, syncobj manager, get_surface endpoint, and acquire timeline.
+ * Previous slots move to retiring; commit a matching buffer, then
+ * khr_dmabuf_present_drop_retired(). Same size is a no-op success.
+ */
+[[nodiscard]]
+bool khr_dmabuf_present_resize(khr_gfx_device_t* dev, khr_dmabuf_present_t* p,
+                               uint32_t w, uint32_t h);
+
+/* Destroy retiring slots (call after the new size is attached). */
+void khr_dmabuf_present_drop_retired(khr_gfx_device_t* dev,
+                                     khr_dmabuf_present_t* p);
 
 /* Index of the next usable slot (not busy, not failed), or UINT32_MAX when
  * the loop must pump for releases instead of blocking. */
@@ -102,6 +123,13 @@ uint32_t khr_dmabuf_present_next_free(const khr_dmabuf_present_t* p);
 bool khr_dmabuf_present_commit_frame(khr_gfx_device_t* dev,
                                      khr_dmabuf_present_t* p,
                                      khr_bda_arena_t* arena, uint64_t frame_no);
+
+/* Same commit, drawing persistent BDA cards (no arena bump). */
+[[nodiscard]]
+bool khr_dmabuf_present_commit_cards(khr_gfx_device_t* dev,
+                                     khr_dmabuf_present_t* p,
+                                     VkDeviceAddress cards_addr,
+                                     uint32_t card_count);
 
 /*
  * Acquire bridge pump: query the device timeline counter and TIMELINE_SIGNAL
