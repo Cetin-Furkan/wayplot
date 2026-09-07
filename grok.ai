@@ -495,4 +495,50 @@ Do not put Wayland on Ring B. Do not copy 2 MiB onto Ring A. Do not spin either 
 
 Atomic conventional commits of the uncommitted R2/R3 + compose pass, then `git push -u origin engine`. No `git add .`.
 
+---
+
+## [2026-09-07T20:40:50+03:00] - Swapchain parked in DEVELOPER_NOTE.md; not 1.0
+
+User: write a note somewhere else (not the manuals) about reinventing a swapchain later; then what to do now.
+
+Wrote `DEVELOPER_NOTE.md` at repo root. WSI / `VkSwapchainKHR` / `wl_display*` / poll stay banned even later. 1.0 present slots are the acquire/draw/present ring. A future `khr_swapchain_*` would be our object on io_uring DMA-BUF, not Khronos WSI. Do not start it.
+
+1.0 next is still the existing loop: real BDA content, XDG size, run until close — not a new present abstraction.
+
+---
+
+## [2026-09-07T21:10:00+03:00] - Real window: XDG size, run until close, chrome, cursor
+
+`include/khoros/core/config.h` owns default 960×540, 32px drag, 8px edges, 16px corner extras, min size, start maximized/fullscreen flags.
+
+`khr_window_run`: until xdg close or SIGINT. Buffer size from XDG (0×0 → default). Recreate DMA-BUF slots on size change. Two persistent BDA cards (titlebar + body), no arena reset. Seat + `wp_cursor_shape_v1` (shm arrow fallback). CSD chrome hit-test → `xdg_toplevel.move` / `resize`. Double-click titlebar toggles maximize. F11 toggles fullscreen, Esc leaves fullscreen. `zxdg_decoration` CSD if advertised (this Mutter had none).
+
+Live 4s SIGTERM: `configured 0x0 (buffer 960x540)`, `cursor_shape=yes`, 230 frames, `stop=1 alive=yes`. Tests 95/95.
+
+---
+
+## [2026-09-07T21:26:46+03:00] - Resize kill + strobe + idle GPU
+
+User: ~5% GPU / ~2% CPU, colors strobing gray/black/other (black looked like a fault), move/drag worked, process died on cursor-resize and drag-to-side (auto-resize).
+
+### Causes
+
+1. **Strobe / idle burn.** The first window loop painted `frame_no % 3` into every free slot (~57 fps). Phase (24,24,28) looked black. Not a GPU error.
+2. **Resize disconnect.** Size change called `khr_dmabuf_present_init` again. That re-binds dmabuf + syncobj and issues `wp_linux_drm_syncobj_manager_v1.get_surface` on the already-mapped `wl_surface`. Protocol error `already_constructed` → compositor kills the client. Side-tile is the same path (Mutter sends a new configure). GPU-idle-then-destroy-old was necessary but not sufficient.
+
+### Fixes
+
+- Stable cards: body `khr_rgba8(48,52,64,255)`, bar `(36,36,42,255)`. Dirty-only commit. Idle wait 500 ms; 1 ms while the acquire bridge still has a named point. `present_sync` every lap (counter query, not a draw).
+- `khr_dmabuf_present_resize`: new GPU slots + wl_buffers only. Reuses dmabuf bind, syncobj manager, get_surface endpoint, acquire timeline. Old slots sit in `retiring` until the matching buffer is attached, then `drop_retired`.
+- Window loop: `present_init` once. Later size changes call `resize`. Never commit a buffer whose size does not match the last configure. Compositor 0×0 after map keeps the current buffer. Do not clamp compositor size up to MIN (ack would mismatch).
+- `khr_gfx_device_wait_idle` before slot rebuild. `image_destroy` closes `dma_fd` only if `> 0` (zeroed slot must not `close(0)`).
+
+### Gates
+
+- `make lint` PASS
+- `make test` 97/97 (2055 assertions), including `test_dmabuf_present_resize_keeps_sync_surface` (get_surface_count stays 1 across 320×240 → 640×360)
+- Live 22 s SIGTERM on Mutter: `frames=1 releases=0` `960x540` `stop=1 alive=yes` CPU 0.0%. No display error.
+
+Interactive cursor-resize / side-tile not driven from this session (no gnome-shell Eval). The protocol path is the one the new test covers.
+
 
