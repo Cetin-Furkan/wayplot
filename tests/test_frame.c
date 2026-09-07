@@ -18,7 +18,7 @@
 bool test_gfx_real_submit_and_readback(void) {
     khr_gfx_device_t dev = {};
     if (!khr_gfx_device_init(&dev, (dev_t)0)) {
-        printf("(SKIP: no Vulkan device in this environment) ");
+        TEST_SKIP("no Vulkan device in this environment");
         return true;
     }
 

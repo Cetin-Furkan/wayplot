@@ -49,6 +49,7 @@ typedef struct {
     uint32_t total;
     uint32_t passed;
     uint32_t failed;
+    uint32_t skipped;
     uint32_t assertions_checked;
     uint64_t start_time_ns;
     uint64_t end_time_ns;
@@ -62,6 +63,7 @@ typedef struct {
     const char* current_test_name;
     test_suite_stats_t* stats;
     bool failed;
+    bool skipped;
 } test_run_context_t;
 
 extern test_run_context_t g_khr_test_ctx;
@@ -247,7 +249,8 @@ static inline void khr_test_run_internal(test_suite_stats_t* stats,
     g_khr_test_ctx = (test_run_context_t){
         .current_test_name = test_name,
         .stats = stats,
-        .failed = false
+        .failed = false,
+        .skipped = false
     };
 
     printf("  " KHR_CLR_CYAN "▶" KHR_CLR_RESET " %-42s ", test_name);
@@ -258,7 +261,10 @@ static inline void khr_test_run_internal(test_suite_stats_t* stats,
     uint64_t t1 = khr_test_now_ns();
     double duration_ms = (double)(t1 - t0) / 1'000'000.0;
 
-    if (ok && !g_khr_test_ctx.failed) {
+    if (g_khr_test_ctx.skipped && !g_khr_test_ctx.failed) {
+        printf(KHR_CLR_YELLOW "↷ [ SKIP ]" KHR_CLR_RESET "  " KHR_CLR_DIM "(%6.3f ms)" KHR_CLR_RESET "\n", duration_ms);
+        stats->skipped++;
+    } else if (ok && !g_khr_test_ctx.failed) {
         printf(KHR_CLR_GREEN "✔ [ PASS ]" KHR_CLR_RESET "  " KHR_CLR_DIM "(%6.3f ms)" KHR_CLR_RESET "\n", duration_ms);
         stats->passed++;
     } else {
@@ -269,6 +275,12 @@ static inline void khr_test_run_internal(test_suite_stats_t* stats,
 
 #define RUN_TEST(stats, test_fn) \
     khr_test_run_internal((stats), #test_fn, (test_fn))
+
+#define TEST_SKIP(msg) do { \
+    printf(KHR_CLR_YELLOW "(SKIP: %s) " KHR_CLR_RESET, (msg)); \
+    g_khr_test_ctx.skipped = true; \
+    return true; \
+} while (0)
 
 static inline void khr_test_print_progress_bar(uint32_t passed, uint32_t total, uint32_t bar_width) {
     if (total == 0) return;
@@ -316,15 +328,18 @@ static inline int khr_test_finish_suite(test_suite_stats_t* stats) {
         printf("\n" KHR_BG_GREEN_BOLD " ✔ ALL TESTS PASSED SUCCESSFULLY " KHR_CLR_RESET "\n\n");
     }
 
-    khr_test_print_progress_bar(stats->passed, stats->total, 36);
+    uint32_t executed = stats->passed + stats->failed;
+    khr_test_print_progress_bar(stats->passed, executed > 0 ? executed : stats->total, 36);
 
     printf("  " KHR_CLR_BOLD "Summary:" KHR_CLR_RESET "   "
            KHR_CLR_GREEN "%u Passed" KHR_CLR_RESET " | "
            "%s%u Failed" KHR_CLR_RESET " | "
+           KHR_CLR_YELLOW "%u Skipped" KHR_CLR_RESET " | "
            "%u Total" KHR_CLR_DIM " (%u assertions checked)" KHR_CLR_RESET "\n",
            stats->passed,
            (stats->failed > 0) ? KHR_CLR_RED : KHR_CLR_DIM,
            stats->failed,
+           stats->skipped,
            stats->total,
            stats->assertions_checked);
     printf("  " KHR_CLR_BOLD "Duration:" KHR_CLR_RESET "  %.3f ms\n", total_ms);

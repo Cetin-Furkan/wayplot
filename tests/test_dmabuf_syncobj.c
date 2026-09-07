@@ -347,9 +347,19 @@ bool test_dmabuf_syncobj_timeline_destroy_on_swapchain_retire(void) {
     mock_compositor_t comp = {};
     TEST_ASSERT(mock_compositor_init(&comp), "init mock compositor");
 
+    /* Import 3 swapchain release timelines through the real wire path. */
+    comp.client_syncobj_mgr_id = 70;
+    for (uint32_t id = 80; id < 83; id++) {
+        khr_wl_msg_buf_t imp = {};
+        khr_wl_buf_init(&imp);
+        TEST_ASSERT(khr_wl_encode_header(&imp, 70, KHR_SYNCOBJ_MGR_IMPORT_TIMELINE, 12), "import");
+        TEST_ASSERT(khr_wl_encode_u32(&imp, id), "timeline id");
+        TEST_ASSERT(mock_client_send_msg_with_fd(comp.client_fd, imp.data, imp.size, -1), "send import");
+    }
+    mock_compositor_drain(&comp);
+
     /* Emit timeline destroy opcode 0 for 3 swapchain release timelines */
     for (uint32_t id = 80; id < 83; id++) {
-        comp.timeline_id = id;
         khr_wl_msg_buf_t tx = {};
         khr_wl_buf_init(&tx);
         TEST_ASSERT(khr_wl_encode_header(&tx, id, KHR_SYNCOBJ_TIMELINE_DESTROY, 8), "timeline destroy");

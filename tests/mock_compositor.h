@@ -24,48 +24,33 @@
 #include <errno.h>
 
 #include "khoros/wayland/wire.h"
+#include "khoros/wayland/xdg.h"
+#include "khoros/wayland/dmabuf.h"
+#include "khoros/wayland/syncobj.h"
+#include "khoros/wayland/shm.h"
 
-/* Protocol Opcode Constants */
-constexpr uint16_t KHR_WL_SURFACE_DESTROY             = 0;
-constexpr uint16_t KHR_WL_SURFACE_ATTACH              = 1;
-constexpr uint16_t KHR_WL_SURFACE_DAMAGE              = 2;
+/* Protocol Opcode Constants: core/XDG/shm opcodes live in their production
+ * headers (single source of truth, XML-verified); the mock keeps only its
+ * extension rake. */
 constexpr uint16_t KHR_WL_SURFACE_FRAME               = 3;
-constexpr uint16_t KHR_WL_SURFACE_COMMIT              = 6;
 
 constexpr uint16_t KHR_XDG_WM_BASE_DESTROY            = 0;
 constexpr uint16_t KHR_XDG_WM_BASE_CREATE_POSITIONER  = 1;
-constexpr uint16_t KHR_XDG_WM_BASE_GET_XDG_SURFACE    = 2;
-constexpr uint16_t KHR_XDG_WM_BASE_PONG               = 3;
-constexpr uint16_t KHR_XDG_WM_BASE_EVENT_PING         = 0;
 
 constexpr uint16_t KHR_XDG_SURFACE_DESTROY            = 0;
-constexpr uint16_t KHR_XDG_SURFACE_GET_TOPLEVEL       = 1;
 constexpr uint16_t KHR_XDG_SURFACE_GET_POPUP          = 2;
 constexpr uint16_t KHR_XDG_SURFACE_SET_WINDOW_GEOM    = 3;
-constexpr uint16_t KHR_XDG_SURFACE_ACK_CONFIGURE      = 4;
-constexpr uint16_t KHR_XDG_SURFACE_EVENT_CONFIGURE    = 0;
 
 constexpr uint16_t KHR_XDG_TOPLEVEL_DESTROY           = 0;
-constexpr uint16_t KHR_XDG_TOPLEVEL_EVENT_CONFIGURE   = 0;
-constexpr uint16_t KHR_XDG_TOPLEVEL_EVENT_CLOSE       = 1;
 
 constexpr uint16_t KHR_DMABUF_DESTROY                 = 0;
-constexpr uint16_t KHR_DMABUF_CREATE_PARAMS           = 1;
 constexpr uint16_t KHR_DMABUF_PARAMS_DESTROY          = 0;
-constexpr uint16_t KHR_DMABUF_PARAMS_ADD              = 1;
 constexpr uint16_t KHR_DMABUF_PARAMS_CREATE           = 2;
-constexpr uint16_t KHR_DMABUF_PARAMS_CREATE_IMMED     = 3;
+/* CREATE_PARAMS / PARAMS_ADD / PARAMS_CREATE_IMMED come from
+ * wayland/dmabuf.h (single source of truth, XML-verified). */
 
-constexpr uint16_t KHR_SYNCOBJ_MGR_DESTROY            = 0;
-constexpr uint16_t KHR_SYNCOBJ_MGR_IMPORT_TIMELINE    = 1;
-constexpr uint16_t KHR_SYNCOBJ_MGR_GET_SURFACE        = 2;
-
-constexpr uint16_t KHR_SYNCOBJ_SURFACE_DESTROY        = 0;
-constexpr uint16_t KHR_SYNCOBJ_SURFACE_SET_ACQUIRE    = 1;
-constexpr uint16_t KHR_SYNCOBJ_SURFACE_SET_RELEASE    = 2;
-
-constexpr uint16_t KHR_SYNCOBJ_TIMELINE_DESTROY       = 0;
-constexpr uint16_t KHR_WL_BUFFER_EVENT_RELEASE        = 0;
+/* Syncobj opcodes live in wayland/syncobj.h, wl_buffer release in
+ * wayland/shm.h (single source of truth, XML-verified). */
 
 constexpr size_t MOCK_MAX_REQUESTS = 256;
 constexpr size_t MOCK_MAX_FDS      = 32;
@@ -114,6 +99,9 @@ typedef struct {
     uint32_t commit_count;
     uint32_t attach_count;
     uint32_t last_attached_buffer;
+    uint32_t shm_pool_id;
+    uint32_t shm_buffer_ids[4];
+    uint32_t shm_buffer_count;
     uint32_t last_ack_serial;
     uint32_t ack_configure_count;
     uint32_t last_pong_serial;
@@ -134,6 +122,10 @@ typedef struct {
     uint32_t release_timeline_id;
     uint64_t release_point;
     uint32_t timeline_destroy_count;
+    /* Live imported timeline ids (per-image slots): destroy matches any of
+     * these, not just the most recent import. */
+    uint32_t timeline_ids[8];
+    uint32_t timeline_id_count;
 
     /* Request Journal */
     mock_wl_request_t requests[MOCK_MAX_REQUESTS];
@@ -279,6 +271,30 @@ static inline bool mock_compositor_send_buffer_release(mock_compositor_t* comp, 
     return mock_compositor_send_raw(comp, buf.data, buf.size);
 }
 
+/* zwp_linux_buffer_params_v1.created(new_id buffer): sent some time after
+ * create_immed; the buffer is usable immediately, created only confirms. */
+[[nodiscard]]
+static inline bool mock_compositor_send_dmabuf_created(mock_compositor_t* comp,
+                                                      uint32_t params_id,
+                                                      uint32_t buffer_id) {
+    khr_wl_msg_buf_t buf = {};
+    khr_wl_buf_init(&buf);
+    if (!khr_wl_encode_header(&buf, params_id, KHR_DMABUF_PARAMS_EVENT_CREATED, 12)) return false;
+    if (!khr_wl_encode_u32(&buf, buffer_id)) return false;
+    return mock_compositor_send_raw(comp, buf.data, buf.size);
+}
+
+/* zwp_linux_buffer_params_v1.failed: the import died (bad format, modifier,
+ * stride, or GPU-stack refusal). No arguments; the params object is done. */
+[[nodiscard]]
+static inline bool mock_compositor_send_dmabuf_failed(mock_compositor_t* comp,
+                                                     uint32_t params_id) {
+    khr_wl_msg_buf_t buf = {};
+    khr_wl_buf_init(&buf);
+    if (!khr_wl_encode_header(&buf, params_id, KHR_DMABUF_PARAMS_EVENT_FAILED, 8)) return false;
+    return mock_compositor_send_raw(comp, buf.data, buf.size);
+}
+
 /*
  * Process a single decoded wire message and update mock compositor state
  */
@@ -376,6 +392,27 @@ static inline void mock_compositor_process_message(mock_compositor_t* comp,
         return;
     }
 
+    /* 6b. wl_shm.create_pool */
+    if (comp->client_shm_id > 0 && hdr->object_id == comp->client_shm_id && hdr->opcode == 0) {
+        if (payload_len >= 4) {
+            size_t off = 0;
+            (void)khr_wl_decode_u32(payload, payload_len, &off, &comp->shm_pool_id);
+        }
+        return;
+    }
+
+    /* 6c. wl_shm_pool.create_buffer */
+    if (comp->shm_pool_id > 0 && hdr->object_id == comp->shm_pool_id && hdr->opcode == 0) {
+        if (payload_len >= 20 && comp->shm_buffer_count < 4) {
+            size_t off = 0;
+            uint32_t new_id = 0;
+            if (khr_wl_decode_u32(payload, payload_len, &off, &new_id) && new_id > 0) {
+                comp->shm_buffer_ids[comp->shm_buffer_count++] = new_id;
+            }
+        }
+        return;
+    }
+
     /* 7. wl_surface.attach */
     if (comp->surface_id > 0 && hdr->object_id == comp->surface_id && hdr->opcode == KHR_WL_SURFACE_ATTACH) {
         if (payload_len >= 4) {
@@ -433,7 +470,13 @@ static inline void mock_compositor_process_message(mock_compositor_t* comp,
     if (comp->client_syncobj_mgr_id > 0 && hdr->object_id == comp->client_syncobj_mgr_id && hdr->opcode == KHR_SYNCOBJ_MGR_IMPORT_TIMELINE) {
         if (payload_len >= 4) {
             size_t off = 0;
-            (void)khr_wl_decode_u32(payload, payload_len, &off, &comp->timeline_id);
+            uint32_t new_id = 0;
+            if (khr_wl_decode_u32(payload, payload_len, &off, &new_id) && new_id > 0) {
+                comp->timeline_id = new_id;
+                if (comp->timeline_id_count < 8) {
+                    comp->timeline_ids[comp->timeline_id_count++] = new_id;
+                }
+            }
             comp->syncobj_timeline_fd = received_fd;
         }
         return;
@@ -482,10 +525,16 @@ static inline void mock_compositor_process_message(mock_compositor_t* comp,
         return;
     }
 
-    /* 16. wp_linux_drm_syncobj_timeline_v1.destroy (Opcode 0) */
-    if (comp->timeline_id > 0 && hdr->object_id == comp->timeline_id && hdr->opcode == KHR_SYNCOBJ_TIMELINE_DESTROY) {
-        comp->timeline_destroy_count++;
-        return;
+    /* 16. wp_linux_drm_syncobj_timeline_v1.destroy (Opcode 0): matches any
+     * live imported id; consumed on destroy so double-destroy is visible. */
+    if (hdr->opcode == KHR_SYNCOBJ_TIMELINE_DESTROY) {
+        for (uint32_t i = 0; i < comp->timeline_id_count; i++) {
+            if (comp->timeline_ids[i] == hdr->object_id && hdr->object_id > 0) {
+                comp->timeline_ids[i] = 0;
+                comp->timeline_destroy_count++;
+                return;
+            }
+        }
     }
 }
 
@@ -528,6 +577,74 @@ static inline uint32_t mock_compositor_drain(mock_compositor_t* comp) {
             }
         }
 
+        /* FD ownership across a coalesced stream batch: like libwayland, the
+         * received FD belongs to the first message that actually declares an
+         * 'h' argument (dmabuf add, syncobj import) — never blindly to the
+         * batch head. Shadow IDs learned mid-batch (create_params precedes
+         * its add) so ordering inside one recvmsg still resolves. */
+        size_t fd_target = (size_t)-1;
+        {
+            size_t scan = 0;
+            /* Shadow the ID learning that process_message performs, so a
+             * fully-coalesced bind+params+add batch still resolves: the bind
+             * teaches the dmabuf/syncobj IDs, create_params teaches params. */
+            uint32_t shadow_dmabuf = comp->client_dmabuf_id;
+            uint32_t shadow_mgr = comp->client_syncobj_mgr_id;
+            uint32_t shadow_params = comp->dmabuf_params_id;
+            while (scan + 8 <= (size_t)n) {
+                khr_wl_msg_header_t shdr = {};
+                if (!khr_wl_decode_header(buffer + scan, (size_t)n - scan, &shdr)) {
+                    break;
+                }
+                if (shdr.size < 8 || scan + shdr.size > (size_t)n) {
+                    break;
+                }
+                if (shdr.object_id == KHR_WL_REGISTRY_ID &&
+                    shdr.opcode == KHR_WL_REGISTRY_BIND) {
+                    size_t off = 0;
+                    uint32_t name = 0;
+                    const char* iface = nullptr;
+                    uint32_t iface_len = 0;
+                    uint32_t version = 0;
+                    uint32_t new_id = 0;
+                    if (khr_wl_decode_u32(buffer + scan + 8, shdr.size - 8, &off, &name) &&
+                        khr_wl_decode_string(buffer + scan + 8, shdr.size - 8, &off, &iface, &iface_len) &&
+                        khr_wl_decode_u32(buffer + scan + 8, shdr.size - 8, &off, &version) &&
+                        khr_wl_decode_u32(buffer + scan + 8, shdr.size - 8, &off, &new_id)) {
+                        (void)name;
+                        (void)version;
+                        if (iface != nullptr && strcmp(iface, "zwp_linux_dmabuf_v1") == 0) {
+                            shadow_dmabuf = new_id;
+                        } else if (iface != nullptr &&
+                                   strcmp(iface, "wp_linux_drm_syncobj_manager_v1") == 0) {
+                            shadow_mgr = new_id;
+                        }
+                    }
+                }
+                if (shadow_dmabuf > 0 && shdr.object_id == shadow_dmabuf &&
+                    shdr.opcode == KHR_DMABUF_CREATE_PARAMS && shdr.size >= 12) {
+                    size_t off = 0;
+                    uint32_t new_id = 0;
+                    if (khr_wl_decode_u32(buffer + scan + 8, shdr.size - 8, &off, &new_id)) {
+                        shadow_params = new_id;
+                    }
+                }
+                bool takes_fd =
+                    (shadow_params > 0 && shdr.object_id == shadow_params &&
+                     shdr.opcode == KHR_DMABUF_PARAMS_ADD) ||
+                    (shadow_mgr > 0 && shdr.object_id == shadow_mgr &&
+                     shdr.opcode == KHR_SYNCOBJ_MGR_IMPORT_TIMELINE);
+                if (takes_fd) {
+                    fd_target = scan;
+                    break;
+                }
+                scan += shdr.size;
+            }
+            if (fd_target == (size_t)-1) {
+                fd_target = 0; /* legacy: no FD-message present */
+            }
+        }
+
         /* Process all concatenated Wayland messages in this read batch */
         size_t offset = 0;
         while (offset + 8 <= (size_t)n) {
@@ -542,8 +659,7 @@ static inline uint32_t mock_compositor_drain(mock_compositor_t* comp) {
             const uint8_t* payload = buffer + offset + 8;
             size_t payload_len = hdr.size - 8;
 
-            /* Associated FD belongs to the first message in the datagram */
-            int msg_fd = (offset == 0) ? received_fd : -1;
+            int msg_fd = (offset == fd_target) ? received_fd : -1;
 
             mock_compositor_process_message(comp, &hdr, payload, payload_len, msg_fd);
             new_msgs++;

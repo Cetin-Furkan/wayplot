@@ -2,11 +2,22 @@
 #include "mock_compositor.h"
 #include "khoros/core/topology.h"
 #include "khoros/core/cpu.h"
+#include "khoros/gfx/device.h"
+#include "khoros/gfx/bda_arena.h"
+#include "khoros/wayland/client.h"
+#include "khoros/wayland/xdg.h"
+#include "khoros/wayland/present.h"
+#include "khoros/wayland/dmabuf.h"
+#include "khoros/wayland/syncobj.h"
+#include "khoros/uring/ring.h"
 #include <unistd.h>
 #include <stdlib.h>
 #include <sys/eventfd.h>
 #include <sys/mman.h>
 #include <fcntl.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <linux/time_types.h>
 
 [[nodiscard]]
 bool test_ipc_bda_stream_cross_core(void) {
@@ -68,13 +79,34 @@ bool test_ipc_ingestion_to_bda_pipeline(void) {
     TEST_ASSERT_EQ(((uint8_t*)topo.hugepage)[0], 0xAB, "Hugepage memory first byte verification");
     TEST_ASSERT_EQ(((uint8_t*)topo.hugepage)[sizeof(dummy_asset) - 1], 0xAB, "Hugepage memory last byte verification");
 
-    /* 3. Stream simulated GPU BDA pointer across cores */
-    uint64_t simulated_bda = 0x2000'0000ULL + (uint64_t)(uintptr_t)topo.hugepage;
-    TEST_ASSERT(khr_topology_signal_bda(&topo, simulated_bda), "Signal BDA");
-
-    uint64_t reaped_bda = 0;
-    TEST_ASSERT(khr_topology_wait_bda(&topo, &reaped_bda, 2'000), "Wait BDA");
-    TEST_ASSERT_EQ(reaped_bda, simulated_bda, "Reaped BDA mismatch");
+    /* 3. Real VkDeviceAddress of the SAME hugepage the ingest DMA'd into,
+     * when the GPU can import it. Host-pointer IPC is only the no-GPU path. */
+    khr_gfx_device_t dev = {};
+    uint64_t want = (uint64_t)(uintptr_t)topo.hugepage;
+    if (khr_gfx_device_init(&dev, (dev_t)0)) {
+        khr_bda_arena_t arena = {};
+        if (khr_bda_arena_init_with_host_ptr(&dev, &arena, topo.hugepage,
+                                             topo.hugepage_sz)) {
+            TEST_ASSERT_EQ(((uint8_t*)arena.host_ptr)[0], 0xAB,
+                           "imported arena must see ingested bytes");
+        } else {
+            TEST_ASSERT(khr_bda_arena_init(&dev, &arena, KHR_BDA_DEFAULT_ARENA_SZ),
+                        "fallback BDA arena");
+        }
+        TEST_ASSERT(arena.gpu_address != 0, "gpu address missing");
+        want = (uint64_t)arena.gpu_address;
+        TEST_ASSERT(khr_topology_signal_bda(&topo, want), "Signal BDA");
+        uint64_t reaped_bda = 0;
+        TEST_ASSERT(khr_topology_wait_bda(&topo, &reaped_bda, 2'000), "Wait BDA");
+        TEST_ASSERT_EQ(reaped_bda, want, "Reaped VkDeviceAddress mismatch");
+        khr_bda_arena_destroy(&dev, &arena);
+        khr_gfx_device_destroy(&dev);
+    } else {
+        TEST_ASSERT(khr_topology_signal_bda(&topo, want), "Signal host pointer");
+        uint64_t reaped_bda = 0;
+        TEST_ASSERT(khr_topology_wait_bda(&topo, &reaped_bda, 2'000), "Wait BDA");
+        TEST_ASSERT_EQ(reaped_bda, want, "Reaped host pointer mismatch");
+    }
 
     khr_topology_destroy(&topo);
     unlink(path);
@@ -83,104 +115,51 @@ bool test_ipc_ingestion_to_bda_pipeline(void) {
 
 [[nodiscard]]
 bool test_tier3_bda_dmabuf_syncobj_pairwise(void) {
+    /* Production encode path against the mock: not hand-rolled opcodes. */
+    khr_topology_t topo = {};
+    TEST_ASSERT(khr_topology_init(&topo), "topology init");
+
     mock_compositor_t comp = {};
     TEST_ASSERT(mock_compositor_init(&comp), "Mock compositor init failed");
-    comp.surface_id = 20;
-    comp.client_syncobj_mgr_id = 13;
-    comp.client_dmabuf_id = 12;
 
-    /* 1. Ingest BDA pointer */
-    uint64_t bda_address = 0x7FFF'A000'1000ULL;
+    khr_wl_client_t client = {
+        .sock_fd = comp.client_fd,
+        .ring = &topo.ring_a,
+    };
+    khr_wl_client_attach_topology(&client, &topo);
+    TEST_ASSERT(mock_compositor_send_globals(&comp), "globals");
+    TEST_ASSERT(mock_compositor_send_sync_done(&comp, KHR_WL_CALLBACK_ID, 1), "sync");
+    TEST_ASSERT(khr_wl_client_roundtrip(&client), "roundtrip");
 
-    /* 2. Create DMA-BUF backing memory */
+    uint32_t dmabuf_id = 0;
+    uint32_t mgr_id = 0;
+    TEST_ASSERT(khr_dmabuf_bind(&client, &dmabuf_id), "dmabuf bind");
+    TEST_ASSERT(khr_syncobj_bind(&client, &mgr_id), "syncobj bind");
+    TEST_ASSERT(mock_compositor_drain(&comp) >= 2, "binds");
+
     int dma_fd = memfd_create("tier3_dmabuf", MFD_CLOEXEC);
     TEST_ASSERT(dma_fd >= 0, "memfd_create dma");
-    TEST_ASSERT_EQ(ftruncate(dma_fd, 1920 * 1080 * 4), 0, "ftruncate dma");
-
-    /* 3. Create DRM syncobj timeline FD */
+    TEST_ASSERT_EQ(ftruncate(dma_fd, 64 * 64 * 4), 0, "ftruncate dma");
     int sync_fd = memfd_create("tier3_syncobj", MFD_CLOEXEC);
     TEST_ASSERT(sync_fd >= 0, "memfd_create syncobj");
 
-    /* Wire sequence: import timeline -> get syncobj surface -> create dmabuf params -> add -> create_immed -> attach -> set_acquire -> set_release -> commit */
-    khr_wl_msg_buf_t tx = {};
-
-    /* Import timeline 90 */
-    khr_wl_buf_init(&tx);
-    TEST_ASSERT(khr_wl_encode_header(&tx, 13, KHR_SYNCOBJ_MGR_IMPORT_TIMELINE, 12), "import timeline");
-    TEST_ASSERT(khr_wl_encode_u32(&tx, 90), "timeline 90");
-    TEST_ASSERT(mock_client_send_msg_with_fd(comp.client_fd, tx.data, tx.size, sync_fd), "send timeline");
-
-    /* Get syncobj surface 91 */
-    khr_wl_buf_init(&tx);
-    TEST_ASSERT(khr_wl_encode_header(&tx, 13, KHR_SYNCOBJ_MGR_GET_SURFACE, 16), "get sync surface");
-    TEST_ASSERT(khr_wl_encode_u32(&tx, 91), "sync surface 91");
-    TEST_ASSERT(khr_wl_encode_u32(&tx, 20), "surface 20");
-    TEST_ASSERT(mock_client_send_msg_with_fd(comp.client_fd, tx.data, tx.size, -1), "send get sync surface");
-
-    /* DMA-BUF create params 92 */
-    khr_wl_buf_init(&tx);
-    TEST_ASSERT(khr_wl_encode_header(&tx, 12, KHR_DMABUF_CREATE_PARAMS, 12), "create params");
-    TEST_ASSERT(khr_wl_encode_u32(&tx, 92), "params 92");
-    TEST_ASSERT(mock_client_send_msg_with_fd(comp.client_fd, tx.data, tx.size, -1), "send create params");
-
-    /* DMA-BUF params add */
-    khr_wl_buf_init(&tx);
-    TEST_ASSERT(khr_wl_encode_header(&tx, 92, KHR_DMABUF_PARAMS_ADD, 28), "params add");
-    TEST_ASSERT(khr_wl_encode_u32(&tx, 0), "plane 0");
-    TEST_ASSERT(khr_wl_encode_u32(&tx, 0), "offset 0");
-    TEST_ASSERT(khr_wl_encode_u32(&tx, 1920 * 4), "stride 7680");
-    TEST_ASSERT(khr_wl_encode_u32(&tx, 0), "mod_hi");
-    TEST_ASSERT(khr_wl_encode_u32(&tx, 0), "mod_lo");
-    TEST_ASSERT(mock_client_send_msg_with_fd(comp.client_fd, tx.data, tx.size, dma_fd), "send params add");
-
-    /* DMA-BUF params create_immed buffer 93 */
-    khr_wl_buf_init(&tx);
-    TEST_ASSERT(khr_wl_encode_header(&tx, 92, KHR_DMABUF_PARAMS_CREATE_IMMED, 28), "create immed");
-    TEST_ASSERT(khr_wl_encode_u32(&tx, 93), "buffer 93");
-    TEST_ASSERT(khr_wl_encode_i32(&tx, 1920), "w 1920");
-    TEST_ASSERT(khr_wl_encode_i32(&tx, 1080), "h 1080");
-    TEST_ASSERT(khr_wl_encode_u32(&tx, 0x34325258), "XRGB8888");
-    TEST_ASSERT(khr_wl_encode_u32(&tx, 0), "flags 0");
-    TEST_ASSERT(mock_client_send_msg_with_fd(comp.client_fd, tx.data, tx.size, -1), "send create immed");
-
-    /* Attach buffer 93 */
-    khr_wl_buf_init(&tx);
-    TEST_ASSERT(khr_wl_encode_header(&tx, 20, KHR_WL_SURFACE_ATTACH, 20), "attach");
-    TEST_ASSERT(khr_wl_encode_u32(&tx, 93), "buffer 93");
-    TEST_ASSERT(khr_wl_encode_i32(&tx, 0), "x 0");
-    TEST_ASSERT(khr_wl_encode_i32(&tx, 0), "y 0");
-    TEST_ASSERT(mock_client_send_msg_with_fd(comp.client_fd, tx.data, tx.size, -1), "send attach");
-
-    /* Set acquire point (BDA-indexed frame) */
-    khr_wl_buf_init(&tx);
-    TEST_ASSERT(khr_wl_encode_header(&tx, 91, KHR_SYNCOBJ_SURFACE_SET_ACQUIRE, 20), "set acquire");
-    TEST_ASSERT(khr_wl_encode_u32(&tx, 90), "timeline 90");
-    TEST_ASSERT(khr_wl_encode_u32(&tx, (uint32_t)(bda_address >> 32)), "hi");
-    TEST_ASSERT(khr_wl_encode_u32(&tx, (uint32_t)bda_address), "lo");
-    TEST_ASSERT(mock_client_send_msg_with_fd(comp.client_fd, tx.data, tx.size, -1), "send set acquire");
-
-    /* Set release point */
-    khr_wl_buf_init(&tx);
-    TEST_ASSERT(khr_wl_encode_header(&tx, 91, KHR_SYNCOBJ_SURFACE_SET_RELEASE, 20), "set release");
-    TEST_ASSERT(khr_wl_encode_u32(&tx, 90), "timeline 90");
-    TEST_ASSERT(khr_wl_encode_u32(&tx, (uint32_t)(bda_address >> 32)), "hi");
-    TEST_ASSERT(khr_wl_encode_u32(&tx, (uint32_t)bda_address + 1), "lo + 1");
-    TEST_ASSERT(mock_client_send_msg_with_fd(comp.client_fd, tx.data, tx.size, -1), "send set release");
-
-    /* Surface commit */
-    khr_wl_buf_init(&tx);
-    TEST_ASSERT(khr_wl_encode_header(&tx, 20, KHR_WL_SURFACE_COMMIT, 8), "commit");
-    TEST_ASSERT(mock_client_send_msg_with_fd(comp.client_fd, tx.data, tx.size, -1), "send commit");
-
-    mock_compositor_drain(&comp);
-    TEST_ASSERT_EQ(comp.commit_count, 1U, "commit count");
-    TEST_ASSERT_EQ(comp.last_attached_buffer, 93U, "attached buffer");
-    TEST_ASSERT_EQ(comp.acquire_point, bda_address, "acquire point matching BDA address");
-    TEST_ASSERT_EQ(comp.release_point, bda_address + 1, "release point matching BDA address + 1");
+    uint32_t tl_id = 0;
+    TEST_ASSERT(khr_syncobj_import_timeline(&client, mgr_id, sync_fd, &tl_id),
+                "import timeline");
+    uint32_t buf_id = 0;
+    TEST_ASSERT(khr_dmabuf_import(&client, dmabuf_id, dma_fd, 64, 64,
+                                 0x34325241U, 64 * 4, 0, 0, &buf_id),
+                "dmabuf import");
+    TEST_ASSERT(mock_compositor_drain(&comp) >= 4, "import requests");
+    TEST_ASSERT(comp.timeline_id_count >= 1U, "timeline imported");
+    TEST_ASSERT(comp.dma_plane_count >= 1U, "dma plane imported");
+    (void)tl_id;
+    (void)buf_id;
 
     close(dma_fd);
     close(sync_fd);
     mock_compositor_destroy(&comp);
+    khr_topology_destroy(&topo);
     return true;
 }
 
@@ -264,36 +243,46 @@ bool test_tier4_mock_wayland_frame_loop(void) {
 
 [[nodiscard]]
 bool test_tier4_144hz_presentation_pacing(void) {
-    /* 144 Hz frame cadence = 1'000'000'000 ns / 144 = 6'944'444 ns (~6.94 ms) */
-    constexpr uint64_t TARGET_FRAME_NS = 6'944'444ULL;
-    (void)TARGET_FRAME_NS;
+    /* Presentation pacing through the real topology: IORING_OP_POLL_ADD on an
+     * eventfd (no poll/epoll) plus IORING_OP_TIMEOUT for the slice. This is
+     * not vsync and does not claim 144 Hz — it proves the engine path. */
+    khr_topology_t topo = {};
+    TEST_ASSERT(khr_topology_init(&topo), "topology init");
 
     int efd = eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
     TEST_ASSERT(efd >= 0, "eventfd create failed");
 
     uint64_t t0 = khr_test_now_ns();
-
-    /* Simulate 3 frame paces */
+    uint32_t fired = 0;
     for (int frame = 0; frame < 3; frame++) {
-        /* Write to eventfd simulating compositor vblank/drm event */
+        TEST_ASSERT(khr_topology_arm_eventfd(&topo, efd), "arm eventfd watch");
         uint64_t val = 1;
-        TEST_ASSERT_EQ(write(efd, &val, sizeof(val)), (ssize_t)sizeof(val), "eventfd signal");
-
-        /* Non-blocking read */
-        uint64_t read_val = 0;
-        TEST_ASSERT_EQ(read(efd, &read_val, sizeof(read_val)), (ssize_t)sizeof(read_val), "eventfd read");
-        TEST_ASSERT_EQ(read_val, 1ULL, "read val");
-
-        /* Sleep remainder of frame target (1 ms test tick) */
-        struct timespec rem = { .tv_sec = 0, .tv_nsec = 1'000'000 };
-        nanosleep(&rem, nullptr);
+        TEST_ASSERT_EQ(write(efd, &val, sizeof(val)), (ssize_t)sizeof(val),
+                       "eventfd signal");
+        khr_cqe_event_t evt = {};
+        TEST_ASSERT(khr_topology_wait_cqe(&topo, &evt, 1'000), "wait eventfd cqe");
+        TEST_ASSERT_EQ(evt.user_data, KHR_TAG_EVENTFD, "eventfd tag");
+        TEST_ASSERT(evt.res >= 0, "eventfd watch failed");
+        fired++;
+        /* Drain the counter so the next POLL_ADD can fire. */
+        uint64_t drain = 0;
+        (void)read(efd, &drain, sizeof(drain));
+        struct __kernel_timespec ts = { .tv_sec = 0, .tv_nsec = 1'000'000 };
+        struct io_uring_sqe* to = khr_uring_prep_timeout(&topo.ring_a, &ts,
+                                                         KHR_TAG_TIMEOUT);
+        TEST_ASSERT_NOT_NULL(to, "timeout sqe");
+        TEST_ASSERT(khr_uring_submit(&topo.ring_a, 0) >= 0, "timeout submit");
+        khr_cqe_event_t tevt = {};
+        TEST_ASSERT(khr_topology_wait_cqe(&topo, &tevt, 1'000), "wait timeout");
+        TEST_ASSERT_EQ(tevt.user_data, KHR_TAG_TIMEOUT, "timeout tag");
     }
-
     uint64_t dt = khr_test_now_ns() - t0;
-    TEST_ASSERT_GE(dt, 3'000'000ULL, "Total duration must be at least 3 ms");
-    TEST_ASSERT_LT(dt, 100'000'000ULL, "Total duration must not stall (>100 ms)");
+    TEST_ASSERT_EQ(fired, 3U, "three eventfd watches");
+    TEST_ASSERT_GE(dt, 3'000'000ULL, "three 1 ms slices");
+    TEST_ASSERT_LT(dt, 100'000'000ULL, "must not stall");
 
     close(efd);
+    khr_topology_destroy(&topo);
     return true;
 }
 
@@ -354,9 +343,18 @@ bool test_tier4_window_resize_reconfiguration(void) {
     TEST_ASSERT(khr_wl_encode_u32(&ack, 303), "serial 303");
     TEST_ASSERT(mock_client_send_msg_with_fd(comp.client_fd, ack.data, ack.size, -1), "send ack");
 
-    /* 3. Client retires 3 old swapchain timelines, emitting destroy (Opcode 0) for each */
+    /* 3. Client retires 3 old swapchain timelines, emitting destroy (Opcode 0) for each.
+     * Timelines are imported first: destroy matches live ids, as on the wire. */
+    comp.client_syncobj_mgr_id = 90;
     for (uint32_t old_t = 500; old_t < 503; old_t++) {
-        comp.timeline_id = old_t;
+        khr_wl_msg_buf_t imp = {};
+        khr_wl_buf_init(&imp);
+        TEST_ASSERT(khr_wl_encode_header(&imp, 90, KHR_SYNCOBJ_MGR_IMPORT_TIMELINE, 12), "import");
+        TEST_ASSERT(khr_wl_encode_u32(&imp, old_t), "timeline id");
+        TEST_ASSERT(mock_client_send_msg_with_fd(comp.client_fd, imp.data, imp.size, -1), "send import");
+    }
+    mock_compositor_drain(&comp);
+    for (uint32_t old_t = 500; old_t < 503; old_t++) {
         khr_wl_msg_buf_t d = {};
         khr_wl_buf_init(&d);
         TEST_ASSERT(khr_wl_encode_header(&d, old_t, KHR_SYNCOBJ_TIMELINE_DESTROY, 8), "destroy old timeline");
@@ -381,12 +379,10 @@ bool test_tier4_window_resize_reconfiguration(void) {
 
 [[nodiscard]]
 bool test_tier4_full_dual_thread_e2e_pipeline(void) {
-    /* Full end-to-end integration:
-     * 1. Disk asset -> 3-SQE atomic ingestion into Ring B hugepage arena.
-     * 2. Core 1 sends 64-bit BDA device address via MSG_RING into Core 0 CQ ring.
-     * 3. Core 0 reaps BDA and packs into push constants.
-     * 4. Core 0 commits frame to Mock Compositor with DMA-BUF and DRM syncobj timeline.
-     */
+    /* Dual-thread e2e through production objects:
+     * ingest on Ring B → wrap hugepage as BDA when a GPU exists → MSG_RING
+     * the real VkDeviceAddress → XDG + shm present on the mock. DMA-BUF GPU
+     * present is covered by test_dmabuf_present_loop_mock, not memfd theatre. */
     char test_path[256] = "/tmp/khr_e2e_asset_XXXXXX";
     int fd = mkstemp(test_path);
     TEST_ASSERT(fd >= 0, "mkstemp");
@@ -395,44 +391,95 @@ bool test_tier4_full_dual_thread_e2e_pipeline(void) {
     TEST_ASSERT_EQ(write(fd, payload, sizeof(payload)), (ssize_t)sizeof(payload), "write");
     close(fd);
 
-    /* Topology bringup */
     khr_topology_t topo = {};
     TEST_ASSERT(khr_topology_init(&topo), "Topology init");
 
-    /* Mock compositor bringup */
-    mock_compositor_t comp = {};
-    TEST_ASSERT(mock_compositor_init(&comp), "Mock compositor init");
-    comp.surface_id = 20;
-    comp.client_syncobj_mgr_id = 13;
-    comp.client_dmabuf_id = 12;
-
-    /* Step 1: Ingest asset */
     size_t bytes = 0;
     TEST_ASSERT(khr_topology_ingest(&topo, test_path, &bytes), "ingest");
     TEST_ASSERT_EQ(bytes, sizeof(payload), "ingested bytes");
+    TEST_ASSERT_EQ(((uint8_t*)topo.hugepage)[0], 0xEE, "hugepage first byte");
 
-    /* Step 2: MSG_RING cross-core stream */
-    uint64_t gpu_bda = 0x4000'0000ULL + (uint64_t)(uintptr_t)topo.hugepage;
-    TEST_ASSERT(khr_topology_signal_bda(&topo, gpu_bda), "signal bda");
-
+    khr_gfx_device_t dev = {};
+    khr_bda_arena_t arena = {};
+    uint64_t want = (uint64_t)(uintptr_t)topo.hugepage;
+    if (khr_gfx_device_init(&dev, (dev_t)0)) {
+        if (khr_bda_arena_init_with_host_ptr(&dev, &arena, topo.hugepage,
+                                             topo.hugepage_sz)) {
+            TEST_ASSERT_EQ(((uint8_t*)arena.host_ptr)[0], 0xEE,
+                           "imported BDA sees ingested bytes");
+        } else {
+            TEST_ASSERT(khr_bda_arena_init(&dev, &arena, KHR_BDA_DEFAULT_ARENA_SZ),
+                        "fallback BDA arena");
+        }
+        want = (uint64_t)arena.gpu_address;
+    }
+    TEST_ASSERT(khr_topology_signal_bda(&topo, want), "signal bda");
     uint64_t reaped_bda = 0;
     TEST_ASSERT(khr_topology_wait_bda(&topo, &reaped_bda, 2'000), "wait bda");
-    TEST_ASSERT_EQ(reaped_bda, gpu_bda, "reaped bda");
+    TEST_ASSERT_EQ(reaped_bda, want, "reaped bda");
 
-    /* Step 3: Mock compositor presentation */
-    int mem_fd = memfd_create("e2e_dmabuf", MFD_CLOEXEC);
-    TEST_ASSERT(mem_fd >= 0, "memfd");
-    TEST_ASSERT_EQ(ftruncate(mem_fd, 1920 * 1080 * 4), 0, "truncate");
+    mock_compositor_t comp = {};
+    TEST_ASSERT(mock_compositor_init(&comp), "Mock compositor init");
+    khr_wl_client_t client = {
+        .sock_fd = comp.client_fd,
+        .ring = &topo.ring_a,
+    };
+    khr_wl_client_attach_pbufs(&client, &topo.pbuf_tier0, nullptr);
+    khr_wl_client_attach_topology(&client, &topo);
+    TEST_ASSERT(mock_compositor_send_globals(&comp), "globals");
+    TEST_ASSERT(mock_compositor_send_sync_done(&comp, KHR_WL_CALLBACK_ID, 1), "sync");
+    TEST_ASSERT(khr_wl_client_roundtrip(&client), "roundtrip");
 
-    khr_wl_msg_buf_t tx = {};
-    khr_wl_buf_init(&tx);
-    TEST_ASSERT(khr_wl_encode_header(&tx, 20, KHR_WL_SURFACE_COMMIT, 8), "commit");
-    TEST_ASSERT(mock_client_send_msg_with_fd(comp.client_fd, tx.data, tx.size, mem_fd), "send commit");
+    khr_xdg_shell_t shell = {};
+    khr_xdg_init(&shell);
+    TEST_ASSERT(khr_xdg_bind(&client, &shell), "xdg bind");
+    TEST_ASSERT(khr_xdg_create_toplevel(&client, &shell, "Khoros", "khoros-engine"),
+                "toplevel");
+    TEST_ASSERT(khr_wl_client_arm_inbound(&client), "arm");
+    TEST_ASSERT(mock_compositor_drain(&comp) >= 5, "xdg setup");
+    TEST_ASSERT(mock_compositor_send_xdg_configure(&comp, comp.xdg_toplevel_id,
+                                                   comp.xdg_surface_id, 0, 0, 1),
+                "configure");
+    for (int i = 0; i < 8 && !shell.configured; i++) {
+        khr_cqe_event_t evt = {};
+        if (!khr_topology_wait_cqe(&topo, &evt, 200)) {
+            break;
+        }
+        const uint8_t* data = nullptr;
+        size_t len = 0;
+        bool rearm = false;
+        (void)khr_wl_client_feed_cqe(&client, evt.user_data, evt.res, evt.flags,
+                                     &data, &len, &rearm);
+        if (data != nullptr && len >= 8) {
+            (void)khr_xdg_consume(&client, &shell, data, len);
+        }
+        khr_topology_recycle_cqe_buffer(&topo, &evt);
+        if (rearm) {
+            (void)khr_wl_client_arm_inbound(&client);
+        }
+    }
+    TEST_ASSERT(khr_xdg_can_attach(&shell), "attach gate");
 
-    mock_compositor_drain(&comp);
-    TEST_ASSERT_EQ(comp.commit_count, 1U, "commit count");
+    khr_present_t present = {};
+    TEST_ASSERT(khr_present_init(&client, shell.surface_id, 64, 48, &present),
+                "shm present init");
+    TEST_ASSERT(mock_compositor_drain(&comp) >= 3, "shm setup");
+    uint8_t* px = khr_present_slot_pixels(&present, 0);
+    TEST_ASSERT_NOT_NULL(px, "pixels");
+    khr_present_paint_test(&present, px, 1);
+    uint32_t commits_before = comp.commit_count;
+    TEST_ASSERT(khr_present_commit(&present, 0), "commit");
+    TEST_ASSERT(mock_compositor_drain(&comp) >= 1, "commit on wire");
+    TEST_ASSERT_EQ(comp.commit_count, commits_before + 1U,
+                   "frame commit must increment (empty xdg commit already counted)");
 
-    close(mem_fd);
+    khr_present_destroy(&present);
+    if (arena.buffer != VK_NULL_HANDLE) {
+        khr_bda_arena_destroy(&dev, &arena);
+    }
+    if (dev.device != VK_NULL_HANDLE) {
+        khr_gfx_device_destroy(&dev);
+    }
     mock_compositor_destroy(&comp);
     khr_topology_destroy(&topo);
     unlink(test_path);

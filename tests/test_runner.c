@@ -22,6 +22,7 @@ extern bool test_wayland_client_mock_roundtrip(void);
 extern bool test_wayland_direct_socket_connect_and_roundtrip(void);
 extern bool test_wayland_pure_ring_native_socket_and_connect(void);
 extern bool test_wayland_raw_uring_roundtrip(void);
+extern bool test_xdg_shell_lifecycle(void);
 
 /* Suite 3: Dual-Ring Topology & PBUF Architecture */
 extern bool test_ring_a_clock_and_no_iowait(void);
@@ -92,6 +93,17 @@ extern bool test_dmabuf_export_and_wire_import_integration(void);
 extern bool test_dmabuf_syncobj_full_surface_commit(void);
 extern bool test_dmabuf_syncobj_timeline_destroy_on_swapchain_retire(void);
 extern bool test_drm_syncobj_boundary_points(void);
+extern bool test_dmabuf_wire_import_fd_passing(void);
+extern bool test_dmabuf_vulkan_export_and_import(void);
+extern bool test_syncobj_wire_full_lifecycle(void);
+extern bool test_syncobj_drm_fd_import(void);
+extern bool test_dmabuf_present_created_failed_consume(void);
+extern bool test_dmabuf_present_loop_mock(void);
+extern bool test_dmabuf_present_acquire_bridge(void);
+extern bool test_shm_wire_pool_and_buffer(void);
+extern bool test_present_loop_release_recycling(void);
+extern bool test_send_await_no_debt_no_steal(void);
+extern bool test_await_tag_match_and_timeout(void);
 
 /* Suite 7: Cross-Feature Interactions & Real-World Scenarios (Tiers 3 & 4) */
 extern bool test_ipc_bda_stream_cross_core(void);
@@ -127,6 +139,8 @@ int main(void) {
     RUN_TEST(&stats, test_wayland_direct_socket_connect_and_roundtrip);
     RUN_TEST(&stats, test_wayland_pure_ring_native_socket_and_connect);
     RUN_TEST(&stats, test_wayland_raw_uring_roundtrip);
+    RUN_TEST(&stats, test_xdg_shell_lifecycle);
+    RUN_TEST(&stats, test_shm_wire_pool_and_buffer);
 
     printf("\n" KHR_CLR_BOLD "Suite 3: Dual-Ring Topology & PBUF Architecture\n" KHR_CLR_RESET);
     RUN_TEST(&stats, test_ring_a_clock_and_no_iowait);
@@ -155,6 +169,8 @@ int main(void) {
     RUN_TEST(&stats, test_pump_classifies_no_swallow);
     RUN_TEST(&stats, test_pump_burst_pairs_wake);
     RUN_TEST(&stats, test_wayland_pbuf_pump_drives_parse);
+    RUN_TEST(&stats, test_send_await_no_debt_no_steal);
+    RUN_TEST(&stats, test_await_tag_match_and_timeout);
 
     printf("\n" KHR_CLR_BOLD "Suite 4: Mock Wayland Compositor Subsystem\n" KHR_CLR_RESET);
     RUN_TEST(&stats, test_mock_compositor_init_destroy);
@@ -197,6 +213,13 @@ int main(void) {
     RUN_TEST(&stats, test_dmabuf_syncobj_full_surface_commit);
     RUN_TEST(&stats, test_dmabuf_syncobj_timeline_destroy_on_swapchain_retire);
     RUN_TEST(&stats, test_drm_syncobj_boundary_points);
+    RUN_TEST(&stats, test_dmabuf_wire_import_fd_passing);
+    RUN_TEST(&stats, test_dmabuf_vulkan_export_and_import);
+    RUN_TEST(&stats, test_syncobj_wire_full_lifecycle);
+    RUN_TEST(&stats, test_syncobj_drm_fd_import);
+    RUN_TEST(&stats, test_dmabuf_present_created_failed_consume);
+    RUN_TEST(&stats, test_dmabuf_present_loop_mock);
+    RUN_TEST(&stats, test_dmabuf_present_acquire_bridge);
 
     printf("\n" KHR_CLR_BOLD "Suite 7: Cross-Feature Interactions & Real-World Scenarios (Tiers 3 & 4)\n" KHR_CLR_RESET);
     RUN_TEST(&stats, test_ipc_bda_stream_cross_core);
@@ -208,6 +231,7 @@ int main(void) {
     RUN_TEST(&stats, test_tier4_compositor_ping_keepalive_under_load);
     RUN_TEST(&stats, test_tier4_window_resize_reconfiguration);
     RUN_TEST(&stats, test_tier4_full_dual_thread_e2e_pipeline);
+    RUN_TEST(&stats, test_present_loop_release_recycling);
 
     return khr_test_finish_suite(&stats);
 }

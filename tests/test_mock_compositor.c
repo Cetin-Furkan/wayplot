@@ -395,7 +395,15 @@ bool test_mock_compositor_drm_syncobj_timeline_import_and_points(void) {
 bool test_mock_compositor_timeline_destroy_lifecycle(void) {
     mock_compositor_t comp = {};
     TEST_ASSERT(mock_compositor_init(&comp), "init failed");
-    comp.timeline_id = 60;
+    comp.client_syncobj_mgr_id = 50;
+
+    /* Real lifecycle: import first (the destroy must match a live id). */
+    khr_wl_msg_buf_t imp = {};
+    khr_wl_buf_init(&imp);
+    TEST_ASSERT(khr_wl_encode_header(&imp, 50, KHR_SYNCOBJ_MGR_IMPORT_TIMELINE, 12), "import");
+    TEST_ASSERT(khr_wl_encode_u32(&imp, 60), "timeline id");
+    TEST_ASSERT(mock_client_send_msg_with_fd(comp.client_fd, imp.data, imp.size, -1), "send import");
+    mock_compositor_drain(&comp);
 
     /* wp_linux_drm_syncobj_timeline_v1.destroy() -> Opcode 0, size 8 */
     khr_wl_msg_buf_t tx = {};

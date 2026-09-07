@@ -18,26 +18,38 @@
  */
 
 [[nodiscard]]
-bool test_cpu_pins_avoid_kernel_cores(void) {
+static bool test_cpu_pins_avoid_kernel_cores_body(khr_topology_t* topo_ctx) {
+/* `topo` aliases wrapper-owned storage so every TEST_ASSERT failure below
+ * still unwinds through the wrapper's destroy: a red test can never strand
+ * the worker thread on freed stack (cascade SEGV). Never declare a local
+ * named topo or topo_ctx in here. */
+#define topo (*topo_ctx)
     /* Compile-time contract: presentation on 2, compute on 3. */
     static_assert(KHR_CPU_PRESENT == 2, "presentation must pin to core 2");
     static_assert(KHR_CPU_COMPUTE == 3, "compute must pin to core 3");
 
-    khr_topology_t topo = {};
-    TEST_ASSERT(khr_topology_init(&topo), "topology init failed");
     TEST_ASSERT_EQ(topo.present_cpu, 2, "present cpu must be 2");
     TEST_ASSERT_EQ(topo.compute_cpu, 3, "compute cpu must be 3");
     TEST_ASSERT_EQ(topo.present_cpu_actual, 2, "present thread must run on core 2");
     TEST_ASSERT_EQ(topo.compute_cpu_actual, 3, "worker thread must run on core 3");
-    khr_topology_destroy(&topo);
+#undef topo
     return true;
 }
 
 [[nodiscard]]
-bool test_pump_classifies_no_swallow(void) {
+bool test_cpu_pins_avoid_kernel_cores(void) {
     khr_topology_t topo = {};
-    TEST_ASSERT(khr_topology_init(&topo), "topology init failed");
+    if (!khr_topology_init(&topo)) {
+        return false;
+    }
+    bool ok = test_cpu_pins_avoid_kernel_cores_body(&topo);
+    khr_topology_destroy(&topo);
+    return ok;
+}
 
+[[nodiscard]]
+static bool test_pump_classifies_no_swallow_body(khr_topology_t* topo_ctx) {
+#define topo (*topo_ctx)
     int sv[2] = { -1, -1 };
     TEST_ASSERT(socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, sv) == 0, "socketpair failed");
     int efd = eventfd(0, EFD_CLOEXEC);
@@ -93,15 +105,24 @@ bool test_pump_classifies_no_swallow(void) {
     close(sv[0]);
     close(sv[1]);
     close(efd);
-    khr_topology_destroy(&topo);
+#undef topo
     return true;
 }
 
 [[nodiscard]]
-bool test_pump_burst_pairs_wake(void) {
+bool test_pump_classifies_no_swallow(void) {
     khr_topology_t topo = {};
-    TEST_ASSERT(khr_topology_init(&topo), "topology init failed");
+    if (!khr_topology_init(&topo)) {
+        return false;
+    }
+    bool ok = test_pump_classifies_no_swallow_body(&topo);
+    khr_topology_destroy(&topo);
+    return ok;
+}
 
+[[nodiscard]]
+static bool test_pump_burst_pairs_wake_body(khr_topology_t* topo_ctx) {
+#define topo (*topo_ctx)
     /* 20 back-to-back roundtrips: every signal doorbells the kernel-parked
      * worker via MSG_RING, every wait reaps exactly its own payload. A lost
      * wake or a swallowed CQE breaks pairing immediately. */
@@ -114,15 +135,24 @@ bool test_pump_burst_pairs_wake(void) {
     }
     TEST_ASSERT_EQ(khr_topology_staged_count(&topo), (size_t)0, "no strays after burst");
 
-    khr_topology_destroy(&topo);
+#undef topo
     return true;
 }
 
 [[nodiscard]]
-bool test_wayland_pbuf_pump_drives_parse(void) {
+bool test_pump_burst_pairs_wake(void) {
     khr_topology_t topo = {};
-    TEST_ASSERT(khr_topology_init(&topo), "topology init failed");
+    if (!khr_topology_init(&topo)) {
+        return false;
+    }
+    bool ok = test_pump_burst_pairs_wake_body(&topo);
+    khr_topology_destroy(&topo);
+    return ok;
+}
 
+[[nodiscard]]
+static bool test_wayland_pbuf_pump_drives_parse_body(khr_topology_t* topo_ctx) {
+#define topo (*topo_ctx)
     int sv[2] = { -1, -1 };
     TEST_ASSERT(socketpair(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0, sv) == 0,
                 "socketpair failed");
@@ -134,6 +164,7 @@ bool test_wayland_pbuf_pump_drives_parse(void) {
         .ring = &topo.ring_a,
     };
     khr_wl_client_attach_pbufs(&client, &topo.pbuf_tier0, nullptr);
+    khr_wl_client_attach_topology(&client, &topo);
     TEST_ASSERT(khr_wl_client_arm_inbound(&client), "multishot inbound arm failed");
 
     /* One server->client wl_registry.global event for wl_compositor. */
@@ -168,6 +199,17 @@ bool test_wayland_pbuf_pump_drives_parse(void) {
 
     close(sv[0]);
     close(sv[1]);
-    khr_topology_destroy(&topo);
+#undef topo
     return true;
+}
+
+[[nodiscard]]
+bool test_wayland_pbuf_pump_drives_parse(void) {
+    khr_topology_t topo = {};
+    if (!khr_topology_init(&topo)) {
+        return false;
+    }
+    bool ok = test_wayland_pbuf_pump_drives_parse_body(&topo);
+    khr_topology_destroy(&topo);
+    return ok;
 }
