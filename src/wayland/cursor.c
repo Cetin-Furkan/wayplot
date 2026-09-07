@@ -62,10 +62,11 @@ bool khr_cursor_setup(khr_wl_client_t* client, uint32_t compositor_id,
             return false;
         }
         cur->shape_proto = true;
-        return true;
+        /* Fall through: also keep a shm arrow. Mutter often ignores
+         * set_shape until set_cursor has run once. */
     }
     if (compositor_id == 0 || pointer_id == 0) {
-        return true;
+        return cur->shape_proto;
     }
     if (!khr_shm_bind(client, &cur->shm_id)) {
         return true;
@@ -73,7 +74,7 @@ bool khr_cursor_setup(khr_wl_client_t* client, uint32_t compositor_id,
     constexpr uint32_t dim = KHR_WINDOW_CURSOR_PX;
     constexpr size_t bytes = (size_t)dim * (size_t)dim * 4U;
     if (!khr_shm_pool_init(client, cur->shm_id, bytes, &cur->pool)) {
-        return false;
+        return cur->shape_proto;
     }
     khr_cursor_paint_arrow((uint32_t*)cur->pool.addr, dim);
     cur->surface_id = khr_wl_client_alloc_id(client);
@@ -81,7 +82,7 @@ bool khr_cursor_setup(khr_wl_client_t* client, uint32_t compositor_id,
         !khr_shm_buffer_create(client, &cur->pool, 0, dim, dim, dim * 4U,
                                &cur->buffer_id)) {
         khr_shm_pool_destroy(client, &cur->pool);
-        return false;
+        return cur->shape_proto;
     }
     khr_wl_msg_buf_t out = {};
     khr_wl_buf_init(&out);
@@ -90,7 +91,7 @@ bool khr_cursor_setup(khr_wl_client_t* client, uint32_t compositor_id,
         !khr_wl_client_send_skip(client, out.data, out.size) ||
         !khr_shm_attach_commit(client, cur->surface_id, cur->buffer_id, dim, dim)) {
         khr_shm_pool_destroy(client, &cur->pool);
-        return false;
+        return cur->shape_proto;
     }
     cur->shm_live = true;
     return true;
@@ -116,11 +117,10 @@ bool khr_cursor_apply(khr_wl_client_t* client, khr_cursor_t* cur,
             !khr_wl_client_send_skip(client, out.data, out.size)) {
             return false;
         }
-        cur->last_shape = shape;
-        cur->last_serial = serial;
-        return true;
     }
     if (!cur->shm_live || cur->surface_id == 0) {
+        cur->last_shape = shape;
+        cur->last_serial = serial;
         return true;
     }
     khr_wl_msg_buf_t out = {};

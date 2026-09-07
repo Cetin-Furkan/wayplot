@@ -77,7 +77,7 @@ static inline uint32_t khr_hit_cursor_shape(khr_hit_t hit) {
     case KHR_HIT_NW:   return KHR_CURSOR_SHAPE_NW;
     case KHR_HIT_SE:   return KHR_CURSOR_SHAPE_SE;
     case KHR_HIT_SW:   return KHR_CURSOR_SHAPE_SW;
-    default:           return KHR_CURSOR_SHAPE_DEFAULT;
+    default:           return KHR_CURSOR_SHAPE_POINTER;
     }
 }
 
