@@ -13,6 +13,7 @@
 #include <string.h>
 #include <signal.h>
 #include <time.h>
+#include <math.h>
 #include <sys/socket.h>
 
 static volatile sig_atomic_t khr_window_stop = 0;
@@ -84,6 +85,27 @@ static void khr_window_paint_cards(khr_card_instance_t* cards, uint32_t w,
         .border_rgba = khr_rgba8(70, 70, 80, 255),
         .corner_radius = 0.0f,
         .border_width = fullscreen ? 0.0f : 1.0f,
+    };
+}
+
+static void khr_window_plot_push(khr_plot_push_t* push, VkDeviceAddress samples) {
+    /* Column-major Ry(yaw)*Rx(pitch) so ribbon half_w is visible, not a line. */
+    const float yaw = 0.42f;
+    const float pitch = 0.32f;
+    float cy = cosf(yaw);
+    float sy = sinf(yaw);
+    float cx = cosf(pitch);
+    float sx = sinf(pitch);
+    *push = (khr_plot_push_t){
+        .mvp_c0 = { cy, 0.0f, -sy, 0.0f },
+        .mvp_c1 = { sy * sx, cx, cy * sx, 0.0f },
+        .mvp_c2 = { sy * cx, -sx, cy * cx, 0.0f },
+        .mvp_c3 = { 0.0f, 0.0f, 0.0f, 1.0f },
+        .light_dir = { 0.35f, -0.80f, -0.50f, 0.0f },
+        .samples_addr = samples,
+        .count = KHR_PLOT_SAMPLE_COUNT,
+        .amp = KHR_PLOT_AMP,
+        .half_w = KHR_PLOT_HALF_W,
     };
 }
 
@@ -207,6 +229,28 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
         khr_wl_client_disconnect(&client);
         return false;
     }
+    float* samples = nullptr;
+    VkDeviceAddress samples_addr = 0;
+    if (!khr_bda_arena_alloc(arena, sizeof(float) * KHR_PLOT_SAMPLE_COUNT, 16,
+                             (void**)&samples, &samples_addr)) {
+        printf("  Present:      FAILED plot BDA alloc\n");
+        khr_cursor_destroy(&client, &cursor);
+        khr_wl_client_disconnect(&client);
+        return false;
+    }
+    khr_plot_fill_demo_samples(samples, KHR_PLOT_SAMPLE_COUNT);
+    khr_plot_push_t plot_push = {};
+    khr_window_plot_push(&plot_push, samples_addr);
+
+    khr_plot_pipeline_t plot = {};
+    if (!khr_plot_pipeline_init(&plot, dev, VK_FORMAT_B8G8R8A8_UNORM)) {
+        printf("  Present:      FAILED plot pipeline\n");
+        khr_cursor_destroy(&client, &cursor);
+        khr_wl_client_disconnect(&client);
+        return false;
+    }
+    printf("  Plot:         %u samples BDA=0x%llx (demo series, no file ingest)\n",
+           KHR_PLOT_SAMPLE_COUNT, (unsigned long long)samples_addr);
 
     khr_dmabuf_present_t dp = {};
     bool have_dp = false;
@@ -311,7 +355,9 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
         bool size_ok = have_dp && dp.width == want_w && dp.height == want_h;
         if (size_ok && dirty && khr_dmabuf_present_next_free(&dp) != UINT32_MAX) {
             khr_window_paint_cards(cards, buf_w, buf_h, shell.fullscreen);
-            if (khr_dmabuf_present_commit_cards(dev, &dp, cards_addr, 2)) {
+            uint32_t top = shell.fullscreen ? 0U : KHR_WINDOW_CHROME_TOP;
+            if (khr_dmabuf_present_commit_scene(dev, &dp, cards_addr, 2,
+                                                &plot, &plot_push, top)) {
                 dirty = false;
                 khr_dmabuf_present_drop_retired(dev, &dp);
             }
@@ -332,6 +378,7 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
     if (have_dp) {
         khr_dmabuf_present_destroy(dev, &dp);
     }
+    khr_plot_pipeline_destroy(&plot);
     khr_cursor_destroy(&client, &cursor);
     khr_wl_client_disconnect(&client);
     if (ok && !client.display_error) {

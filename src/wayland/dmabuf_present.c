@@ -336,6 +336,47 @@ bool khr_dmabuf_present_commit_cards(khr_gfx_device_t* dev,
     return true;
 }
 
+[[nodiscard]]
+bool khr_dmabuf_present_commit_scene(khr_gfx_device_t* dev,
+                                     khr_dmabuf_present_t* p,
+                                     VkDeviceAddress cards_addr,
+                                     uint32_t card_count,
+                                     const khr_plot_pipeline_t* plot,
+                                     const khr_plot_push_t* plot_push,
+                                     uint32_t plot_top_px) {
+    if (dev == nullptr || p == nullptr || p->client == nullptr ||
+        cards_addr == 0 || card_count == 0) {
+        return false;
+    }
+    uint32_t idx = khr_dmabuf_present_next_free(p);
+    if (idx == UINT32_MAX) {
+        return false;
+    }
+    khr_dmabuf_pslot_t* slot = &p->slots[idx];
+    uint64_t point = dev->acquire_point + 1U;
+    if (!khr_dmabuf_slot_render_scene(dev, &slot->gfx, cards_addr, card_count,
+                                      plot, plot_push, plot_top_px,
+                                      dev->acquire_sem, point)) {
+        return false;
+    }
+    dev->acquire_point = point;
+    (void)khr_dmabuf_present_sync(dev, p);
+    if (!khr_syncobj_set_points(p->client, p->sync_surface_id,
+                                p->acquire_tl_id, point,
+                                slot->release_tl_id, slot->release_point + 1U)) {
+        return false;
+    }
+    slot->release_point++;
+    if (!khr_shm_attach_commit(p->client, p->surface_id, slot->buffer_id,
+                               p->width, p->height)) {
+        return false;
+    }
+    slot->busy = true;
+    p->next_slot = (idx + 1U) % KHR_DMABUF_PRESENT_SLOTS;
+    p->frames++;
+    return true;
+}
+
 uint32_t khr_dmabuf_present_consume(khr_dmabuf_present_t* p,
                                     const uint8_t* data, size_t len) {
     if (p == nullptr || data == nullptr) {

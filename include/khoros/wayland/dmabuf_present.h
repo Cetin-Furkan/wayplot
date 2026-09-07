@@ -131,6 +131,16 @@ bool khr_dmabuf_present_commit_cards(khr_gfx_device_t* dev,
                                      VkDeviceAddress cards_addr,
                                      uint32_t card_count);
 
+/* Cards plus the BDA plot ribbon in the client rect (plot_top_px inset). */
+[[nodiscard]]
+bool khr_dmabuf_present_commit_scene(khr_gfx_device_t* dev,
+                                     khr_dmabuf_present_t* p,
+                                     VkDeviceAddress cards_addr,
+                                     uint32_t card_count,
+                                     const khr_plot_pipeline_t* plot,
+                                     const khr_plot_push_t* plot_push,
+                                     uint32_t plot_top_px);
+
 /*
  * Acquire bridge pump: query the device timeline counter and TIMELINE_SIGNAL
  * every newly completed point. Call once per present-loop lap (and inside
