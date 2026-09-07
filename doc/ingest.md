@@ -38,4 +38,6 @@ The topology diagram's cold path is: parse `.obj` / `.dem` on core 1, write `.wp
 
 ## Destination today
 
-`dst` is the anonymous/THP 2 MiB mapping, registered as buffer 0. The diagram's end state is the same bytes sitting in host-visible `VkDeviceMemory` (also registered). Graphics has not allocated that memory yet; swapping the iovec at `REGISTER_BUFFERS` time is the intended cutover.
+`dst` is the topology 2 MiB hugepage (THP fallback when `MAP_HUGETLB` is unavailable), registered as Ring B buffer 0. The product window wraps that same mapping as the Vulkan BDA arena: title-bar cards and the 256-float demo plot live in the bump allocator from offset 0.
+
+The live window does **not** call ingest. `khr_worker_start_ingest` writes the file at hugepage offset 0, which would overwrite those cards and samples. Partition the 2 MiB (UI region vs file payload) before wiring `khr_topology_ingest_submit` into `khr_window_run`. Tests already exercise the 3-SQE chain.
