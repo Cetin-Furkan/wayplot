@@ -19,8 +19,9 @@
 #include "khoros/gfx/bda_arena.h"
 
 /*
- * Product window: XDG size, CSD chrome, seat/cursor, DMA-BUF present.
- * Runs until xdg_toplevel.close or SIGINT. Ring A waits in io_uring.
+ * Product window: XDG size, CSD chrome (hit list + title-bar close),
+ * seat/cursor, DMA-BUF present. Runs until title-bar close,
+ * xdg_toplevel.close, or SIGINT. Ring A waits in io_uring.
  */
 [[nodiscard]]
 bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,

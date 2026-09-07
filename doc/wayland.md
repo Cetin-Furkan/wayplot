@@ -80,7 +80,25 @@ Live status on Mutter/Xe-experimental, revised 2026-09-07 after the send-await f
 
 ## XDG shell (`xdg.h` / `xdg.c`)
 
-Opcodes verified against `wayland.xml` + `xdg-shell.xml`; `xdg.h` is the single source (the mock includes it). Flow: `khr_xdg_bind` (batched registry binds) → `khr_xdg_create_toplevel` (surface, xdg_surface, toplevel, title/app_id, one empty commit — never a buffer) → `khr_xdg_consume` on the inbound stream: ping gets an immediate pong, `xdg_surface.configure` an immediate ack, toplevel configure stores w/h, close marks closed. `khr_xdg_can_attach()` is the attach gate: false until the first ack, false again after close. Proven live against Mutter (40 globals, configure acked, no protocol error) and headlessly in `test_xdg_shell_lifecycle`.
+Opcodes verified against `wayland.xml` + `xdg-shell.xml`; `xdg.h` is the single source (the mock includes it). Flow: `khr_xdg_bind` (batched registry binds) → `khr_xdg_create_toplevel` (surface, xdg_surface, toplevel, title/app_id, one empty commit — never a buffer) → `khr_xdg_consume` on the inbound stream: ping gets an immediate pong, `xdg_surface.configure` stores a pending serial (`khr_xdg_ack_pending` with the matching attach), toplevel configure stores w/h, close marks closed. `khr_xdg_can_attach()` is the attach gate: false until the first configure, false again after close. Proven live against Mutter and headlessly in `test_xdg_shell_lifecycle`.
+
+## Product window (`window.h` / `window.c`, `core/config.h`)
+
+`khr_window_run` is `make run`. Two DMA-BUF present slots, dirty-only commits, plot ribbon from 256 demo floats in the hugepage BDA. No file ingest.
+
+Client-side decorations. Hit testing is a first-match rect table (`khr_hit_list_t`, `KHR_HIT_LIST_MAX` 16), not an if-ladder. Fill order: 16 px corners, 8 px edges, 32 px title-bar close, 32 px move bar. Miss is `KHR_HIT_CLIENT`. Exclusive fullscreen (F11) fills an empty list.
+
+| Input | Action |
+|---|---|
+| Left-click close square | Stop the loop (same as SIGINT). Finger cursor. |
+| Drag title bar | `xdg_toplevel.move` |
+| Double-click title bar | `xdg_toplevel.set_maximized` / `unset_maximized`. Same request as dragging the window to the top of the output. The compositor picks the work-area size. Not `set_fullscreen`, not a pixel size we compute. |
+| Drag edges / corners | `xdg_toplevel.resize` |
+| F11 | Exclusive `set_fullscreen` |
+| Esc | Dismiss cart, or leave exclusive fullscreen |
+| Right-click client | Grabbing `xdg_popup` cart (shm). May hang outside the parent. Dismiss on `popup_done`, parent click, parent size change, Esc. |
+
+`khr_window_hit` is a fill+pick wrapper for tests. The live loop fills and picks. Popup focus is `KHR_HIT_POPUP` from `pointer_surface`, not a parent-list rect.
 
 ## SHM present loop (`wayland/present.h`, first mapped window)
 
