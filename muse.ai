@@ -1,0 +1,95 @@
+# Muse Agent Notes Log
+
+## Directive to Myself (and Any Future Muse Session)
+
+> **CRITICAL RULE**: Never delete, overwrite, truncate, or rewrite prior notes in this file. Always **append** new notes below existing entries. Prefix every entry with an explicit ISO 8601 timestamp of the form `[YYYY-MM-DDTHH:MM:SS+TZ]`.
+>
+> This file is the Muse-side twin of `grok.ai` / `gemini.ai`. All three are append-only. Do not merge, compact, or clean up any of them.
+> Do not create, edit, or delete any other file outside explicitly authorized scope (see `AGENTS.md` section 1). This session is **read-only on code** until the user grants permission.
+
+How to append:
+
+1. `date -Iseconds` for the timestamp.
+2. Add a `---` rule, then `## [timestamp] - Short title`.
+3. Write what changed, what was observed (not assumed), and what is still open.
+4. Save. Do not edit lines above the new heading.
+
+---
+
+## [2026-09-07T00:00:00+03:00] - First Muse session: full-tree read, current-position snapshot (code untouched)
+
+### Who / where
+
+- Agent: Muse Code, repo at `/home/arch-cetin/projects/engine`.
+- Mandate this turn: read the full project, write current-position note into `muse.ai`, touch no code. No source, test, build, or doc file was modified; only this new file was created.
+- Host context carried over from prior logs (not re-probed): CachyOS, kernel 7.2.x, i7-1165G7, `WAYLAND_DISPLAY=wayland-0`, Vulkan 1.4.357, `/dev/dri/card0` + `renderD128`, `HugePages_Total = 0` (THP/anon fallback is the live hugepage path).
+
+### What the project is
+
+Khoros Engine: pure ISO C23 (`-std=c23`, `-Wall -Wextra -Wpedantic -Werror=vla`), Linux 7.2+ only. Raw `io_uring` syscalls (no liburing, no epoll/poll), pure Vulkan 1.4 Dynamic Rendering + Sync2 + BDA via push constants (no libwayland, no OpenGL/EGL/GLFW), Slang shaders compiled with `slangc` to SPIR-V 1.6. Dual-ring topology: Core 0 / Ring A (presentation + Wayland), Core 1 / Ring B (ingest + compute), `IORING_OP_MSG_RING` streams 64-bit `VkDeviceAddress` across cores.
+
+Governing docs: `ORIGINAL_REQUEST.md` (R1 Vulkan core, R2 DMA-BUF + DRM syncobj, R3 io_uring Wayland XDG lifecycle, R4 dual-thread topology + acceptance criteria), `AGENTS.md` (permission discipline, append-only logs, C23 bans, subsystem bans), `DEVELOPER.md`, `GITHUB.md` (atomic per-file commits, never commit build/logs/binaries/secrets), `TEST_INFRA.md` / `TEST_READY.md`, `doc/` manuals (12 files).
+
+### Source inventory (observed, not changed)
+
+- `main.c`, `src/engine.c`, `include/engine.h` — banner + `engine_init()` topology smoke probe (bring up Ring A/B, print pin/clock/buffer report, MSG_RING roundtrip, teardown).
+- `src/uring/` + `include/khoros/uring/` — `raw_syscalls.c`, `ring.c` (776 lines: Ring A 64x256 / Ring B 128x256, SINGLE_ISSUER, DEFER/COOP_TASKRUN, NO_SQARRAY, clock, NO_IOWAIT, REGISTER_RING_FDS with kernel-chosen slot + unregister on destroy, sparse files table, socket/connect/close/openat2/read_fixed/send/recv/accept/read/write prep helpers, EXT_ARG enter2 with ETIME handling), `pbuf.c` (tier 0 128x256 B, tier 1 16x64 KiB), `ingest.c` (atomic 3-SQE OPENAT2 LINK -> READ_FIXED HARDLINK -> CLOSE on slot 0, O_DIRECT with fallback).
+- `src/core/topology.c` (496 lines) + `include/khoros/core/` — CPU 0/1 pinning, worker with 8-slot lockless SPSC cmdq (60-byte pads, no alignas(64)), CQE staging (`staged_cqes`, `pop/wait/staged_count`, PBUF recycling with explicit T1 tags), inline 256 B path copy, MADV_HUGEPAGE + MADV_COLLAPSE, eventfd starvation watch via POLL_ADD.
+- `src/wayland/` + `include/khoros/wayland/` — `wire.c` (header/u32/i32/string encode-decode, memcpy unaligned-safe, NUL + overflow guards), `client.c` (427 lines: pure io_uring direct-socket connect on `KHR_DIRECT_SLOT_WAYLAND = 1`, FIXED_FILE send/recv, multishot RECVMSG inbound tier 0/1, SENDMSG skip-success + NOP barrier, bounded 2000 ms roundtrip, direct close; `KHR_DIRECT_SLOT_INGEST = 0` kept distinct).
+- `src/gfx/` + `include/khoros/gfx/` — `device.c` (571 lines: Vulkan 1.4 init, dynamic device scoring incl. UMA/discrete/DRM match, gfx/compute/xfer family selection, BDA + Dynamic Rendering + Sync2 feature query, UMA host-visible/coherent memory, timeline-semaphore DRM syncobj export), `bda_arena.c` (332 lines: 2 MiB UMA arena, external_memory_host import-first with vkAllocate fallback, bump allocator, Ring B REGISTER_BUFFERS pairing), `pipeline.c` (381 lines: card + plot pipelines, push-constant layouts CardPush 24 B / PlotPush 112 B under 128 B limit, SPIR-V via C23 `#embed` of slangc output).
+- `shaders/card.slang`, `shaders/plot.slang` — Slang sources (`vs_main`/`fs_main`, SV_VertexID procedural vertex, analytical fragment); `Makefile` builds `build/shaders/*.vert/frag.spv` with `slangc -target spirv -profile sm_6_6+SPIRV_1_6` before `gfx/pipeline.o`.
+- `tests/` — 8 suites files + `mock_compositor.h` (607 lines) + `test_framework.h` (348 lines): `test_c23`, `test_wayland`, `test_topology` (1175 lines), `test_mock_compositor` (501), `test_vulkan_bda` (573), `test_dmabuf_syncobj` (406), `test_ipc_pipeline` (440), `test_runner.c` (203). Total ~8391 lines src+include+tests (per `wc -l` this session).
+- `Makefile` — `all/run/clean/test/lint/sanitize/shaders`, `-O3` + `-D_GNU_SOURCE` + `-Iinclude` + `--embed-dir`, `-MMD -MP` incl. san deps, ASan+UBSan `build/san/`, `lint` greps banned headers/libs, `test` tees `logs/test_logs/test_results.log` + timestamped copy + `failures.log` note.
+- `.github/workflows/ci.yml` — explicit-step CI: C23 check, three ban audits, no-binaries check, `make all/run/test`.
+- `.agents/` (17 entries: orchestrator, explorers, reviewers, challengers, test_writer_e2e, sentinel, etc.), `project_bundle.txt` (278 KB), `bundle.sh`, `build/` (objects + `test_runner` + `san/` + `shaders/`), `logs/test_logs/` (5 timestamped logs + sanitize log). All currently untracked.
+
+### Verification position (observed from on-disk logs, not re-run)
+
+- Latest committed logs in `logs/test_logs/`: `test_results.log` and `sanitize_results.log` both report **76 Passed | 0 Failed | 76 Total (1581 assertions)** — ~434 ms native, ~14.3 s under ASan+UBSan. Suites 1-7 all green incl. Vulkan BDA/device/arena/pipeline, DMA-BUF + DRM syncobj timelines, mock compositor XDG/ping/DMABUF/release, Tier 3 pairwise + Tier 4 frame-loop/144 Hz/ping-under-load/resize/full-e2e.
+- `TEST_READY.md` / `TEST_INFRA.md` still describe the older **71/71 (1506 assertions)** checkpoint — stale counts, not a regression signal; the delta is the post-R1/R2 gfx + IPC test growth (`test_vulkan_device_init_and_scoring`, `test_vulkan_bda_arena_alloc_and_coherence`, `test_vulkan_slang_bytecode_and_modules`, `test_vulkan_dynamic_rendering_pipeline_create`, `test_bda_arena_uring_registration`, plus IPC burst/pipeline tests).
+- `git log` this session: `fatal: your current branch 'main' does not have any commits yet`; `git status --short` shows **everything untracked** (`??` on all root files, dirs). No remote state verified. `GITHUB.md` atomic-commit + `make lint/test/sanitize` pre-push checklist has therefore not been executed as commits yet.
+- Live hardware notes in the tail logs: Vulkan suites emit `MESA: warning: Support for this platform is experimental with Xe KMD` but still PASS; DRM syncobj ioctls exercised against `/dev/dri/renderD128`.
+- `doc/architecture.md` source-layout table still says `include/khoros/gfx/`, `src/gfx/` are "**Empty.** Vulkan 1.4 BDA / KMS / Slang not started" and its test inventory says "Three suites" — stale relative to the implemented gfx subsystem and 7-suite runner. Flagging as doc drift, not touching per read-only mandate.
+- `grok.ai` (323 lines) and `gemini.ai` (387 lines) both end at the `[2026-09-05T15:10:00+03:00]` hardlinked-3-SQE + pure-ring-socket entry (32 tests / 913 assertions era); the 32 -> 76 test growth from the ORIGINAL_REQUEST gfx/syncobj/IPC implementation pass has **no corresponding tail entry** in either log yet.
+
+### ORIGINAL_REQUEST acceptance mapping (document-level, from code + logs, no re-run)
+
+- R1 Vulkan 1.4 core (dynamic rendering, sync2, BDA push constants, UMA host-visible/coherent, dynamic device + queue selection, slangc SPIR-V 1.6): implemented in `src/gfx/` + `shaders/`; covered by Suite 5 incl. 128 B contract + UMA + queue-family tests.
+- R2 DMA-BUF zero-copy + DRM syncobj explicit sync (external-memory images, DMA-BUF FD export -> `zwp_linux_dmabuf_v1`, timeline-semaphore syncobj FD export, acquire/release points): covered by Suite 6 (create/export, FD roundtrip, point signaling, wait timeout, per-image isolation, plane layout, wire import, full surface commit, destroy-on-retire, boundary points).
+- R3 io_uring Wayland XDG lifecycle (direct-socket Ring A slot 1, multishot PBUF inbound, registry discovery, wl_surface -> xdg_surface -> xdg_toplevel + ping/pong + configure/ack): covered by Suite 2 + Suite 4 mock-compositor XDG/configure/ping/DMABUF/syncobj tests.
+- R4 dual-thread topology (Core 0 presentation never stalls, Core 1 3-SQE ingest + compute into hugepage arena, MSG_RING BDA cross-core): covered by Suite 3 + Suite 7 (BDA stream, burst, ingestion-to-BDA, pairwise, full dual-thread e2e).
+- Automated verification clause (`make lint` + `make test` + `make sanitize` 100% green, ASan/UBSan clean): satisfied per latest on-disk logs quoted above; not re-executed this session (read-only mandate, no command side effects beyond reads).
+
+### Open items / risks for next step (awaiting user permission)
+
+1. Doc drift: `doc/architecture.md` (gfx empty, 3 suites) and `TEST_READY.md`/`TEST_INFRA.md` (71 tests) lag the 76-test gfx-complete tree; `grok.ai`/`gemini.ai` have no entry for the gfx/IPC growth pass.
+2. VCS: zero commits on `main`; `build/`, `logs/`, `.agents/`, `project_bundle.txt` are untracked and mostly must stay out of git per `GITHUB.md`/`AGENTS.md` (only deliberate atomic `git add <file>` per file when user orders it).
+3. `main.c` uses `auto ok = engine_init();` — `auto` is a C23 keyword path but worth a conscious lint/compile confirmation whenever builds are next authorized.
+4. Next verification whenever authorized: `make lint`, `make test`, `make sanitize`, `make run` (expect Ring A 64/256 + Ring B 128/256 + THP collapsed + MSG_RING OK), plus a `git status --short` + `.gitignore` review before any staging.
+
+### Working agreement
+
+Codebase read complete to the level needed for a position note. No code, build, test, doc, or config file touched. Standing by for explicit permission before any modification, build, test run, or git operation.
+
+---
+
+## [2026-09-07T15:30:00+03:00] - Full-permission rework: parked worker, pump, async ingest, cores 2/3, real Vulkan frame
+
+User granted full project permission with constraints: no simplifications, latest kernel/Vulkan, no libwayland, no Vulkan WSI (Wayland over io_uring sockets), Vulkan 1.4 genuinely used, pin threads to cores 2/3, C23 idioms where they fit (no banned headers).
+
+### What changed
+
+1. **Cores 2/3** (`topology.h`): `KHR_CPU_PRESENT=2`, `KHR_CPU_COMPUTE=3`. Kernel keeps 0/1 (+SMT 4/5). New `test_cpu_pins_avoid_kernel_cores` asserts compile-time (static_assert) and runtime pins.
+2. **Worker parks in kernel** (`topology.c`): `PAUSE` spin deleted. Parks in `wait_cqe_timeout(Ring B, 50ms)`; Core 2 doorbells via `MSG_RING` A->B (`KHR_MSG_RES_WAKE`). Destroy doorbells before join.
+3. **Pump replaces tag-wait**: `khr_wait_tagged` + `staged_cqes` + `memmove` deleted. `khr_topology_pump` classifies into O(1) FIFOs (`bda_q`64/`ingest_q`16/`evt_q`256). All existing test call-sites compile unmodified.
+4. **Async ingest** (`ingest.h/.c`): `chain_submit` + `op_begin/feed/finalize` split. Worker never blocks on disk; CLOSE reports via MSG_RING; O_DIRECT `-EINVAL` resubmits plain. Blocking helper kept for bootstrap/tests.
+5. **Wayland consumer** (`client.h/.c`): `khr_wl_client_process_cqe` parses PBUF packets non-blockingly. `roundtrip` is bootstrap-only now.
+6. **Vulkan made real** (`device.h/.c`, new `frame.h/.c`): submit mutex; maintenance5/6 + host-image-copy enabled and functionally used (usage-flags2, push-constants2, queue-free readback with transfer fallback). `pushDescriptor` enabled+queried, no dummy set bound (zero-descriptor design per R1; documented). New `test_gfx_real_submit_and_readback` asserts a red center pixel; honest SKIP without GPU.
+7. **Harness abort fixed** (`test_vulkan_bda.c`): 4 enumeration tests aborted the runner on GPU-less hosts; now FAIL cleanly. Strictness kept.
+8. **Docs**: `topology.md`, `io-uring.md`, `graphics.md`, `architecture.md`, `wayland.md`, `TEST_READY.md` (addendum, history intact).
+
+### Verification (this sandbox: 7.3-rc1, no /dev/dri, io_uring blocked)
+
+- `make all` clean, `make lint` PASSED, sanitizer binary links.
+- `make test`: all **81** run (was aborting mid-Suite-5): 36 pass / 45 fail, every failure at a hw gate. Frame test SKIP-passes. On real hw the target is 81/81 — MUST be re-run there.
+- NOT done: XDG/DMA-BUF/syncobj glue (no compositor here; mocks would repeat the facade), cold path, AVX parsing.
