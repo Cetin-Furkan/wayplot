@@ -25,14 +25,22 @@ constexpr uint16_t KHR_WL_POINTER_EVENT_ENTER  = 0;
 constexpr uint16_t KHR_WL_POINTER_EVENT_LEAVE  = 1;
 constexpr uint16_t KHR_WL_POINTER_EVENT_MOTION = 2;
 constexpr uint16_t KHR_WL_POINTER_EVENT_BUTTON = 3;
+constexpr uint16_t KHR_WL_POINTER_EVENT_AXIS   = 4;
+constexpr uint16_t KHR_WL_POINTER_EVENT_AXIS_VALUE120 = 9;
+constexpr uint16_t KHR_WL_KEYBOARD_EVENT_LEAVE = 2;
 constexpr uint16_t KHR_WL_KEYBOARD_EVENT_KEY   = 3;
 constexpr uint32_t KHR_WL_SEAT_CAP_POINTER   = 1;
 constexpr uint32_t KHR_WL_SEAT_CAP_KEYBOARD  = 2;
 constexpr uint32_t KHR_WL_POINTER_PRESSED    = 1;
 constexpr uint32_t KHR_WL_POINTER_RELEASED   = 0;
+constexpr uint32_t KHR_WL_POINTER_AXIS_VERTICAL = 0;
 constexpr uint32_t KHR_BTN_LEFT              = 0x110U;
 constexpr uint32_t KHR_BTN_RIGHT             = 0x111U;
+constexpr uint32_t KHR_BTN_MIDDLE            = 0x112U;
 constexpr uint32_t KHR_KEY_ESC               = 1;
+constexpr uint32_t KHR_KEY_F                 = 33;
+constexpr uint32_t KHR_KEY_LEFTSHIFT         = 42;
+constexpr uint32_t KHR_KEY_RIGHTSHIFT        = 54;
 constexpr uint32_t KHR_KEY_F11               = 87;
 constexpr uint32_t KHR_WL_KEY_PRESSED        = 1;
 
@@ -53,9 +61,13 @@ typedef struct {
     bool     pointer_in;
     bool     left_down;
     bool     right_down;
+    bool     middle_down;
     bool     double_click;
     bool     f11_pressed;
     bool     esc_pressed;
+    bool     f_pressed;
+    bool     shift_down;
+    int32_t  wheel; /* accumulated 120ths of a detent; window consumes and zeros */
 } khr_seat_t;
 
 void khr_seat_init(khr_seat_t* seat);

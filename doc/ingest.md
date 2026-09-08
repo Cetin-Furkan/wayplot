@@ -38,6 +38,18 @@ The topology diagram's cold path is: parse `.obj` / `.dem` on core 1, write `.wp
 
 ## Destination today
 
-`dst` is the topology 2 MiB hugepage (THP fallback when `MAP_HUGETLB` is unavailable), registered as Ring B buffer 0. The product window wraps that same mapping as the Vulkan BDA arena: title-bar cards and the 256-float demo plot live in the bump allocator from offset 0.
+`dst` is the topology 2 MiB hugepage (THP fallback when `MAP_HUGETLB` is unavailable), registered as Ring B buffer 0. The product window wraps that same mapping as the Vulkan BDA arena.
 
-The live window does **not** call ingest. `khr_worker_start_ingest` writes the file at hugepage offset 0, which would overwrite those cards and samples. Partition the 2 MiB (UI region vs file payload) before wiring `khr_topology_ingest_submit` into `khr_window_run`. Tests already exercise the 3-SQE chain.
+Memory split (not a screen split): ingest writes `[0, total - 64 KiB)` — the payload. Chrome cards live at the high 64 KiB so DMA cannot smash the title bar. `khr_window_run` submits `khr_topology_ingest_submit` for `./engine file.khrb` and never waits on disk on the present thread.
+
+The packed mesh blob (`khr_blob_t`, magic `KHRB`) uses self-relative pointers. CPU validates once and fits the camera to the AABB; the mesh shader reads verts/indices through BDA. Default with no file is a unit box written into the payload once.
+
+```bash
+./build/engine --write-box /tmp/box.khrb
+./build/engine /tmp/box.khrb
+blender --background --python tools/export_khrb.py -- /tmp/mesh.khrb
+blender --background --python tools/export_khrb.py -- --monkey /tmp/suzanne.khrb
+./build/engine /tmp/suzanne.khrb
+```
+
+The engine does not parse `.blend`. The Python script is the cold path.

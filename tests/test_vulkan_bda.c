@@ -442,6 +442,8 @@ bool test_vulkan_slang_bytecode_and_modules(void) {
     khr_shader_bytecode_t cf = khr_shader_get_card_frag();
     khr_shader_bytecode_t pv = khr_shader_get_plot_vert();
     khr_shader_bytecode_t pf = khr_shader_get_plot_frag();
+    khr_shader_bytecode_t mv = khr_shader_get_mesh_vert();
+    khr_shader_bytecode_t mf = khr_shader_get_mesh_frag();
 
     TEST_ASSERT_NOT_NULL(cv.code, "card.vert bytecode exists");
     TEST_ASSERT(cv.size_bytes > 0, "card.vert bytecode size > 0");
@@ -459,12 +461,19 @@ bool test_vulkan_slang_bytecode_and_modules(void) {
     TEST_ASSERT(pf.size_bytes > 0, "plot.frag bytecode size > 0");
     TEST_ASSERT_EQ(pf.size_bytes % 4, 0U, "plot.frag bytecode 4-byte aligned size");
 
+    TEST_ASSERT_NOT_NULL(mv.code, "mesh.vert bytecode exists");
+    TEST_ASSERT(mv.size_bytes > 0 && mv.size_bytes % 4 == 0, "mesh.vert bytecode");
+    TEST_ASSERT_NOT_NULL(mf.code, "mesh.frag bytecode exists");
+    TEST_ASSERT(mf.size_bytes > 0 && mf.size_bytes % 4 == 0, "mesh.frag bytecode");
+
     /* Validate SPIR-V 1.6 Magic Number (0x07230203) */
     constexpr uint32_t SPIRV_MAGIC = 0x07230203;
     TEST_ASSERT_EQ(cv.code[0], SPIRV_MAGIC, "card.vert SPIR-V magic");
     TEST_ASSERT_EQ(cf.code[0], SPIRV_MAGIC, "card.frag SPIR-V magic");
     TEST_ASSERT_EQ(pv.code[0], SPIRV_MAGIC, "plot.vert SPIR-V magic");
     TEST_ASSERT_EQ(pf.code[0], SPIRV_MAGIC, "plot.frag SPIR-V magic");
+    TEST_ASSERT_EQ(mv.code[0], SPIRV_MAGIC, "mesh.vert SPIR-V magic");
+    TEST_ASSERT_EQ(mf.code[0], SPIRV_MAGIC, "mesh.frag SPIR-V magic");
 
     /* Validate 4-byte pointer alignment for Vulkan spec compliance */
     TEST_ASSERT_EQ((uintptr_t)cv.code % 4, 0U, "card.vert 4-byte pointer alignment");
@@ -490,6 +499,11 @@ bool test_vulkan_slang_bytecode_and_modules(void) {
     TEST_ASSERT(khr_shader_module_create(dev.device, pf.code, pf.size_bytes, &mod), "create plot.frag module");
     khr_shader_module_destroy(dev.device, mod);
 
+    TEST_ASSERT(khr_shader_module_create(dev.device, mv.code, mv.size_bytes, &mod), "create mesh.vert module");
+    khr_shader_module_destroy(dev.device, mod);
+    TEST_ASSERT(khr_shader_module_create(dev.device, mf.code, mf.size_bytes, &mod), "create mesh.frag module");
+    khr_shader_module_destroy(dev.device, mod);
+
     khr_gfx_device_destroy(&dev);
     return true;
 }
@@ -510,6 +524,10 @@ bool test_vulkan_dynamic_rendering_pipeline_create(void) {
     TEST_ASSERT(khr_plot_pipeline_init(&plot_pipe, &dev, VK_FORMAT_B8G8R8A8_SRGB), "khr_plot_pipeline_init");
     TEST_ASSERT_NOT_NULL(plot_pipe.pipeline, "plot pipeline handle not null");
     TEST_ASSERT_NOT_NULL(plot_pipe.layout, "plot pipeline layout not null");
+
+    khr_mesh_pipeline_t mesh_pipe = {};
+    TEST_ASSERT(khr_mesh_pipeline_init(&mesh_pipe, &dev, VK_FORMAT_B8G8R8A8_SRGB), "khr_mesh_pipeline_init");
+    TEST_ASSERT_NOT_NULL(mesh_pipe.pipeline, "mesh pipeline handle not null");
 
     /* Test recording draw commands into command buffer */
     VkCommandBufferAllocateInfo cb_ai = {
@@ -543,11 +561,20 @@ bool test_vulkan_dynamic_rendering_pipeline_create(void) {
     };
     khr_plot_draw(&plot_pipe, cmd, &plot_push, 255);
 
+    khr_mesh_push_t mesh_push = {
+        .verts_addr = 0x3000'0000ULL,
+        .indices_addr = 0x3000'1000ULL,
+        .index_count = 36,
+        .vert_count = 8,
+    };
+    khr_mesh_draw(&mesh_pipe, cmd, &mesh_push);
+
     TEST_ASSERT_EQ(vkEndCommandBuffer(cmd), VK_SUCCESS, "end command buffer");
 
     vkFreeCommandBuffers(dev.device, dev.pool, 1, &cmd);
 
     khr_card_pipeline_destroy(&card_pipe);
+    khr_mesh_pipeline_destroy(&mesh_pipe);
     TEST_ASSERT_NULL(card_pipe.pipeline, "card pipeline null after destroy");
 
     khr_plot_pipeline_destroy(&plot_pipe);

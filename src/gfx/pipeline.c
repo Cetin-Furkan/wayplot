@@ -19,6 +19,14 @@ alignas(uint32_t) static const uint8_t khr_plot_frag_spv[] = {
 #embed "shaders/plot.frag.spv"
 };
 
+alignas(uint32_t) static const uint8_t khr_mesh_vert_spv[] = {
+#embed "shaders/mesh.vert.spv"
+};
+
+alignas(uint32_t) static const uint8_t khr_mesh_frag_spv[] = {
+#embed "shaders/mesh.frag.spv"
+};
+
 khr_shader_bytecode_t khr_shader_get_card_vert(void) {
     return (khr_shader_bytecode_t){
         .code = (const uint32_t*)khr_card_vert_spv,
@@ -44,6 +52,20 @@ khr_shader_bytecode_t khr_shader_get_plot_frag(void) {
     return (khr_shader_bytecode_t){
         .code = (const uint32_t*)khr_plot_frag_spv,
         .size_bytes = sizeof(khr_plot_frag_spv),
+    };
+}
+
+khr_shader_bytecode_t khr_shader_get_mesh_vert(void) {
+    return (khr_shader_bytecode_t){
+        .code = (const uint32_t*)khr_mesh_vert_spv,
+        .size_bytes = sizeof(khr_mesh_vert_spv),
+    };
+}
+
+khr_shader_bytecode_t khr_shader_get_mesh_frag(void) {
+    return (khr_shader_bytecode_t){
+        .code = (const uint32_t*)khr_mesh_frag_spv,
+        .size_bytes = sizeof(khr_mesh_frag_spv),
     };
 }
 
@@ -158,9 +180,11 @@ bool khr_gfx_pipeline_create(VkDevice dev,
         .lineWidth = 1.0f,
     };
 
+    VkSampleCountFlagBits samples = cfg->samples != 0 ? cfg->samples
+                                                      : VK_SAMPLE_COUNT_1_BIT;
     VkPipelineMultisampleStateCreateInfo ms = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-        .rasterizationSamples = VK_SAMPLE_COUNT_1_BIT,
+        .rasterizationSamples = samples,
     };
 
     VkPipelineColorBlendAttachmentState ba = {
@@ -193,8 +217,8 @@ bool khr_gfx_pipeline_create(VkDevice dev,
 
     VkPipelineDepthStencilStateCreateInfo ds = {
         .sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-        .depthTestEnable = VK_TRUE,
-        .depthWriteEnable = VK_TRUE,
+        .depthTestEnable = cfg->depth_test ? VK_TRUE : VK_FALSE,
+        .depthWriteEnable = cfg->depth_test ? VK_TRUE : VK_FALSE,
         .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL,
     };
 
@@ -264,7 +288,9 @@ bool khr_card_pipeline_init(khr_card_pipeline_t *p, const khr_gfx_device_t *d, V
         .fs_entry = "main",
         .layout = p->layout,
         .color_format = color_format,
-        .depth_format = VK_FORMAT_UNDEFINED,
+        .depth_format = khr_gfx_depth_format(d),
+        .samples = khr_gfx_sample_count(d),
+        .depth_test = false,
         .blend_enable = true,
         .cull_mode = VK_CULL_MODE_NONE,
         .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
@@ -337,7 +363,9 @@ bool khr_plot_pipeline_init(khr_plot_pipeline_t *p, const khr_gfx_device_t *d, V
         .fs_entry = "main",
         .layout = p->layout,
         .color_format = color_format,
-        .depth_format = VK_FORMAT_UNDEFINED,
+        .depth_format = khr_gfx_depth_format(d),
+        .samples = khr_gfx_sample_count(d),
+        .depth_test = false,
         .blend_enable = false,
         .cull_mode = VK_CULL_MODE_NONE,
         .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
@@ -379,6 +407,76 @@ void khr_plot_draw(const khr_plot_pipeline_t *p, VkCommandBuffer cmd, const khr_
     vkCmdPushConstants(cmd, p->layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
                        0, sizeof(khr_plot_push_t), push);
     vkCmdDraw(cmd, 12, segment_count, 0, 0);
+}
+
+bool khr_mesh_pipeline_init(khr_mesh_pipeline_t *p, const khr_gfx_device_t *d, VkFormat color_format) {
+    if (!p || !d || d->device == VK_NULL_HANDLE) return false;
+    memset(p, 0, sizeof(*p));
+    p->dev = d;
+    p->color_format = color_format;
+
+    if (!khr_shader_module_create(d->device, (const uint32_t*)khr_mesh_vert_spv,
+                                 sizeof(khr_mesh_vert_spv), &p->vs_module)) {
+        return false;
+    }
+    if (!khr_shader_module_create(d->device, (const uint32_t*)khr_mesh_frag_spv,
+                                 sizeof(khr_mesh_frag_spv), &p->fs_module)) {
+        khr_mesh_pipeline_destroy(p);
+        return false;
+    }
+    if (!khr_pipeline_layout_create(d->device, VK_NULL_HANDLE, sizeof(khr_mesh_push_t), &p->layout)) {
+        khr_mesh_pipeline_destroy(p);
+        return false;
+    }
+    khr_gfx_pipeline_config_t cfg = {
+        .vs_module = p->vs_module,
+        .vs_entry = "main",
+        .fs_module = p->fs_module,
+        .fs_entry = "main",
+        .layout = p->layout,
+        .color_format = color_format,
+        .depth_format = khr_gfx_depth_format(d),
+        .samples = khr_gfx_sample_count(d),
+        .depth_test = true,
+        .blend_enable = false,
+        .cull_mode = VK_CULL_MODE_BACK_BIT,
+        .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+    };
+    if (!khr_gfx_pipeline_create(d->device, &cfg, &p->pipeline)) {
+        khr_mesh_pipeline_destroy(p);
+        return false;
+    }
+    return true;
+}
+
+void khr_mesh_pipeline_destroy(khr_mesh_pipeline_t *p) {
+    if (!p || !p->dev) return;
+    VkDevice dev = p->dev->device;
+    if (p->pipeline != VK_NULL_HANDLE) {
+        vkDestroyPipeline(dev, p->pipeline, nullptr);
+        p->pipeline = VK_NULL_HANDLE;
+    }
+    if (p->layout != VK_NULL_HANDLE) {
+        vkDestroyPipelineLayout(dev, p->layout, nullptr);
+        p->layout = VK_NULL_HANDLE;
+    }
+    if (p->fs_module != VK_NULL_HANDLE) {
+        vkDestroyShaderModule(dev, p->fs_module, nullptr);
+        p->fs_module = VK_NULL_HANDLE;
+    }
+    if (p->vs_module != VK_NULL_HANDLE) {
+        vkDestroyShaderModule(dev, p->vs_module, nullptr);
+        p->vs_module = VK_NULL_HANDLE;
+    }
+    memset(p, 0, sizeof(*p));
+}
+
+void khr_mesh_draw(const khr_mesh_pipeline_t *p, VkCommandBuffer cmd, const khr_mesh_push_t *push) {
+    if (!p || !p->pipeline || !cmd || !push || push->index_count < 3U) return;
+    vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, p->pipeline);
+    vkCmdPushConstants(cmd, p->layout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                       0, sizeof(khr_mesh_push_t), push);
+    vkCmdDraw(cmd, push->index_count, 1, 0, 0);
 }
 
 void khr_plot_fill_demo_samples(float* samples, uint32_t count) {

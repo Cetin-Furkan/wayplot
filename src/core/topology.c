@@ -87,6 +87,20 @@ bool khr_cmdq_pop(khr_topology_t* t, khr_wcmd_item_t* out) {
 }
 
 [[nodiscard]]
+bool khr_cmdq_peek(const khr_topology_t* t, khr_wcmd_item_t* out) {
+    if (t == nullptr || out == nullptr) {
+        return false;
+    }
+    uint32_t tail = atomic_load_explicit(&t->cmdq_tail, memory_order_relaxed);
+    uint32_t head = atomic_load_explicit(&t->cmdq_head, memory_order_acquire);
+    if (head == tail) {
+        return false;
+    }
+    *out = t->cmdq[tail & (KHR_CMDQ_CAP - 1U)];
+    return true;
+}
+
+[[nodiscard]]
 static bool khr_worker_msg_ring(khr_topology_t* t, uint64_t payload, uint32_t res) {
     struct io_uring_sqe* sqe = khr_uring_prep_msg_ring(&t->ring_b, t->ring_a.ring_fd,
                                                        payload, res);
@@ -367,30 +381,24 @@ static bool khr_worker_drain_ring_b(khr_topology_t* t, khr_ingest_op_t* op) {
     return ingest_done;
 }
 
-/* Start the async ingest op for a freshly popped command. The path bytes live
- * in t->ingest_path (owned by the worker) until CLOSE lands, so the cmdq slot
- * is free for reuse immediately. Returns false when no SQE was available: the
- * caller must unpop the item and retry after harvesting completions. */
+/* Start the async ingest op. Path bytes live in t->ingest_path until CLOSE.
+ * Writes into the payload slice only (UI reserve at the high end is intact).
+ * Returns false when the chain could not be submitted; the command stays
+ * queued for the next harvest. */
 static bool khr_worker_start_ingest(khr_topology_t* t, khr_ingest_op_t* op,
                                     const khr_wcmd_item_t* item) {
     size_t len = strnlen(item->path, sizeof(t->ingest_path) - 1);
     memcpy(t->ingest_path, item->path, len);
     t->ingest_path[len] = '\0';
     khr_ingest_op_begin(op, true);
-    if (khr_ingest_chain_submit(&t->ring_b, t->ingest_path, t->hugepage, 0,
-                                t->hugepage_sz, op) != 0) {
+    size_t cap = khr_hp_payload_cap(t->hugepage_sz);
+    if (cap == 0 || khr_ingest_chain_submit(&t->ring_b, t->ingest_path,
+                                           t->hugepage, 0, cap, op) != 0) {
         op->active = false;
         return false;
     }
     t->ingest_active = true;
     return true;
-}
-
-static void khr_cmdq_unpop(khr_topology_t* t) {
-    /* Single consumer owns tail: stepping it back re-queues the item at the
-     * head. Release pairs with the producer's acquire load in khr_cmdq_push. */
-    uint32_t tail = atomic_load_explicit(&t->cmdq_tail, memory_order_relaxed);
-    atomic_store_explicit(&t->cmdq_tail, tail - 1U, memory_order_release);
 }
 
 static void* khr_worker_main(void* arg) {
@@ -434,30 +442,27 @@ static void* khr_worker_main(void* arg) {
     for (;;) {
         (void)khr_worker_drain_ring_b(t, &op);
 
-        bool requeue = false;
         khr_wcmd_item_t item = {};
-        while (!requeue && khr_cmdq_pop(t, &item)) {
+        while (khr_cmdq_peek(t, &item)) {
             if (atomic_load_explicit(&t->stop, memory_order_acquire)) {
-                khr_cmdq_unpop(t);
                 break;
             }
+            if (item.cmd == KHR_WCMD_INGEST) {
+                if (op.active || !khr_worker_start_ingest(t, &op, &item)) {
+                    break;
+                }
+                (void)khr_cmdq_pop(t, &item);
+                continue;
+            }
+            (void)khr_cmdq_pop(t, &item);
             if (item.cmd == KHR_WCMD_MSG_BDA) {
                 (void)khr_worker_msg_ring(t, item.u64, KHR_MSG_RES_BDA);
-            } else if (item.cmd == KHR_WCMD_INGEST) {
-                if (op.active) {
-                    /* One chain in flight: keep order, retry after harvest. */
-                    khr_cmdq_unpop(t);
-                    requeue = true;
-                } else if (!khr_worker_start_ingest(t, &op, &item)) {
-                    khr_cmdq_unpop(t);
-                    requeue = true;
-                }
             }
         }
 
         if (atomic_load_explicit(&t->stop, memory_order_acquire) &&
             !op.active) {
-            /* Drain any command left unpopped above, then exit: destroy() has
+            /* Peek left any unconsumed command queued; destroy() has
              * joined only after stop is set, so no new work can arrive. */
             break;
         }

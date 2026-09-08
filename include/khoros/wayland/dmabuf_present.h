@@ -131,7 +131,7 @@ bool khr_dmabuf_present_commit_cards(khr_gfx_device_t* dev,
                                      VkDeviceAddress cards_addr,
                                      uint32_t card_count);
 
-/* Cards plus the BDA plot ribbon in the client rect (plot_top_px inset). */
+/* Cards plus mesh (preferred) or plot ribbon in the client rect. */
 [[nodiscard]]
 bool khr_dmabuf_present_commit_scene(khr_gfx_device_t* dev,
                                      khr_dmabuf_present_t* p,
@@ -139,6 +139,9 @@ bool khr_dmabuf_present_commit_scene(khr_gfx_device_t* dev,
                                      uint32_t card_count,
                                      const khr_plot_pipeline_t* plot,
                                      const khr_plot_push_t* plot_push,
+                                     const khr_mesh_pipeline_t* mesh,
+                                     const khr_mesh_push_t* mesh_push,
+                                     const khr_gizmo_pass_t* gizmo,
                                      uint32_t plot_top_px);
 
 /*

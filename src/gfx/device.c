@@ -658,3 +658,39 @@ VkDeviceAddress khr_gfx_get_buffer_address(const khr_gfx_device_t* d, VkBuffer b
     };
     return d->vkGetBufferDeviceAddress(d->device, &info);
 }
+
+VkSampleCountFlagBits khr_gfx_sample_count(const khr_gfx_device_t* d) {
+    if (d == nullptr || d->phy == VK_NULL_HANDLE) {
+        return VK_SAMPLE_COUNT_1_BIT;
+    }
+    VkPhysicalDeviceProperties props = {};
+    vkGetPhysicalDeviceProperties(d->phy, &props);
+    VkSampleCountFlags f = props.limits.framebufferColorSampleCounts &
+                           props.limits.framebufferDepthSampleCounts;
+    if ((f & VK_SAMPLE_COUNT_4_BIT) != 0) {
+        return VK_SAMPLE_COUNT_4_BIT;
+    }
+    if ((f & VK_SAMPLE_COUNT_2_BIT) != 0) {
+        return VK_SAMPLE_COUNT_2_BIT;
+    }
+    return VK_SAMPLE_COUNT_1_BIT;
+}
+
+VkFormat khr_gfx_depth_format(const khr_gfx_device_t* d) {
+    if (d == nullptr || d->phy == VK_NULL_HANDLE) {
+        return VK_FORMAT_UNDEFINED;
+    }
+    const VkFormat try_fmt[2] = {
+        VK_FORMAT_D32_SFLOAT,
+        VK_FORMAT_D24_UNORM_S8_UINT,
+    };
+    for (uint32_t i = 0; i < 2; i++) {
+        VkFormatProperties fp = {};
+        vkGetPhysicalDeviceFormatProperties(d->phy, try_fmt[i], &fp);
+        if ((fp.optimalTilingFeatures &
+             VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) != 0) {
+            return try_fmt[i];
+        }
+    }
+    return VK_FORMAT_UNDEFINED;
+}

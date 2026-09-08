@@ -152,4 +152,11 @@ VkDeviceAddress khr_gfx_get_buffer_address(const khr_gfx_device_t* d, VkBuffer b
 [[nodiscard]]
 int32_t khr_score_device(const khr_device_candidate_t* c, dev_t compositor_dev);
 
+/* 4x if the device can, else 2 or 1. MSAA only extra-samples triangle edges. */
+[[nodiscard]]
+VkSampleCountFlagBits khr_gfx_sample_count(const khr_gfx_device_t* d);
+
+[[nodiscard]]
+VkFormat khr_gfx_depth_format(const khr_gfx_device_t* d);
+
 #endif /* KHOROS_GFX_DEVICE_H */

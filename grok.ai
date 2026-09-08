@@ -604,3 +604,84 @@ User's `git add .` + `git push` was a no-op (staged, never committed). Committed
 
 Follow-up: user asked to do the git/docs side. Updated `doc/wayland.md` (product window: close, hit list, double-click = set_maximized), `doc/testing.md` (window tests), `doc/ingest.md` (hugepage is BDA; live ingest parked until partition), `window.h` comment. Still no ingest, no cart rows.
 
+---
+
+## [2026-09-08T02:33:30+03:00] - Hugepage split, KHRB blob, mesh in the client, ingest live
+
+User: render files in the main area; steps 1–3 (memory split, native blob, ingest+draw). Step 4 Blender exporter parked. GPU does the mesh; CPU validates once.
+
+- Payload `[0, 2MiB-64KiB)`, UI chrome in the high 64 KiB. Not a screen split. Ingest cap is the payload so cards cannot be DMA'd over. `cmdq_peek` instead of unpop.
+- `khr_blob_t` magic `KHRB`, self-relative verts/indices. Default unit box (8/36). `./engine --write-box path.khrb` then `./engine path.khrb`.
+- Mesh pipeline: BDA packed float3 + uint32 indices, face normals on GPU, backface cull, no depth, no per-frame CPU geometry. Present thread does not block on disk.
+
+Gates: `make lint` PASS, `make test` 101/101 (2641 assertions). No Blender exporter. Not pushed.
+
+---
+
+## [2026-09-08T02:43:33+03:00] - Fit camera, brighter mesh, Blender → .khrb exporter
+
+User: next step after the dark box. `--write-box` is file-only (no window). Ingest of the same box cannot look different.
+
+- CPU once: AABB center/scale + yaw/pitch so any blob fills the client (`khr_mesh_fit_view` / `khr_mesh_setup`).
+- Mesh shader: warmer albedo, higher ambient + fill light so faces read against the body card.
+- Cold path: `tools/export_khrb.py` writes `KHRB` from selected (or all) Blender meshes. Engine still does not parse `.blend`.
+
+Gates: `make lint` PASS, `make test` 102/102 (2649 assertions). Not pushed.
+
+---
+
+## [2026-09-08T02:50:17+03:00] - Cube winding, diagonal fit, Blender exports
+
+Screenshot was a tan slab with a triangular hole: box faces mixed CW/CCW, backface cull ate half of each quad; scale used AABB side so rotation clipped. All 12 triangles now outward; fit uses bounding diagonal.
+
+`scene.blend` does not exist. Ran:
+
+- `blender --background --python tools/export_khrb.py -- /tmp/mesh.khrb` → default cube 8/36, 272 B
+- `blender --background --python tools/export_khrb.py -- --monkey /tmp/suzanne.khrb` → 507 verts, 2904 idx, 17732 B
+
+Gates: `make test` 103/103. Not pushed.
+
+---
+
+## [2026-09-08T03:01:01+03:00] - GPU depth + 4x MSAA resolve (Vulkan 1.4)
+
+Stairs = coverage aliasing. Overlapping dark triangles = no z-buffer (draw order, not “other faces”). User: AA only on edges, visible faces only, no CPU visibility, Vulkan 1.4.
+
+- Per slot: GPU-local MSAA color + depth. Dynamic rendering resolve (`VK_RESOLVE_MODE_AVERAGE_BIT`) into the 1-sample DMA-BUF. Not exported MSAA (compositor LINEAR).
+- Mesh PSO: depth test/write LESS, backface cull (rasterizer). Cards declare the same depth format but do not test/write.
+- Face shading stays flat (cross in the VS). No Phong, no CPU front-face list.
+- `khr_mesh_fit_view` maps z into Vulkan [0,1] so depth is meaningful.
+
+Gates: `make test` 103/103, `make lint` PASS. Not pushed.
+
+---
+
+## [2026-09-08T03:08:32+03:00] - Face the camera, cube shade contrast, 3px NE
+
+Suzanne was the back of the head: yaw += π. Cube looked like one hexagon: fill light made +X and +Z the same; key light now in view space via R^T so the three faces differ. NE resize was 16×16 over the close button: NE is 3×3, CLOSE is before E so the title-bar close is clickable. Right edge below the bar still resizes.
+
+No re-export needed. Not pushed.
+
+---
+
+## [2026-09-08T03:12:28+03:00] - Y-up in Vulkan, hemisphere lighting
+
+Suzanne was upside-down: mesh Y-up written into a Y-down framebuffer. Flip clip.y in the mesh VS (chrome unchanged). Lighting: per-face hemisphere (sky/ground from n.y) + wrapped key so unlit faces are not black; still not Phong. Same file, no re-export.
+
+---
+
+## [2026-09-08T03:35:45+03:00] - Client orbit + top-right RGB gimbal
+
+User: what to add to “orbit the client” so it helps more; a gimbal at the top right if it worked. Not orbit-only.
+
+- Turntable LMB orbit (pitch clamped). Shift+LMB or MMB pan (trackpads have no middle). Wheel zoom (`axis_value120`, axis is fallback). F / double-click client = frame, keep yaw/pitch. CPU writes MVP only when dirty.
+- Gimbal is in the **client**, below the 32 px bar, inset 16 px so it never fights close or the 8 px E strip. Click an arm (or the hub) snaps look-from ±X±Y±Z; drag orbits; double-click resets orient + frames. POINTER cursor. Same mesh PSO: one +X arm, three rotated draws, `pad0` RGB tint. Depth cleared in that scissor so arms occlude each other, not the mesh.
+
+Gates: `make lint` PASS, `make test` 105/105 (2678 assertions). Engine rebuilt. Not pushed.
+
+---
+
+## [2026-09-09T01:05:43+03:00] - Publish mesh/orbit/gimbal stack
+
+User: publish that version; talk instead of coding. Committing the unpublished stack (hugepage split → KHRB → mesh → MSAA/depth → lighting/Y-up → client orbit + RGB gimbal) and pushing `engine`.
+

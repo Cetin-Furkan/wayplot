@@ -28,7 +28,8 @@ SHADER_DIR = shaders
 SPV_DIR = $(BIN_DIR)/shaders
 
 SPV_TARGETS = $(SPV_DIR)/card.vert.spv $(SPV_DIR)/card.frag.spv \
-              $(SPV_DIR)/plot.vert.spv $(SPV_DIR)/plot.frag.spv
+              $(SPV_DIR)/plot.vert.spv $(SPV_DIR)/plot.frag.spv \
+              $(SPV_DIR)/mesh.vert.spv $(SPV_DIR)/mesh.frag.spv
 
 # Recursive source discovery
 SRCS = $(wildcard src/*.c) $(wildcard src/**/*.c)

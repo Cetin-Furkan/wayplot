@@ -28,7 +28,7 @@ constexpr size_t   ENGINE_CACHE_LINE_SIZE   = 64;
 constexpr size_t   ENGINE_PAGE_SIZE         = 4'096;
 
 [[nodiscard]]
-bool engine_init(void);
+bool engine_init(const char* blob_path);
 
 [[nodiscard]]
 const char* engine_get_banner(void);

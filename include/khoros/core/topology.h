@@ -27,6 +27,9 @@
 constexpr int      KHR_CPU_PRESENT     = 2;
 constexpr int      KHR_CPU_COMPUTE     = 3;
 constexpr size_t   KHR_HUGEPAGE_SZ     = 2'097'152; /* 2 MiB */
+/* Chrome lives at the high end so ingest (offset 0) cannot smash cards.
+ * Not a screen split: the window layout is unchanged. */
+constexpr size_t   KHR_HP_UI_RESERVE   = 65'536;
 constexpr size_t   KHR_STD_PAGE_SZ     = 4'096;
 constexpr uint32_t KHR_CMDQ_CAP        = 8; /* power of two, SPSC */
 constexpr size_t   KHR_PATH_MAX        = 256;
@@ -169,6 +172,24 @@ bool khr_cmdq_push(khr_topology_t* t, uint32_t cmd, uint64_t u64, const char* pa
 
 [[nodiscard]]
 bool khr_cmdq_pop(khr_topology_t* t, khr_wcmd_item_t* out);
+
+/* Copy the next command without consuming it. Worker peeks, then pops
+ * only after ingest can start — no tail rollback. */
+[[nodiscard]]
+bool khr_cmdq_peek(const khr_topology_t* t, khr_wcmd_item_t* out);
+
+[[nodiscard]]
+static inline size_t khr_hp_payload_cap(size_t total) {
+    if (total <= KHR_HP_UI_RESERVE) {
+        return 0;
+    }
+    return total - KHR_HP_UI_RESERVE;
+}
+
+[[nodiscard]]
+static inline size_t khr_hp_ui_off(size_t total) {
+    return khr_hp_payload_cap(total);
+}
 
 /*
  * Unified completion pump: issue a single kernel wait (at most timeout_ms),

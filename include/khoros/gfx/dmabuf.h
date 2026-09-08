@@ -65,6 +65,17 @@ typedef struct {
     PFN_vkCmdPushConstants2KHR pfn_push2;
     VkImageLayout      layout;
     uint64_t           painted;
+    /* MSAA color + depth are GPU-local. Resolve into img (the DMA-BUF). */
+    VkSampleCountFlagBits samples;
+    VkFormat           depth_format;
+    VkImage            msaa_color;
+    VkDeviceMemory     msaa_color_mem;
+    VkImageView        msaa_color_view;
+    VkImageLayout      msaa_color_layout;
+    VkImage            depth;
+    VkDeviceMemory     depth_mem;
+    VkImageView        depth_view;
+    VkImageLayout      depth_layout;
 } khr_dmabuf_slot_t;
 
 /* Image + DMA-BUF export + view + command pool/buffer + card pipeline. */
@@ -90,13 +101,29 @@ bool khr_dmabuf_slot_render_cards(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
                                   VkDeviceAddress cards_addr, uint32_t card_count,
                                   VkSemaphore signal_sem, uint64_t signal_value);
 
-/* Cards plus an optional BDA plot ribbon. plot_top_px insets the plot
- * viewport under the title bar (0 = full slot). plot may be null. */
+typedef struct khr_gizmo_pass {
+    VkDeviceAddress verts_addr;
+    VkDeviceAddress indices_addr;
+    uint32_t        index_count;
+    uint32_t        vert_count;
+    uint32_t        x;
+    uint32_t        y;
+    uint32_t        s;
+    float           r0[3];
+    float           r1[3];
+    float           r2[3];
+} khr_gizmo_pass_t;
+
+/* Cards plus mesh (preferred) or plot ribbon in the client rect.
+ * top_px insets under the title bar. mesh/plot/gizmo may be null. */
 [[nodiscard]]
 bool khr_dmabuf_slot_render_scene(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
                                   VkDeviceAddress cards_addr, uint32_t card_count,
                                   const khr_plot_pipeline_t* plot,
                                   const khr_plot_push_t* plot_push,
+                                  const khr_mesh_pipeline_t* mesh,
+                                  const khr_mesh_push_t* mesh_push,
+                                  const khr_gizmo_pass_t* gizmo,
                                   uint32_t plot_top_px,
                                   VkSemaphore signal_sem, uint64_t signal_value);
 

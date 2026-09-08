@@ -25,6 +25,6 @@
  */
 [[nodiscard]]
 bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
-                    khr_bda_arena_t* arena);
+                    khr_bda_arena_t* arena, const char* blob_path);
 
 #endif /* KHOROS_WAYLAND_WINDOW_H */

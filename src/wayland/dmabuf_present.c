@@ -343,6 +343,9 @@ bool khr_dmabuf_present_commit_scene(khr_gfx_device_t* dev,
                                      uint32_t card_count,
                                      const khr_plot_pipeline_t* plot,
                                      const khr_plot_push_t* plot_push,
+                                     const khr_mesh_pipeline_t* mesh,
+                                     const khr_mesh_push_t* mesh_push,
+                                     const khr_gizmo_pass_t* gizmo,
                                      uint32_t plot_top_px) {
     if (dev == nullptr || p == nullptr || p->client == nullptr ||
         cards_addr == 0 || card_count == 0) {
@@ -355,8 +358,8 @@ bool khr_dmabuf_present_commit_scene(khr_gfx_device_t* dev,
     khr_dmabuf_pslot_t* slot = &p->slots[idx];
     uint64_t point = dev->acquire_point + 1U;
     if (!khr_dmabuf_slot_render_scene(dev, &slot->gfx, cards_addr, card_count,
-                                      plot, plot_push, plot_top_px,
-                                      dev->acquire_sem, point)) {
+                                      plot, plot_push, mesh, mesh_push, gizmo,
+                                      plot_top_px, dev->acquire_sem, point)) {
         return false;
     }
     dev->acquire_point = point;

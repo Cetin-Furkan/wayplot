@@ -8,6 +8,7 @@
 #include "khoros/wayland/shm.h"
 #include "khoros/wayland/wire.h"
 #include "khoros/gfx/pipeline.h"
+#include "khoros/gfx/blob.h"
 #include "khoros/uring/pbuf.h"
 #include <vulkan/vulkan.h>
 
@@ -15,7 +16,6 @@
 #include <string.h>
 #include <signal.h>
 #include <time.h>
-#include <math.h>
 #include <sys/socket.h>
 
 static volatile sig_atomic_t khr_window_stop = 0;
@@ -157,6 +157,37 @@ static void khr_window_popup_teardown(khr_wl_client_t* client,
     khr_shm_pool_destroy(client, pool);
 }
 
+[[nodiscard]]
+static int32_t khr_window_iabs(int32_t v) {
+    return v < 0 ? -v : v;
+}
+
+[[nodiscard]]
+static bool khr_window_mesh_from_payload(void* payload, size_t cap,
+                                         VkDeviceAddress bda,
+                                         khr_mesh_push_t* push, khr_cam_t* cam,
+                                         bool reset_orient) {
+    khr_blob_view_t v = {};
+    if (!khr_mesh_bind_blob(payload, cap, bda, push) ||
+        !khr_blob_parse(payload, cap, &v)) {
+        return false;
+    }
+    khr_cam_frame(cam, v.verts, v.vert_count, reset_orient);
+    khr_mesh_cam_apply(push, cam);
+    return true;
+}
+
+static void khr_window_frame_payload(void* payload, size_t cap,
+                                     khr_mesh_push_t* push, khr_cam_t* cam,
+                                     bool reset_orient) {
+    khr_blob_view_t v = {};
+    if (!khr_blob_parse(payload, cap, &v)) {
+        return;
+    }
+    khr_cam_frame(cam, v.verts, v.vert_count, reset_orient);
+    khr_mesh_cam_apply(push, cam);
+}
+
 static void khr_window_wait_acquire(khr_gfx_device_t* dev) {
     if (dev == nullptr || dev->device == VK_NULL_HANDLE ||
         dev->acquire_sem == VK_NULL_HANDLE || dev->acquire_point == 0) {
@@ -172,30 +203,9 @@ static void khr_window_wait_acquire(khr_gfx_device_t* dev) {
     (void)vkWaitSemaphores(dev->device, &wi, 50'000'000ULL);
 }
 
-static void khr_window_plot_push(khr_plot_push_t* push, VkDeviceAddress samples) {
-    /* Column-major Ry(yaw)*Rx(pitch) so ribbon half_w is visible, not a line. */
-    const float yaw = 0.42f;
-    const float pitch = 0.32f;
-    float cy = cosf(yaw);
-    float sy = sinf(yaw);
-    float cx = cosf(pitch);
-    float sx = sinf(pitch);
-    *push = (khr_plot_push_t){
-        .mvp_c0 = { cy, 0.0f, -sy, 0.0f },
-        .mvp_c1 = { sy * sx, cx, cy * sx, 0.0f },
-        .mvp_c2 = { sy * cx, -sx, cy * cx, 0.0f },
-        .mvp_c3 = { 0.0f, 0.0f, 0.0f, 1.0f },
-        .light_dir = { 0.35f, -0.80f, -0.50f, 0.0f },
-        .samples_addr = samples,
-        .count = KHR_PLOT_SAMPLE_COUNT,
-        .amp = KHR_PLOT_AMP,
-        .half_w = KHR_PLOT_HALF_W,
-    };
-}
-
 [[nodiscard]]
 bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
-                    khr_bda_arena_t* arena) {
+                    khr_bda_arena_t* arena, const char* blob_path) {
     if (topo == nullptr || dev == nullptr || arena == nullptr) {
         return false;
     }
@@ -312,38 +322,78 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
            shell.width, shell.height, buf_w, buf_h, shell.last_ack_serial,
            shell.maximized, shell.fullscreen);
 
-    khr_card_instance_t* cards = nullptr;
-    VkDeviceAddress cards_addr = 0;
-    if (!khr_bda_arena_alloc(arena,
-                             sizeof(khr_card_instance_t) * KHR_WINDOW_CARD_COUNT,
-                             16, (void**)&cards, &cards_addr)) {
-        printf("  Present:      FAILED card BDA alloc\n");
+    size_t hp_sz = arena->size;
+    size_t ui_off = khr_hp_ui_off(hp_sz);
+    size_t pay_cap = khr_hp_payload_cap(hp_sz);
+    if (pay_cap == 0 || ui_off + sizeof(khr_card_instance_t) * KHR_WINDOW_CARD_COUNT > hp_sz ||
+        arena->host_ptr == nullptr || arena->gpu_address == 0) {
+        printf("  Present:      FAILED hugepage split\n");
         khr_cursor_destroy(&client, &cursor);
         khr_wl_client_disconnect(&client);
         return false;
     }
-    float* samples = nullptr;
-    VkDeviceAddress samples_addr = 0;
-    if (!khr_bda_arena_alloc(arena, sizeof(float) * KHR_PLOT_SAMPLE_COUNT, 16,
-                             (void**)&samples, &samples_addr)) {
-        printf("  Present:      FAILED plot BDA alloc\n");
-        khr_cursor_destroy(&client, &cursor);
-        khr_wl_client_disconnect(&client);
-        return false;
-    }
-    khr_plot_fill_demo_samples(samples, KHR_PLOT_SAMPLE_COUNT);
-    khr_plot_push_t plot_push = {};
-    khr_window_plot_push(&plot_push, samples_addr);
+    khr_card_instance_t* cards =
+        (khr_card_instance_t*)((uint8_t*)arena->host_ptr + ui_off);
+    VkDeviceAddress cards_addr = arena->gpu_address + (VkDeviceAddress)ui_off;
+    void* payload = arena->host_ptr;
+    VkDeviceAddress payload_bda = arena->gpu_address;
 
-    khr_plot_pipeline_t plot = {};
-    if (!khr_plot_pipeline_init(&plot, dev, VK_FORMAT_B8G8R8A8_UNORM)) {
-        printf("  Present:      FAILED plot pipeline\n");
+    khr_mesh_push_t mesh_push = {};
+    khr_cam_t cam = {};
+    size_t box_n = khr_blob_write_box(payload, pay_cap);
+    if (box_n == 0 ||
+        !khr_window_mesh_from_payload(payload, pay_cap, payload_bda, &mesh_push,
+                                      &cam, true)) {
+        printf("  Present:      FAILED default box blob\n");
         khr_cursor_destroy(&client, &cursor);
         khr_wl_client_disconnect(&client);
         return false;
     }
-    printf("  Plot:         %u samples BDA=0x%llx (demo series, no file ingest)\n",
-           KHR_PLOT_SAMPLE_COUNT, (unsigned long long)samples_addr);
+
+    khr_mesh_push_t giz_bind = {};
+    size_t giz_off = sizeof(khr_card_instance_t) * KHR_WINDOW_CARD_COUNT;
+    uint8_t* giz_host = (uint8_t*)arena->host_ptr + ui_off + giz_off;
+    size_t giz_cap = (giz_off < KHR_HP_UI_RESERVE)
+                         ? (KHR_HP_UI_RESERVE - giz_off) : 0;
+    size_t giz_n = khr_blob_write_gizmo_arm(giz_host, giz_cap);
+    bool giz_ok = giz_n > 0 &&
+                  khr_mesh_bind_blob(giz_host, giz_n,
+                                     arena->gpu_address +
+                                         (VkDeviceAddress)(ui_off + giz_off),
+                                     &giz_bind);
+
+    bool ingest_pending = false;
+    bool imported = arena->is_imported && topo->hugepage == arena->host_ptr;
+    if (blob_path != nullptr && blob_path[0] != '\0') {
+        if (imported && khr_topology_ingest_submit(topo, blob_path)) {
+            ingest_pending = true;
+            printf("  Ingest:       submitted '%s' -> payload %zu B (async)\n",
+                   blob_path, pay_cap);
+        } else {
+            printf("  Ingest:       skipped (%s) default box stays\n",
+                   imported ? "submit failed" : "arena is not the hugepage");
+        }
+    }
+
+    khr_mesh_pipeline_t mesh = {};
+    if (!khr_mesh_pipeline_init(&mesh, dev, VK_FORMAT_B8G8R8A8_UNORM)) {
+        printf("  Present:      FAILED mesh pipeline\n");
+        khr_cursor_destroy(&client, &cursor);
+        khr_wl_client_disconnect(&client);
+        return false;
+    }
+    printf("  GPU:          %ux MSAA  depth=%s (cull back, GPU z-test)\n",
+           (unsigned)khr_gfx_sample_count(dev),
+           khr_gfx_depth_format(dev) == VK_FORMAT_D32_SFLOAT ? "D32"
+           : (khr_gfx_depth_format(dev) != VK_FORMAT_UNDEFINED ? "D24" : "none"));
+    printf("  Payload:      %zu KiB @0  UI %zu KiB @%zu  import=%s\n",
+           pay_cap / 1024, KHR_HP_UI_RESERVE / 1024, ui_off,
+           imported ? "yes" : "no");
+    printf("  Mesh:         %u verts %u idx BDA=0x%llx (%s)\n",
+           mesh_push.vert_count, mesh_push.index_count,
+           (unsigned long long)mesh_push.verts_addr,
+           ingest_pending ? "box until ingest" : "box");
+    printf("  View:         LMB orbit  Shift/MMB pan  wheel zoom  F frame  gimbal snap\n");
 
     khr_dmabuf_present_t dp = {};
     bool have_dp = false;
@@ -355,16 +405,46 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
     uint32_t popup_buffer_id = 0;
     uint32_t popup_parent_w = 0;
     uint32_t popup_parent_h = 0;
+    uint32_t cam_drag = 0; /* 1 = orbit, 2 = pan */
+    int32_t drag_x = 0;
+    int32_t drag_y = 0;
+    int32_t drag_sx = 0;
+    int32_t drag_sy = 0;
+    khr_hit_t drag_hit = KHR_HIT_CLIENT;
 
     while (!shell.closed && !client.display_error && !khr_window_stop) {
         bool resizing =
             (shell.states & (1U << KHR_XDG_STATE_RESIZING)) != 0;
         /* A mapped grab popup must notice popup_done / parent clicks promptly.
-         * Outside-app clicks only arrive as popup_done, and only if grab stuck. */
+         * Outside-app clicks only arrive as popup_done, and only if grab stuck.
+         * Pointer-down view drags must not sit in a 500 ms wait. */
+        bool view_drag = seat.left_down || seat.middle_down || cam_drag != 0;
         uint32_t wait_ms = dirty ? (resizing ? 16U : 0U)
-                                 : (shell.popup_live ? 16U : 500U);
+                                 : (shell.popup_live || ingest_pending || view_drag
+                                        ? 16U : 500U);
         khr_window_feed(topo, &client, &shell, &seat, have_dp ? &dp : nullptr,
                         have_dp, wait_ms);
+        if (ingest_pending) {
+            uint32_t was = topo->ingest_outstanding;
+            size_t n = 0;
+            bool got = khr_topology_pop_ingest(topo, &n);
+            if (got || topo->ingest_outstanding != was) {
+                ingest_pending = false;
+                if (n == 0 ||
+                    !khr_window_mesh_from_payload(payload, pay_cap, payload_bda,
+                                                  &mesh_push, &cam, true)) {
+                    (void)khr_blob_write_box(payload, pay_cap);
+                    (void)khr_window_mesh_from_payload(payload, pay_cap,
+                                                       payload_bda, &mesh_push,
+                                                       &cam, true);
+                    printf("  Ingest:       invalid blob, default box\n");
+                } else {
+                    printf("  Ingest:       %zu B  %u verts %u idx\n",
+                           n, mesh_push.vert_count, mesh_push.index_count);
+                }
+                dirty = true;
+            }
+        }
         (void)khr_seat_offer_devices(&client, &seat);
         if (seat.pointer_id != 0 && cursor.device_id == 0 && !cursor.shm_live) {
             (void)khr_cursor_setup(&client, shell.compositor_id, seat.pointer_id,
@@ -467,14 +547,15 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
             }
             seat.right_down = false;
         }
-        if (seat.left_down && shell.popup_live && !on_popup) {
+        if (cam_drag == 0 && seat.left_down && shell.popup_live && !on_popup) {
             khr_window_popup_teardown(&client, &shell, &popup_pool,
                                       &popup_buffer_id);
             seat.left_down = false;
-        } else if (seat.left_down && hit == KHR_HIT_CLOSE && !on_popup) {
+        } else if (cam_drag == 0 && seat.left_down && hit == KHR_HIT_CLOSE &&
+                   !on_popup) {
             khr_window_stop = 1;
             seat.left_down = false;
-        } else if (seat.double_click && hit == KHR_HIT_MOVE &&
+        } else if (cam_drag == 0 && seat.double_click && hit == KHR_HIT_MOVE &&
                    !shell.fullscreen && !on_popup) {
             /* Same request as dragging the title bar to the top of the
              * output: xdg_toplevel.set_maximized. The compositor picks
@@ -482,17 +563,109 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
             (void)khr_xdg_set_maximized(&client, &shell, !shell.maximized);
             seat.left_down = false;
             seat.double_click = false;
-        } else if (seat.left_down && on_popup) {
+        } else if (cam_drag == 0 && seat.left_down && on_popup) {
             seat.left_down = false;
-        } else if (seat.left_down && !shell.fullscreen) {
+        } else if (cam_drag == 0 && seat.left_down && !on_popup &&
+                   !shell.fullscreen) {
             uint32_t serial = khr_seat_serial(&seat);
             uint32_t edge = khr_hit_resize_edge(hit);
             if (hit == KHR_HIT_MOVE) {
                 (void)khr_xdg_move(&client, &shell, seat.seat_id, serial);
+                seat.left_down = false;
             } else if (edge != KHR_XDG_RESIZE_NONE) {
                 (void)khr_xdg_resize(&client, &shell, seat.seat_id, serial, edge);
+                seat.left_down = false;
             }
+        }
+        bool in_view = !on_popup &&
+                       (hit == KHR_HIT_CLIENT || hit == KHR_HIT_GIMBAL);
+        if (seat.double_click && in_view) {
+            khr_window_frame_payload(payload, pay_cap, &mesh_push, &cam,
+                                     hit == KHR_HIT_GIMBAL);
+            dirty = true;
+            seat.double_click = false;
             seat.left_down = false;
+            cam_drag = 0;
+        }
+        if (seat.f_pressed && !on_popup) {
+            khr_window_frame_payload(payload, pay_cap, &mesh_push, &cam, false);
+            dirty = true;
+            seat.f_pressed = false;
+        }
+        if (cam_drag == 0 && in_view) {
+            if (seat.middle_down || (seat.left_down && seat.shift_down)) {
+                cam_drag = 2;
+                drag_sx = seat.x;
+                drag_sy = seat.y;
+                drag_x = seat.x;
+                drag_y = seat.y;
+                drag_hit = hit;
+            } else if (seat.left_down) {
+                cam_drag = 1;
+                drag_sx = seat.x;
+                drag_sy = seat.y;
+                drag_x = seat.x;
+                drag_y = seat.y;
+                drag_hit = hit;
+            }
+        }
+        if (cam_drag == 1 && seat.left_down) {
+            int32_t dx = seat.x - drag_x;
+            int32_t dy = seat.y - drag_y;
+            if (dx != 0 || dy != 0) {
+                khr_cam_orbit(&cam, (float)dx * 0.008f, (float)dy * 0.008f);
+                khr_mesh_cam_apply(&mesh_push, &cam);
+                dirty = true;
+                drag_x = seat.x;
+                drag_y = seat.y;
+            }
+        } else if (cam_drag == 2 &&
+                   (seat.middle_down || (seat.left_down && seat.shift_down))) {
+            int32_t dx = seat.x - drag_x;
+            int32_t dy = seat.y - drag_y;
+            if (dx != 0 || dy != 0) {
+                khr_cam_pan(&cam, (float)dx, (float)dy);
+                khr_mesh_cam_apply(&mesh_push, &cam);
+                dirty = true;
+                drag_x = seat.x;
+                drag_y = seat.y;
+            }
+        }
+        if (cam_drag == 1 && !seat.left_down) {
+            int32_t tdx = khr_window_iabs(seat.x - drag_sx);
+            int32_t tdy = khr_window_iabs(seat.y - drag_sy);
+            if (drag_hit == KHR_HIT_GIMBAL &&
+                tdx <= (int32_t)KHR_WINDOW_DBLCLICK_PX &&
+                tdy <= (int32_t)KHR_WINDOW_DBLCLICK_PX) {
+                uint32_t gx = 0, gy = 0, gs = 0;
+                khr_window_gimbal_rect(buf_w, buf_h, shell.fullscreen,
+                                       &gx, &gy, &gs);
+                if (gs > 0) {
+                    float cx = (float)gx + (float)gs * 0.5f;
+                    float cy = (float)gy + (float)gs * 0.5f;
+                    float nx = ((float)drag_sx - cx) / ((float)gs * 0.5f);
+                    float ny = ((float)drag_sy - cy) / ((float)gs * 0.5f);
+                    int axis = khr_cam_pick_axis(&cam, nx, ny);
+                    if (axis != 0) {
+                        khr_cam_snap_axis(&cam, axis);
+                        khr_mesh_cam_apply(&mesh_push, &cam);
+                        dirty = true;
+                    }
+                }
+            }
+            cam_drag = 0;
+        }
+        if (cam_drag == 2 &&
+            !seat.middle_down && !(seat.left_down && seat.shift_down)) {
+            cam_drag = 0;
+        }
+        if (seat.wheel != 0) {
+            if ((in_view || cam_drag != 0) && !on_popup) {
+                khr_cam_zoom(&cam, -(float)seat.wheel / 120.0f);
+                khr_mesh_cam_apply(&mesh_push, &cam);
+                dirty = true;
+            }
+            seat.wheel = 0;
         }
         if (seat.f11_pressed) {
             if (shell.popup_live) {
@@ -552,10 +725,30 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
         if (size_ok && dirty && khr_dmabuf_present_next_free(&dp) != UINT32_MAX) {
             khr_window_paint_cards(cards, buf_w, buf_h, shell.fullscreen);
             uint32_t top = shell.fullscreen ? 0U : KHR_WINDOW_CHROME_TOP;
+            uint32_t gx = 0, gy = 0, gs = 0;
+            khr_window_gimbal_rect(buf_w, buf_h, shell.fullscreen, &gx, &gy, &gs);
+            khr_gizmo_pass_t giz = {};
+            const khr_gizmo_pass_t* giz_arg = nullptr;
+            if (giz_ok && gs > 0) {
+                giz.verts_addr = giz_bind.verts_addr;
+                giz.indices_addr = giz_bind.indices_addr;
+                giz.index_count = giz_bind.index_count;
+                giz.vert_count = giz_bind.vert_count;
+                giz.x = gx;
+                giz.y = gy;
+                giz.s = gs;
+                for (int i = 0; i < 3; i++) {
+                    giz.r0[i] = cam.r0[i];
+                    giz.r1[i] = cam.r1[i];
+                    giz.r2[i] = cam.r2[i];
+                }
+                giz_arg = &giz;
+            }
             (void)khr_xdg_ack_pending(&client, &shell);
             if (khr_dmabuf_present_commit_scene(dev, &dp, cards_addr,
                                                 KHR_WINDOW_CARD_COUNT,
-                                                &plot, &plot_push, top)) {
+                                                nullptr, nullptr,
+                                                &mesh, &mesh_push, giz_arg, top)) {
                 dirty = false;
                 khr_window_wait_acquire(dev);
                 (void)khr_dmabuf_present_sync(dev, &dp);
@@ -582,7 +775,7 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
         khr_dmabuf_present_destroy(dev, &dp);
     }
     khr_window_popup_teardown(&client, &shell, &popup_pool, &popup_buffer_id);
-    khr_plot_pipeline_destroy(&plot);
+    khr_mesh_pipeline_destroy(&mesh);
     khr_cursor_destroy(&client, &cursor);
     khr_wl_client_disconnect(&client);
     if (ok && !client.display_error) {

@@ -13,7 +13,9 @@ bool test_window_hit_chrome_regions(void) {
     TEST_ASSERT_EQ((uint32_t)khr_window_hit(0, 0, w, h, false), (uint32_t)KHR_HIT_NW,
                    "top-left extra is NW resize");
     TEST_ASSERT_EQ((uint32_t)khr_window_hit((int32_t)(w - 1), 0, w, h, false),
-                   (uint32_t)KHR_HIT_NE, "top-right extra is NE resize");
+                   (uint32_t)KHR_HIT_NE, "top-right 3px extra is NE resize");
+    TEST_ASSERT_EQ((uint32_t)khr_window_hit((int32_t)(w - 8), 8, w, h, false),
+                   (uint32_t)KHR_HIT_CLOSE, "close wins over the old 16px NE");
     TEST_ASSERT_EQ((uint32_t)khr_window_hit(0, (int32_t)(h - 1), w, h, false),
                    (uint32_t)KHR_HIT_SW, "bottom-left extra is SW resize");
     TEST_ASSERT_EQ((uint32_t)khr_window_hit((int32_t)(w - 1), (int32_t)(h - 1), w, h, false),
@@ -32,15 +34,26 @@ bool test_window_hit_chrome_regions(void) {
                    (uint32_t)KHR_HIT_S, "bottom edge resize");
     TEST_ASSERT_EQ((uint32_t)khr_window_hit(80, 80, w, h, false),
                    (uint32_t)KHR_HIT_CLIENT, "interior is client");
+    uint32_t gx = 0, gy = 0, gs = 0;
+    khr_window_gimbal_rect(w, h, false, &gx, &gy, &gs);
+    TEST_ASSERT(gs == KHR_WINDOW_GIMBAL_PX, "gimbal is 88 px");
+    TEST_ASSERT(gy >= KHR_WINDOW_CHROME_TOP, "gimbal sits below the title bar");
+    TEST_ASSERT(gx + gs <= w - KHR_WINDOW_CHROME_EDGE,
+                "gimbal misses the 8 px E strip");
+    TEST_ASSERT_EQ((uint32_t)khr_window_hit((int32_t)(gx + gs / 2U),
+                                            (int32_t)(gy + gs / 2U), w, h, false),
+                   (uint32_t)KHR_HIT_GIMBAL, "client top-right is the gimbal");
     TEST_ASSERT_EQ(khr_hit_cursor_shape(KHR_HIT_CLIENT), KHR_CURSOR_SHAPE_DEFAULT,
                    "empty client uses the default arrow, not the finger");
     TEST_ASSERT_EQ(khr_hit_cursor_shape(KHR_HIT_POPUP), KHR_CURSOR_SHAPE_POINTER,
                    "popup uses the pointer finger");
     TEST_ASSERT_EQ(khr_hit_cursor_shape(KHR_HIT_CLOSE), KHR_CURSOR_SHAPE_POINTER,
                    "close uses the pointer finger");
+    TEST_ASSERT_EQ(khr_hit_cursor_shape(KHR_HIT_GIMBAL), KHR_CURSOR_SHAPE_POINTER,
+                   "gimbal uses the pointer finger");
     TEST_ASSERT_EQ((uint32_t)khr_window_hit(0, 0, w, h, true),
                    (uint32_t)KHR_HIT_CLIENT, "fullscreen has no chrome");
-    TEST_ASSERT_EQ((uint32_t)khr_window_hit((int32_t)(w - 24), 20, w, h, true),
+    TEST_ASSERT_EQ((uint32_t)khr_window_hit((int32_t)(w - 24), 8, w, h, true),
                    (uint32_t)KHR_HIT_CLIENT, "fullscreen has no close");
     TEST_ASSERT_EQ(khr_hit_resize_edge(KHR_HIT_SE), KHR_XDG_RESIZE_BOTTOM_RIGHT,
                    "SE maps to xdg edge");
@@ -72,15 +85,19 @@ bool test_window_hit_list_first_match(void) {
     khr_window_hit_list_fill(&chrome, 400, 300, false);
     TEST_ASSERT(chrome.count >= 9U, "chrome fills corners, edges, close, move");
     TEST_ASSERT_EQ((uint32_t)khr_hit_list_pick(&chrome, 399, 0),
-                   (uint32_t)KHR_HIT_NE, "outer top-right extra is still NE");
+                   (uint32_t)KHR_HIT_NE, "outer 3px top-right is still NE");
     TEST_ASSERT_EQ((uint32_t)khr_hit_list_pick(&chrome, 392, 20),
-                   (uint32_t)KHR_HIT_E, "right 8px of the close square is E");
+                   (uint32_t)KHR_HIT_CLOSE, "close wins over E in the title bar");
     TEST_ASSERT_EQ((uint32_t)khr_hit_list_pick(&chrome, 376, 20),
                    (uint32_t)KHR_HIT_CLOSE, "inset of the close square is CLOSE");
+    TEST_ASSERT_EQ((uint32_t)khr_hit_list_pick(&chrome, 398, 80),
+                   (uint32_t)KHR_HIT_E, "right edge below the bar is still E");
     TEST_ASSERT_EQ((uint32_t)khr_hit_list_pick(&chrome, 200, 4),
                    (uint32_t)KHR_HIT_MOVE, "rest of the title bar is MOVE");
     khr_window_hit_list_fill(&chrome, 400, 300, true);
-    TEST_ASSERT_EQ(chrome.count, 0U, "fullscreen chrome list is empty");
+    TEST_ASSERT_EQ(chrome.count, 1U, "fullscreen keeps the gimbal, no chrome");
+    TEST_ASSERT_EQ((uint32_t)chrome.rects[0].kind, (uint32_t)KHR_HIT_GIMBAL,
+                   "fullscreen hit is gimbal only");
 
     khr_hit_list_t full = {};
     for (uint32_t i = 0; i < KHR_HIT_LIST_MAX; i++) {

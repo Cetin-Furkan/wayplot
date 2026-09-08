@@ -282,6 +282,9 @@ bool khr_bda_arena_alloc(khr_bda_arena_t* arena, size_t size, size_t align,
                          void** out_host_ptr, VkDeviceAddress* out_gpu_addr) {
     if (!arena || !arena->host_ptr || size == 0) return false;
     if (align == 0) align = 8;
+    if ((align & (align - 1U)) != 0) {
+        return false;
+    }
     size_t aligned_head = (arena->head + (align - 1U)) & ~(align - 1U);
     if (aligned_head + size > arena->size) {
         return false;

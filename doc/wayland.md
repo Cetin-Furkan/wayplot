@@ -84,7 +84,7 @@ Opcodes verified against `wayland.xml` + `xdg-shell.xml`; `xdg.h` is the single 
 
 ## Product window (`window.h` / `window.c`, `core/config.h`)
 
-`khr_window_run` is `make run`. Two DMA-BUF present slots, dirty-only commits, plot ribbon from 256 demo floats in the hugepage BDA. No file ingest.
+`khr_window_run` is `make run`. Two DMA-BUF present slots, dirty-only commits. Client rect draws a BDA mesh (default unit box, or `./engine file.khrb` ingested async into the payload slice). Chrome cards live in the high 64 KiB of the hugepage; ingest cannot overwrite them.
 
 Client-side decorations. Hit testing is a first-match rect table (`khr_hit_list_t`, `KHR_HIT_LIST_MAX` 16), not an if-ladder. Fill order: 16 px corners, 8 px edges, 32 px title-bar close, 32 px move bar. Miss is `KHR_HIT_CLIENT`. Exclusive fullscreen (F11) fills an empty list.
 

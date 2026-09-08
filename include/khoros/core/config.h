@@ -27,6 +27,7 @@ constexpr uint32_t KHR_WINDOW_DEFAULT_H        = 540;
 constexpr uint32_t KHR_WINDOW_CHROME_TOP       = 32; /* drag bar, pixels */
 constexpr uint32_t KHR_WINDOW_CHROME_EDGE      = 8;  /* edge resize strip */
 constexpr uint32_t KHR_WINDOW_CHROME_CORNER    = 16; /* extra corner hit */
+constexpr uint32_t KHR_WINDOW_CHROME_CORNER_NE = 3;  /* tiny: close sits here */
 constexpr uint32_t KHR_WINDOW_CHROME_CLOSE     = 32; /* title-bar close square */
 constexpr uint32_t KHR_WINDOW_CARD_COUNT       = 3;  /* body, bar, close */
 constexpr uint32_t KHR_HIT_LIST_MAX            = 16; /* first-match chrome */
@@ -45,11 +46,14 @@ constexpr uint32_t KHR_WINDOW_DBLCLICK_PX = 6;  /* trackpad jitter */
 constexpr uint32_t KHR_WINDOW_CURSOR_PX   = 24;
 constexpr uint32_t KHR_WINDOW_POPUP_W     = 220;
 constexpr uint32_t KHR_WINDOW_POPUP_H     = 148;
+constexpr uint32_t KHR_WINDOW_GIMBAL_PX   = 88;
+constexpr uint32_t KHR_WINDOW_GIMBAL_PAD  = 16; /* inset from client edge */
 
 typedef enum {
     KHR_HIT_CLIENT = 0,
     KHR_HIT_POPUP,
     KHR_HIT_CLOSE,
+    KHR_HIT_GIMBAL,
     KHR_HIT_MOVE,
     KHR_HIT_N,
     KHR_HIT_S,
@@ -168,44 +172,76 @@ static inline khr_hit_t khr_hit_list_pick(const khr_hit_list_t* list,
     return KHR_HIT_CLIENT;
 }
 
+/* Client top-right, below the title bar, inset so it misses the 8 px E strip. */
+static inline void khr_window_gimbal_rect(uint32_t w, uint32_t h, bool fullscreen,
+                                          uint32_t* x, uint32_t* y, uint32_t* s) {
+    uint32_t top = fullscreen ? 0U : KHR_WINDOW_CHROME_TOP;
+    uint32_t side = KHR_WINDOW_GIMBAL_PX;
+    uint32_t pad = KHR_WINDOW_GIMBAL_PAD;
+    if (x == nullptr || y == nullptr || s == nullptr) {
+        return;
+    }
+    if (w < side + pad + KHR_WINDOW_CHROME_EDGE ||
+        h < top + side + pad) {
+        *x = 0;
+        *y = 0;
+        *s = 0;
+        return;
+    }
+    *s = side;
+    *x = w - pad - side;
+    *y = top + pad;
+}
+
 /*
- * First match wins. Corners and edges are inserted before CLOSE so the
- * outer 8–16 px stay resize (NE on the top-right extra). CLOSE sits on
- * the remaining title-bar square; MOVE is the rest of the 32 px bar.
+ * First match wins. NE is only 3×3 so the close square is clickable.
+ * CLOSE is inserted before the 8 px edges, so the title-bar close wins
+ * over E/N in that square. Other corners stay 16 px. MOVE is the rest.
+ * Gimbal is last: it lives in the client, never in the 32 px chrome.
  */
 static inline void khr_window_hit_list_fill(khr_hit_list_t* list, uint32_t w,
                                             uint32_t h, bool fullscreen) {
     khr_hit_list_clear(list);
-    if (list == nullptr || fullscreen || w == 0 || h == 0) {
+    if (list == nullptr || w == 0 || h == 0) {
         return;
     }
-    const uint32_t c = KHR_WINDOW_CHROME_CORNER;
-    const uint32_t e = KHR_WINDOW_CHROME_EDGE;
-    const uint32_t t = KHR_WINDOW_CHROME_TOP;
-    const uint32_t z = KHR_WINDOW_CHROME_CLOSE;
-    if (w >= c && h >= c) {
-        (void)khr_hit_list_add(list, 0, 0, c, c, KHR_HIT_NW);
-        (void)khr_hit_list_add(list, w - c, 0, c, c, KHR_HIT_NE);
-        (void)khr_hit_list_add(list, 0, h - c, c, c, KHR_HIT_SW);
-        (void)khr_hit_list_add(list, w - c, h - c, c, c, KHR_HIT_SE);
+    if (!fullscreen) {
+        const uint32_t c = KHR_WINDOW_CHROME_CORNER;
+        const uint32_t ne = KHR_WINDOW_CHROME_CORNER_NE;
+        const uint32_t e = KHR_WINDOW_CHROME_EDGE;
+        const uint32_t t = KHR_WINDOW_CHROME_TOP;
+        const uint32_t z = KHR_WINDOW_CHROME_CLOSE;
+        if (w >= c && h >= c) {
+            (void)khr_hit_list_add(list, 0, 0, c, c, KHR_HIT_NW);
+            (void)khr_hit_list_add(list, 0, h - c, c, c, KHR_HIT_SW);
+            (void)khr_hit_list_add(list, w - c, h - c, c, c, KHR_HIT_SE);
+        }
+        if (w >= ne && h >= ne) {
+            (void)khr_hit_list_add(list, w - ne, 0, ne, ne, KHR_HIT_NE);
+        }
+        if (w >= z && t > 0) {
+            (void)khr_hit_list_add(list, w - z, 0, z, t, KHR_HIT_CLOSE);
+        }
+        if (w >= e && h >= e) {
+            (void)khr_hit_list_add(list, 0, 0, e, h, KHR_HIT_W);
+            (void)khr_hit_list_add(list, w - e, 0, e, h, KHR_HIT_E);
+            (void)khr_hit_list_add(list, 0, h - e, w, e, KHR_HIT_S);
+        }
+        if (t > 0) {
+            (void)khr_hit_list_add(list, 0, 0, w, t, KHR_HIT_MOVE);
+        }
     }
-    if (w >= e && h >= e) {
-        (void)khr_hit_list_add(list, 0, 0, e, h, KHR_HIT_W);
-        (void)khr_hit_list_add(list, w - e, 0, e, h, KHR_HIT_E);
-        (void)khr_hit_list_add(list, 0, h - e, w, e, KHR_HIT_S);
-    }
-    if (w >= z && t > 0) {
-        (void)khr_hit_list_add(list, w - z, 0, z, t, KHR_HIT_CLOSE);
-    }
-    if (t > 0) {
-        (void)khr_hit_list_add(list, 0, 0, w, t, KHR_HIT_MOVE);
+    uint32_t gx = 0, gy = 0, gs = 0;
+    khr_window_gimbal_rect(w, h, fullscreen, &gx, &gy, &gs);
+    if (gs > 0) {
+        (void)khr_hit_list_add(list, gx, gy, gs, gs, KHR_HIT_GIMBAL);
     }
 }
 
 [[nodiscard]]
 static inline khr_hit_t khr_window_hit(int32_t x, int32_t y, uint32_t w, uint32_t h,
                                        bool fullscreen) {
-    if (fullscreen || w == 0 || h == 0 || x < 0 || y < 0 ||
+    if (w == 0 || h == 0 || x < 0 || y < 0 ||
         (uint32_t)x >= w || (uint32_t)y >= h) {
         return KHR_HIT_CLIENT;
     }

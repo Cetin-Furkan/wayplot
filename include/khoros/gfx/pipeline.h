@@ -50,10 +50,26 @@ typedef struct khr_plot_push {
     uint32_t pad2;              /* offset 108..111 */
 } khr_plot_push_t;
 
+typedef struct khr_mesh_push {
+    float mvp_c0[4];
+    float mvp_c1[4];
+    float mvp_c2[4];
+    float mvp_c3[4];
+    float light_dir[4];
+    VkDeviceAddress verts_addr;    /* packed float3 */
+    VkDeviceAddress indices_addr;  /* uint32 triangle list */
+    uint32_t index_count;
+    uint32_t vert_count;
+    uint32_t pad0;              /* RGB8 tint if nonzero (gizmo arms) */
+    uint32_t pad1;
+} khr_mesh_push_t;
+
 static_assert(sizeof(khr_card_instance_t) == 32, "CardInstance size must be 32 bytes");
 static_assert(sizeof(khr_card_push_t) == 24, "CardPush size must be 24 bytes");
 static_assert(sizeof(khr_plot_push_t) == 112, "PlotPush size must be 112 bytes");
+static_assert(sizeof(khr_mesh_push_t) == 112, "MeshPush size must be 112 bytes");
 static_assert(sizeof(khr_plot_push_t) <= 128, "PlotPush must fit 128-byte hardware limit");
+static_assert(sizeof(khr_mesh_push_t) <= 128, "MeshPush must fit 128-byte hardware limit");
 
 /* Demo series living in the BDA arena. File ingest is a later step. */
 constexpr uint32_t KHR_PLOT_SAMPLE_COUNT = 256;
@@ -73,6 +89,8 @@ typedef struct {
     VkPipelineLayout    layout;
     VkFormat            color_format;
     VkFormat            depth_format;  /* VK_FORMAT_UNDEFINED if depth disabled */
+    VkSampleCountFlagBits samples;     /* 0 = 1 sample */
+    bool                depth_test;    /* GPU z-test; ignored if no depth format */
     bool                blend_enable;
     VkCullModeFlags     cull_mode;     /* e.g. VK_CULL_MODE_NONE */
     VkPrimitiveTopology topology;      /* e.g. VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST */
@@ -96,10 +114,21 @@ typedef struct khr_plot_pipeline {
     VkFormat color_format;
 } khr_plot_pipeline_t;
 
+typedef struct khr_mesh_pipeline {
+    const khr_gfx_device_t *dev;
+    VkShaderModule vs_module;
+    VkShaderModule fs_module;
+    VkPipelineLayout layout;
+    VkPipeline pipeline;
+    VkFormat color_format;
+} khr_mesh_pipeline_t;
+
 [[nodiscard]] khr_shader_bytecode_t khr_shader_get_card_vert(void);
 [[nodiscard]] khr_shader_bytecode_t khr_shader_get_card_frag(void);
 [[nodiscard]] khr_shader_bytecode_t khr_shader_get_plot_vert(void);
 [[nodiscard]] khr_shader_bytecode_t khr_shader_get_plot_frag(void);
+[[nodiscard]] khr_shader_bytecode_t khr_shader_get_mesh_vert(void);
+[[nodiscard]] khr_shader_bytecode_t khr_shader_get_mesh_frag(void);
 
 [[nodiscard]]
 bool khr_pipeline_layout_create(VkDevice dev,
@@ -131,6 +160,10 @@ void khr_card_draw(const khr_card_pipeline_t *p, VkCommandBuffer cmd, const khr_
 [[nodiscard]] bool khr_plot_pipeline_init(khr_plot_pipeline_t *p, const khr_gfx_device_t *d, VkFormat color_format);
 void khr_plot_pipeline_destroy(khr_plot_pipeline_t *p);
 void khr_plot_draw(const khr_plot_pipeline_t *p, VkCommandBuffer cmd, const khr_plot_push_t *push, uint32_t segment_count);
+
+[[nodiscard]] bool khr_mesh_pipeline_init(khr_mesh_pipeline_t *p, const khr_gfx_device_t *d, VkFormat color_format);
+void khr_mesh_pipeline_destroy(khr_mesh_pipeline_t *p);
+void khr_mesh_draw(const khr_mesh_pipeline_t *p, VkCommandBuffer cmd, const khr_mesh_push_t *push);
 
 /* Host-side demo series. Values stay in (0, 1) so the shader color ramp is used. */
 void khr_plot_fill_demo_samples(float* samples, uint32_t count);

@@ -78,8 +78,12 @@ uint32_t khr_seat_consume(khr_wl_client_t* client, khr_seat_t* seat,
     seat->double_click = false;
     seat->f11_pressed = false;
     seat->esc_pressed = false;
+    seat->f_pressed = false;
     uint32_t count = 0;
     size_t offset = 0;
+    int32_t axis_fixed = 0;
+    int32_t v120 = 0;
+    bool saw_120 = false;
     while (offset + 8 <= len) {
         khr_wl_msg_header_t hdr = {};
         if (!khr_wl_decode_header(data + offset, len - offset, &hdr)) {
@@ -161,30 +165,71 @@ uint32_t khr_seat_consume(khr_wl_client_t* client, khr_seat_t* seat,
                         } else {
                             seat->right_down = false;
                         }
+                    } else if (button == KHR_BTN_MIDDLE) {
+                        seat->button_serial = serial;
+                        seat->middle_down = (state == KHR_WL_POINTER_PRESSED);
+                    }
+                    count++;
+                }
+            } else if (hdr.opcode == KHR_WL_POINTER_EVENT_AXIS &&
+                       payload_len >= 12) {
+                uint32_t time = 0, axis = 0;
+                int32_t value = 0;
+                if (khr_wl_decode_u32(payload, payload_len, &off, &time) &&
+                    khr_wl_decode_u32(payload, payload_len, &off, &axis) &&
+                    khr_wl_decode_i32(payload, payload_len, &off, &value)) {
+                    (void)time;
+                    if (axis == KHR_WL_POINTER_AXIS_VERTICAL) {
+                        axis_fixed += value;
+                    }
+                    count++;
+                }
+            } else if (hdr.opcode == KHR_WL_POINTER_EVENT_AXIS_VALUE120 &&
+                       payload_len >= 8) {
+                uint32_t axis = 0;
+                int32_t value120 = 0;
+                if (khr_wl_decode_u32(payload, payload_len, &off, &axis) &&
+                    khr_wl_decode_i32(payload, payload_len, &off, &value120)) {
+                    if (axis == KHR_WL_POINTER_AXIS_VERTICAL) {
+                        saw_120 = true;
+                        v120 += value120;
                     }
                     count++;
                 }
             }
-        } else if (seat->keyboard_id != 0 && hdr.object_id == seat->keyboard_id &&
-                   hdr.opcode == KHR_WL_KEYBOARD_EVENT_KEY && payload_len >= 16) {
-            uint32_t serial = 0, time = 0, key = 0, state = 0;
-            if (khr_wl_decode_u32(payload, payload_len, &off, &serial) &&
-                khr_wl_decode_u32(payload, payload_len, &off, &time) &&
-                khr_wl_decode_u32(payload, payload_len, &off, &key) &&
-                khr_wl_decode_u32(payload, payload_len, &off, &state)) {
-                (void)serial;
-                (void)time;
-                if (state == KHR_WL_KEY_PRESSED) {
-                    if (key == KHR_KEY_F11) {
-                        seat->f11_pressed = true;
-                    } else if (key == KHR_KEY_ESC) {
-                        seat->esc_pressed = true;
-                    }
-                }
+        } else if (seat->keyboard_id != 0 && hdr.object_id == seat->keyboard_id) {
+            if (hdr.opcode == KHR_WL_KEYBOARD_EVENT_LEAVE) {
+                seat->shift_down = false;
                 count++;
+            } else if (hdr.opcode == KHR_WL_KEYBOARD_EVENT_KEY && payload_len >= 16) {
+                uint32_t serial = 0, time = 0, key = 0, state = 0;
+                if (khr_wl_decode_u32(payload, payload_len, &off, &serial) &&
+                    khr_wl_decode_u32(payload, payload_len, &off, &time) &&
+                    khr_wl_decode_u32(payload, payload_len, &off, &key) &&
+                    khr_wl_decode_u32(payload, payload_len, &off, &state)) {
+                    (void)serial;
+                    (void)time;
+                    if (key == KHR_KEY_LEFTSHIFT || key == KHR_KEY_RIGHTSHIFT) {
+                        seat->shift_down = (state == KHR_WL_KEY_PRESSED);
+                    } else if (state == KHR_WL_KEY_PRESSED) {
+                        if (key == KHR_KEY_F11) {
+                            seat->f11_pressed = true;
+                        } else if (key == KHR_KEY_ESC) {
+                            seat->esc_pressed = true;
+                        } else if (key == KHR_KEY_F) {
+                            seat->f_pressed = true;
+                        }
+                    }
+                    count++;
+                }
             }
         }
         offset += hdr.size;
+    }
+    if (saw_120) {
+        seat->wheel += v120;
+    } else if (axis_fixed != 0) {
+        seat->wheel += (axis_fixed * 120) / 2560;
     }
     return count;
 }

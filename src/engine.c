@@ -13,7 +13,7 @@ const char* engine_get_banner(void) {
 }
 
 [[nodiscard]]
-bool engine_init(void) {
+bool engine_init(const char* blob_path) {
     const char* banner = engine_get_banner();
     if (banner == nullptr) {
         return false;
@@ -67,6 +67,10 @@ bool engine_init(void) {
                (unsigned long long)arena.gpu_address,
                wrapped ? "hugepage-imported (ingest==shader)"
                        : "separate UMA arena");
+        printf("  Split:        payload %zu KiB @0 / UI %zu KiB @%zu\n",
+               khr_hp_payload_cap(arena.size) / 1024,
+               KHR_HP_UI_RESERVE / 1024,
+               khr_hp_ui_off(arena.size));
     } else {
         printf("  Vulkan:       skipped (no device)\n");
     }
@@ -84,7 +88,7 @@ bool engine_init(void) {
 
     bool present_ok = true;
     if (ipc_ok && have_gpu && arena.gpu_address != 0) {
-        present_ok = khr_window_run(&topo, &dev, &arena);
+        present_ok = khr_window_run(&topo, &dev, &arena, blob_path);
     } else if (ipc_ok) {
         printf("  Present:      skipped (need GPU for DMA-BUF loop)\n");
     }

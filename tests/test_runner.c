@@ -27,6 +27,12 @@ extern bool test_window_hit_chrome_regions(void);
 extern bool test_window_hit_list_first_match(void);
 extern bool test_window_buffer_size_from_xdg(void);
 extern bool test_plot_demo_samples_in_range(void);
+extern bool test_blob_self_relative_box(void);
+extern bool test_blob_ingest_leaves_ui_reserve(void);
+extern bool test_blob_fit_centers_offset_mesh(void);
+extern bool test_blob_box_outward_winding(void);
+extern bool test_cam_orbit_snap_and_pick(void);
+extern bool test_blob_gizmo_arm(void);
 
 /* Suite 3: Dual-Ring Topology & PBUF Architecture */
 extern bool test_ring_a_clock_and_no_iowait(void);
@@ -150,6 +156,12 @@ int main(void) {
     RUN_TEST(&stats, test_window_hit_list_first_match);
     RUN_TEST(&stats, test_window_buffer_size_from_xdg);
     RUN_TEST(&stats, test_plot_demo_samples_in_range);
+    RUN_TEST(&stats, test_blob_self_relative_box);
+    RUN_TEST(&stats, test_blob_ingest_leaves_ui_reserve);
+    RUN_TEST(&stats, test_blob_fit_centers_offset_mesh);
+    RUN_TEST(&stats, test_blob_box_outward_winding);
+    RUN_TEST(&stats, test_cam_orbit_snap_and_pick);
+    RUN_TEST(&stats, test_blob_gizmo_arm);
     RUN_TEST(&stats, test_shm_wire_pool_and_buffer);
 
     printf("\n" KHR_CLR_BOLD "Suite 3: Dual-Ring Topology & PBUF Architecture\n" KHR_CLR_RESET);

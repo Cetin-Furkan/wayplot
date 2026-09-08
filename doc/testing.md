@@ -36,6 +36,9 @@ Do not commit `build/`, `logs/`, or `*.log`. `.gitignore` already excludes them.
 | `test_window_hit_list_first_match` | first-match rect table, chrome fill order (NE/E beat close), overflow reject |
 | `test_window_buffer_size_from_xdg` | 0×0 → default, compositor size used verbatim, double-click jitter |
 | `test_plot_demo_samples_in_range` | 256 demo floats in (0,1), not a flat line |
+| `test_blob_self_relative_box` | packed `KHRB` box, relptrs, bad magic rejected |
+| `test_blob_ingest_leaves_ui_reserve` | ingest lands in payload; high 64 KiB UI bytes unchanged |
+| `test_blob_fit_centers_offset_mesh` | AABB fit translates an offset triangle into view |
 | `test_shm_wire_pool_and_buffer` | shm pool + buffer create, page-aligned size, FD identity |
 
 ### Suite 3 — Wayplot topology
