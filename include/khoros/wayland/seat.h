@@ -38,9 +38,16 @@ constexpr uint32_t KHR_BTN_LEFT              = 0x110U;
 constexpr uint32_t KHR_BTN_RIGHT             = 0x111U;
 constexpr uint32_t KHR_BTN_MIDDLE            = 0x112U;
 constexpr uint32_t KHR_KEY_ESC               = 1;
+constexpr uint32_t KHR_KEY_W                 = 17;
+constexpr uint32_t KHR_KEY_R                 = 19;
+constexpr uint32_t KHR_KEY_A                 = 30;
+constexpr uint32_t KHR_KEY_S                 = 31;
+constexpr uint32_t KHR_KEY_D                 = 32;
 constexpr uint32_t KHR_KEY_F                 = 33;
+constexpr uint32_t KHR_KEY_C                 = 46;
 constexpr uint32_t KHR_KEY_LEFTSHIFT         = 42;
 constexpr uint32_t KHR_KEY_RIGHTSHIFT        = 54;
+constexpr uint32_t KHR_KEY_SPACE             = 57;
 constexpr uint32_t KHR_KEY_F11               = 87;
 constexpr uint32_t KHR_WL_KEY_PRESSED        = 1;
 
@@ -66,6 +73,13 @@ typedef struct {
     bool     f11_pressed;
     bool     esc_pressed;
     bool     f_pressed;
+    bool     r_pressed;
+    bool     w_down;
+    bool     a_down;
+    bool     s_down;
+    bool     d_down;
+    bool     space_down;
+    bool     c_down;
     bool     shift_down;
     int32_t  wheel; /* accumulated 120ths of a detent; window consumes and zeros */
     struct khr_input_ring* input_ring; /* Optional attached lock-free input ring */

@@ -201,6 +201,11 @@ static inline void khr_quat_rotate_vec3(float r[3], const float q[4], const floa
     r[2] = v[2] + q[3] * t[2] + c[2];
 }
 
+static inline void khr_quat_rotate_inv_vec3(float r[3], const float q[4], const float v[3]) {
+    float q_conj[4] = { -q[0], -q[1], -q[2], q[3] };
+    khr_quat_rotate_vec3(r, q_conj, v);
+}
+
 /*
  * Rigid Body Initialization and Bounds Computation
  */
@@ -273,6 +278,16 @@ bool khr_collide_aabb_plane(const khr_rigid_body_t* aabb, uint32_t idx_aabb,
 bool khr_collide_capsule_plane(const khr_rigid_body_t* capsule, uint32_t idx_capsule,
                                const khr_rigid_body_t* plane, uint32_t idx_plane,
                                khr_contact_t* out_contact);
+
+[[nodiscard]]
+bool khr_collide_capsule_capsule(const khr_rigid_body_t* a, uint32_t idx_a,
+                                 const khr_rigid_body_t* b, uint32_t idx_b,
+                                 khr_contact_t* out_contact);
+
+[[nodiscard]]
+bool khr_collide_capsule_aabb(const khr_rigid_body_t* capsule, uint32_t idx_capsule,
+                              const khr_rigid_body_t* aabb, uint32_t idx_aabb,
+                              khr_contact_t* out_contact);
 
 [[nodiscard]]
 bool khr_collide_bodies(const khr_rigid_body_t* a, uint32_t idx_a,

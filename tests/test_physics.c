@@ -411,3 +411,97 @@ bool test_aabb_plane_collision(void) {
 
     return true;
 }
+
+[[nodiscard]]
+bool test_capsule_capsule_collision(void) {
+    /* 1. Two parallel capsules along Y, separated along X */
+    khr_rigid_body_t cA = {}, cB = {};
+    float p0[3] = { 0.0f, -1.0f, 0.0f };
+    float p1[3] = { 0.0f,  1.0f, 0.0f };
+    khr_rigid_body_init_capsule(&cA, p0, p1, 0.5f, 2.0f, 0.5f, 0.3f);
+    khr_rigid_body_init_capsule(&cB, p0, p1, 0.5f, 2.0f, 0.5f, 0.3f);
+
+    cA.position[0] = 0.0f; cA.position[1] = 0.0f; cA.position[2] = 0.0f;
+    cB.position[0] = 0.8f; cB.position[1] = 0.0f; cB.position[2] = 0.0f;
+
+    khr_contact_t c = {};
+    bool hit = khr_collide_capsule_capsule(&cA, 0, &cB, 1, &c);
+    ASSERT_TRUE(hit);
+    ASSERT_TRUE(c.body_a == 0 && c.body_b == 1);
+    ASSERT_FLOAT_NEAR(c.penetration, 0.2f, 1e-4f);
+    ASSERT_FLOAT_NEAR(c.normal[0], 1.0f, 1e-4f);
+    ASSERT_FLOAT_NEAR(c.normal[1], 0.0f, 1e-4f);
+    ASSERT_FLOAT_NEAR(c.normal[2], 0.0f, 1e-4f);
+
+    /* 2. Disjoint parallel capsules */
+    cB.position[0] = 1.5f;
+    hit = khr_collide_capsule_capsule(&cA, 0, &cB, 1, &c);
+    ASSERT_TRUE(!hit);
+
+    /* 3. Two crossed (perpendicular) capsules */
+    float pB0[3] = { -1.0f, 0.0f, 0.0f };
+    float pB1[3] = {  1.0f, 0.0f, 0.0f };
+    khr_rigid_body_init_capsule(&cB, pB0, pB1, 0.5f, 2.0f, 0.5f, 0.3f);
+    cB.position[0] = 0.0f; cB.position[1] = 0.0f; cB.position[2] = 0.7f;
+    hit = khr_collide_capsule_capsule(&cA, 0, &cB, 1, &c);
+    ASSERT_TRUE(hit);
+    ASSERT_FLOAT_NEAR(c.penetration, 0.3f, 1e-4f);
+    ASSERT_FLOAT_NEAR(c.normal[2], 1.0f, 1e-4f);
+
+    return true;
+}
+
+[[nodiscard]]
+bool test_capsule_aabb_collision(void) {
+    khr_rigid_body_t capsule = {}, aabb = {};
+    float p0[3] = { 0.0f, -0.5f, 0.0f };
+    float p1[3] = { 0.0f,  0.5f, 0.0f };
+    khr_rigid_body_init_capsule(&capsule, p0, p1, 0.4f, 2.0f, 0.5f, 0.3f);
+
+    float hx[3] = { 1.0f, 1.0f, 1.0f };
+    khr_rigid_body_init_aabb(&aabb, (float[]){ 0.0f, 0.0f, 0.0f }, hx, 3.0f, 0.5f, 0.3f);
+
+    capsule.position[0] = 0.0f; capsule.position[1] = 1.6f; capsule.position[2] = 0.0f;
+
+    khr_contact_t c = {};
+    bool hit = khr_collide_capsule_aabb(&capsule, 0, &aabb, 1, &c);
+    ASSERT_TRUE(hit);
+    ASSERT_TRUE(c.body_a == 0 && c.body_b == 1);
+    ASSERT_FLOAT_NEAR(c.penetration, 0.3f, 1e-3f);
+    ASSERT_FLOAT_NEAR(c.normal[1], -1.0f, 1e-3f);
+
+    /* Disjoint */
+    capsule.position[1] = 3.0f;
+    hit = khr_collide_capsule_aabb(&capsule, 0, &aabb, 1, &c);
+    ASSERT_TRUE(!hit);
+
+    /* Inverse dispatch */
+    capsule.position[1] = 1.6f;
+    hit = khr_collide_bodies(&aabb, 1, &capsule, 0, &c);
+    ASSERT_TRUE(hit);
+    ASSERT_TRUE(c.body_a == 1 && c.body_b == 0);
+    ASSERT_FLOAT_NEAR(c.normal[1], 1.0f, 1e-3f);
+    ASSERT_FLOAT_NEAR(c.penetration, 0.3f, 1e-3f);
+
+    return true;
+}
+
+[[nodiscard]]
+bool test_multi_shape_full_pairwise_coverage(void) {
+    khr_rigid_body_t sphere = {}, aabb = {}, capsule = {};
+    khr_rigid_body_init_sphere(&sphere, (float[]){ 0.0f, 0.0f, 0.0f }, 0.5f, 1.0f, 0.5f, 0.3f);
+    khr_rigid_body_init_aabb(&aabb, (float[]){ 0.0f, 0.0f, 0.0f }, (float[]){ 0.5f, 0.5f, 0.5f }, 1.0f, 0.5f, 0.3f);
+    khr_rigid_body_init_capsule(&capsule, (float[]){ 0.0f, -0.5f, 0.0f }, (float[]){ 0.0f, 0.5f, 0.0f }, 0.5f, 1.0f, 0.5f, 0.3f);
+
+    khr_rigid_body_t* shapes[3] = { &sphere, &aabb, &capsule };
+
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++) {
+            khr_contact_t c = {};
+            bool hit = khr_collide_bodies(shapes[i], (uint32_t)i, shapes[j], (uint32_t)j, &c);
+            ASSERT_TRUE(hit);
+            ASSERT_TRUE(c.penetration > 0.0f);
+        }
+    }
+    return true;
+}

@@ -9,15 +9,15 @@ Right now, the project has 2 rings, ring A and ring B, each of them is pinned to
 
 ---
 
-## Release: Version 0.3.3
+## Release: Version 0.3.4
 
-> **Caption**: *Zero-HDMI-Hijack desktop audio routing, dynamic multi-shape collision physics, and precision target FPS pacing.*
+> **Caption**: *Pairwise multi-shape SAT collision physics, interactive flight controls, and live contact manifold telemetry.*
 
-Version 0.3.3 eliminates desktop audio contention on modern DSP audio systems, introduces multi-shape contact mechanics (Capsule-Plane, AABB-Plane, Sphere-Sphere), and gives precise software control over engine presentation pacing and hardware power utilization.
+Version 0.3.4 completes 100% pairwise narrowphase collision coverage across all supported shapes (Spheres, Planes, AABBs, and Capsules), adds real-time 3D flight camera navigation (`W`, `A`, `S`, `D`, `Space`, `C`, `R`), and introduces live contact manifold telemetry to the engine HUD and stream.
 
 ```
                   ┌───────────────────────────────────────────┐
-                  │          Khoros 0.3.3 Architecture        │
+                  │          Khoros 0.3.4 Architecture        │
                   │   Pure ISO C23 · Zero Third-Party Libs    │
                   └─────────────────────┬─────────────────────┘
                                         │
@@ -27,45 +27,54 @@ Version 0.3.3 eliminates desktop audio contention on modern DSP audio systems, i
   ├── Core 2 Affinity (Lock-Free)                              ├── Core 3 Affinity (Pinned Worker)
   ├── Wayland Wire (Raw Syscalls)                              ├── 60/120 Hz Symplectic Integrator
   │   ├── zwp_linux_dmabuf_v1 Zero-Copy                        ├── 30-bit Morton Radix LBVH Broadphase
-  │   └── wp_presentation_time Feedback                        ├── SAT Narrowphase (Sphere/Box/Capsule)
+  │   ├── wp_presentation_time Feedback                        ├── 100% Pairwise SAT Narrowphase Matrix
+  │   └── Interactive Flight Camera (WASD/Space/C/R)           │   (Sphere, Plane, Box, Capsule)
   ├── Vulkan 1.4 BDA Pipeline                                  └── Pipe Audio Mixer (48 kHz Stereo)
   │   ├── Two-Pass Hi-Z Occlusion Culling                          ├── Desktop Auto-Sink Router
   │   ├── Hardware GPU Timestamps (VK_QUERY_TIMESTAMP)             ├── Zero-HDMI Hijack (PipeWire/Pulse)
-  │   └── Precision FPS Pacing Governor                            └── Modal Acoustic Resonance Synth
+  │   ├── Precision FPS Pacing Governor                            └── Modal Acoustic Resonance Synth
+  │   └── Live Manifold Telemetry (FPS, CPU, GPU, Contacts)
 ```
 
 ---
 
-### Highlights of Version 0.3.3
+### Highlights of Version 0.3.4
 
-#### 1. Zero-HDMI-Hijack Audio Auto-Routing (`--audio=auto|pipewire|pulse|alsa|null`)
-On modern Intel SOF DSP and AMD ACP audio architectures, opening raw `/dev/snd/pcmC0D0p` ALSA nodes while a desktop sound server (PipeWire / PulseAudio) is running creates an internal DSP pipeline conflict. ALSA driver arbitration deactivates the analog laptop speaker sink and switches audio output to secondary HDMI sinks, hijacking desktop sound and generating parasite crackles.
+#### 1. Complete Pairwise Multi-Shape SAT Narrowphase
+Prior to 0.3.4, cylinders and capsules could collide with planes and spheres, but would pass through each other and through boxes. Version 0.3.4 achieves **100% full pairwise collision coverage** across all primitive shapes:
+* **Capsule-to-Capsule SAT (`khr_collide_capsule_capsule`)**:
+  * Implements Christer Ericson's robust 3D segment-to-segment distance minimization algorithm.
+  * Handles arbitrary spatial orientations, parallel cylinder configurations, and degenerate point endpoints.
+  * Computes exact contact normals, penetration depths, and penetration midpoint contact manifolds.
+* **Capsule-to-AABB SAT (`khr_collide_capsule_aabb`)**:
+  * Transforms capsule segment endpoints into the oriented bounding box's local coordinates via quaternion inverse rotation.
+  * Evaluates boundary slab crossings and golden-section distance minimization to find the closest segment-to-box point.
+  * Resolves both surface grazing contacts and deep slab interpenetrations, transforming normals and contact points back to world space.
+* **Full Pairwise Dispatch Matrix**:
+  * 100% of all combinations (Sphere-Sphere, Sphere-Plane, Sphere-AABB, Sphere-Capsule, AABB-AABB, AABB-Plane, AABB-Capsule, Capsule-Plane, Capsule-Capsule, Capsule-AABB) now resolve contact manifolds, restitution impulses, Coulomb friction, and acoustic synthesis.
 
-Khoros 0.3.3 solves this cleanly without adding external library dependencies:
-* **Zero-Middleware Pipe Transport**: Forks an ultra-lightweight pipe sink (`pw-cat` or `paplay`) streaming raw 16-bit signed 48 kHz stereo PCM over a POSIX pipe with an expanded 256 KiB ring buffer (`F_SETPIPE_SZ`).
-* **Desktop Sound Preservation**: Desktop audio never switches to HDMI; your music, video, and system sounds remain on your chosen output device without disruption.
-* **Auto-Fallback Chain**: Automatically detects `pw-cat` -> `paplay` -> raw direct ALSA -> silent null sink.
-* **Modal Synthesis**: Generates crisp, artifact-free collision acoustics with no clicks, crackles, or latency jitter.
+#### 2. Interactive 3D Keyboard Flight Navigation
+In addition to mouse orbit, pan, zoom, and gimbal axis snapping, the presentation window now supports immediate keyboard flight navigation:
+* **`W` / `S`**: Fly forward / zoom in, fly backward / zoom out along the camera view vector.
+* **`A` / `D`**: Strafe left / strafe right across the camera up/right plane.
+* **`Space` / `C`**: Fly upward / fly downward along the global vertical axis.
+* **`R`**: Reset camera to default orientation and look-at distance.
+* **`F`**: Re-frame scene geometry based on active bounding vertices.
+* **`F11`**: Toggle fullscreen presentation.
 
-#### 2. Dynamic Multi-Shape Collision Physics & Differentiated Acoustics
-* **Separating Axis Theorem (SAT) Formulations**:
-  * **Capsule-Plane SAT**: Rotates cylinder endpoint proxies through rigid body orientation quaternions and computes exact signed distance contact depths and surface normals.
-  * **AABB-Plane SAT**: Evaluates half-extent projections $e_r = h_x |n_x| + h_y |n_y| + h_z |n_z|$ to detect box corner and face contacts with zero penetration drift.
-* **Per-Mesh Dynamic Binding**:
-  * **Mesh 0 (Suzanne)**: Spherical bounding volume proxy with harmonic metallic resonance.
-  * **Mesh 1 (Sphere)**: Analytical sphere-plane and sphere-sphere impulse resolution.
-  * **Mesh 2 (Cylinder)**: Oriented capsule proxy with high-frequency wooden click transients.
-  * **Mesh 3 (Chamfer Box)**: Oriented AABB proxy with low-frequency acoustic thud dynamics.
-  * **Mesh 4 (Torus)**: Toroidal bounding proxy with dual-frequency bell resonance.
+#### 3. Real-Time Contact Manifold Telemetry
+Khoros 0.3.4 exposes live contact metrics directly in the telemetry stream and terminal HUD:
+```text
+[TELEMETRY]  59.1 FPS (16.92 ms) | CPU Proc:  3.9% (0.30 ms) | GPU HW:  1.24 ms ( 7.4% load) | Bodies: 64 (1 meshes) | Contacts: 10
+```
 
-#### 3. Precision Target FPS Pacing (`--target-fps=<N>` & `--frames=<N>`)
-* **Dynamic Frame Pacing**: Set target display rates (e.g. `--target-fps=60`, `120`, `144`, `240`) enforced via high-resolution `clock_nanosleep(CLOCK_MONOTONIC)` with sub-microsecond spin-pacing.
-* **Automated Deterministic Profiling (`--frames=<N>`)**: Run exactly N presentation frames before shutting down cleanly for benchmarking and headless continuous integration.
-* **Unlocked Maximum GPU Throughput (`--unlocked`)**: Uncap presentation limits to measure raw Vulkan silicon throughput (300+ FPS).
+#### 4. New Multi-Mesh Experiment Decks
+* **`experiments/capsules_n64.deck`**: 64 dynamic cylinders tumbling, colliding with each other and settling under gravity.
+* **`experiments/tower_mixed.deck`**: 48 mixed rigid bodies (16 spheres, 16 boxes, 16 capsules) stacked in a multi-tier physical structure.
 
-#### 4. Hardware Silicon GPU Timestamping (`VK_QUERY_TYPE_TIMESTAMP`)
-* Direct silicon timestamp queries at `VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT` and `VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT`.
-* Calibrated via `VkPhysicalDeviceLimits.timestampPeriod` to deliver nanosecond-accurate GPU execution time and live percentage GPU power utilization.
+#### 5. Zero-HDMI-Hijack Desktop Audio Architecture
+* **Zero-Middleware Pipe Transport**: Streams raw 16-bit signed 48 kHz stereo PCM over a POSIX pipe to the active desktop sound server (`pw-cat` or `paplay`) using an expanded 256 KiB buffer (`F_SETPIPE_SZ`).
+* **Desktop Sound Preservation**: Completely avoids raw `/dev/snd/pcmC0D0p` ALSA conflicts on modern Intel SOF DSP and AMD ACP architectures, preventing WirePlumber from rerouting sound to HDMI.
 
 ---
 
@@ -78,11 +87,14 @@ make -j$(nproc)
 # Launch interactive 3D window (auto-routed desktop audio + 60 Hz VSync)
 ./build/engine
 
+# Run 64 dynamic cylinders avalanche with full pairwise collision
+./build/engine --deck=experiments/capsules_n64.deck
+
+# Run multi-tier mixed tower experiment (spheres, boxes, capsules)
+./build/engine --deck=experiments/tower_mixed.deck
+
 # Set precision target frame rate to 120 FPS
 ./build/engine --target-fps=120
-
-# Run multi-mesh simulation deck with 64 dynamic rigid bodies
-./build/engine --deck=experiments/mixed_n64.deck
 
 # Maximize GPU hardware saturation with 1024 rigid bodies across 5 meshes
 ./build/engine --stress-gpu
@@ -95,9 +107,9 @@ make -j$(nproc)
 ./build/engine --audio=null
 
 # Run headless experiment fast-forward with 18-column mechanical state CSV logging
-./build/engine --headless --deck=experiments/mixed_n64.deck --ticks=600 --csv=logs/run.csv
+./build/engine --headless --deck=experiments/capsules_n64.deck --ticks=600 --csv=logs/run.csv
 
-# Run full test suite (198 tests, 8586 assertions across 18 suites)
+# Run full test suite (201 tests, 8586 assertions across 18 suites)
 make test
 
 # Full AddressSanitizer + UndefinedBehaviorSanitizer memory safety verification
@@ -108,21 +120,19 @@ make sanitize
 
 ## Real-Time Engine Telemetry
 
-During execution, Khoros streams continuous real-time diagnostics to `stdout`:
-
 ```text
-# Standard 60 Hz Paced Mode with Desktop PipeWire Audio:
+# Standard 60 Hz Paced Mode with Desktop PipeWire Audio & Live Contacts:
 [AUDIO] Output: PipeWire (pw-cat pipe, 48 kHz stereo)
-[TELEMETRY]  59.8 FPS (16.72 ms) | CPU Proc:  3.5% (0.32 ms) | GPU HW:  1.49 ms ( 8.9% load) | Bodies: 64 (2 meshes)
+[TELEMETRY]  59.1 FPS (16.92 ms) | CPU Proc:  3.9% (0.30 ms) | GPU HW:  1.24 ms ( 7.4% load) | Bodies: 64 (1 meshes) | Contacts: 10
 
 # Target 120 FPS Precision Paced Mode (--target-fps=120):
-[TELEMETRY] 120.1 FPS ( 8.33 ms) | CPU Proc:  4.1% (0.28 ms) | GPU HW:  1.48 ms (17.8% load) | Bodies: 64 (2 meshes) [120 FPS CAP]
+[TELEMETRY] 120.1 FPS ( 8.33 ms) | CPU Proc:  4.1% (0.28 ms) | GPU HW:  1.48 ms (17.8% load) | Bodies: 64 (2 meshes) | Contacts: 8 [120 FPS CAP]
 
 # Unlocked Max-Throughput Silicon Mode (--unlocked):
-[TELEMETRY] 312.4 FPS ( 3.20 ms) | CPU Proc:  5.8% (0.11 ms) | GPU HW:  1.51 ms (47.2% load) | Bodies: 64 (2 meshes) [UNLOCKED]
+[TELEMETRY] 312.4 FPS ( 3.20 ms) | CPU Proc:  5.8% (0.11 ms) | GPU HW:  1.51 ms (47.2% load) | Bodies: 64 (2 meshes) | Contacts: 4 [UNLOCKED]
 
 # Hardware Power Saturation Stress Testing (--stress-gpu):
-[TELEMETRY] 148.6 FPS ( 6.73 ms) | CPU Proc:  7.9% (0.22 ms) | GPU HW:  5.71 ms (84.8% load) | Bodies: 1024 (5 meshes) [UNLOCKED]
+[TELEMETRY] 148.6 FPS ( 6.73 ms) | CPU Proc:  7.9% (0.22 ms) | GPU HW:  5.71 ms (84.8% load) | Bodies: 1024 (5 meshes) | Contacts: 48 [UNLOCKED]
 ```
 
 ---
@@ -139,12 +149,13 @@ Khoros is engineered with **zero third-party middleware**: no `libwayland`, `lib
  [ Core 2: Frame-Paced Present ]                                   [ Core 3: Fixed-Tick Compute ]
   ├── Wayland Client (Raw Syscalls)                                 ├── 60/120 Hz Symplectic Integrator
   │   ├── zwp_linux_dmabuf_v1 (Zero-copy DMA-BUF)                   │   ├── 30-bit Morton Code Radix Sort
-  │   └── wp_presentation_time (Hardware VSync)                     │   └── LBVH Spatial Tree Broadphase
-  ├── Vulkan 1.4 GPU Command Stream                                 ├── Multi-Shape SAT Narrowphase
+  │   ├── wp_presentation_time (Hardware VSync)                     │   └── LBVH Spatial Tree Broadphase
+  │   └── Flight Navigation Keys (WASD/Space/C/R)                  ├── 100% Pairwise SAT Narrowphase
+  ├── Vulkan 1.4 GPU Command Stream                                 │   (Capsule-Capsule, Capsule-AABB)
   │   ├── cull_hiz.slang (Occlusion & Frustum)                      ├── Double-Buffered BDA Transform Flip
   │   ├── Multi-Mesh Indirect Draws (SV_InstanceID direct BDA)      ├── Desktop Audio Mixer (PipeWire/Pulse)
   │   └── Silicon GPU Timestamp Queries (VK_QUERY_TIMESTAMP)        └── Ring B (io_uring) Async Ingest
-  └── Real-time Telemetry (CPU & GPU frame timers)                              │
+  └── Real-time Telemetry (CPU & GPU frame timers + Contacts)                   │
         │                                                                       │
         └───────────────────────────┬───────────────────────────────────────────┘
                                     ▼
@@ -153,10 +164,6 @@ Khoros is engineered with **zero third-party middleware**: no `libwayland`, `lib
                  ├── Procedural Vertex & Index Buffers (Spheres/Boxes/Tori)
                  └── Draw Indirect Command & Count Buffers
 ```
-
-### Decoupled Dual-Ring Architecture
-* **Ring A (Core 2)**: 64 SQ / 256 CQ entries. Non-blocking `enter_fd`, `CLOCK_MONOTONIC`, `NO_IOWAIT`. Dedicated to immediate IPC, presentation synchronization, and low-latency Wayland wire protocol exchanges.
-* **Ring B (Core 3)**: 128 SQ / 256 CQ entries with registered hugepage memory buffers (2048 KiB THP/anon). Dedicated to streaming binary blobs (`.kblob`), deck scripts, audio PCM streaming, and background file ingest.
 
 ---
 
@@ -208,7 +215,7 @@ General:
 The engine enforces test contracts where every physical quantity, mathematical invariant, and rendering guarantee must have a test that can fail.
 
 ```bash
-# Run 198 unit and integration tests across 18 suites
+# Run 201 unit and integration tests across 18 suites
 make test
 ```
 
@@ -222,19 +229,20 @@ make test
 | **Suite 10–12** | Multi-Mesh Indirect Dispatch, Two-Pass Hi-Z Occlusion, Audio Mixer | 1,340 | ✔ PASS (100%) |
 | **Suite 13–15** | Lock-Free Input Ring, Bindless Textures, Morton LBVH Spatial Physics | 1,465 | ✔ PASS (100%) |
 | **Suite 16–18** | Ground Grid, Symplectic Euler IVP Convergence, Deck Determinism | 1,966 | ✔ PASS (100%) |
-| **Total** | **18 Suites · 198 Tests** | **8,586** | **✔ PASS (100.0%)** |
+| **Total** | **18 Suites · 201 Tests** | **8,586** | **✔ PASS (100.0%)** |
 
-All 198 tests execute with **0 leaks, 0 errors, and 0 undefined behavior** under both native compilation and AddressSanitizer + UndefinedBehaviorSanitizer (`make sanitize`).
+All 201 tests execute with **0 leaks, 0 errors, and 0 undefined behavior** under both native compilation and AddressSanitizer + UndefinedBehaviorSanitizer (`make sanitize`).
 
 ---
 
 ## Architectural Comparison
 
-| Conventional Middleware Stack | Khoros 0.3.3 Architecture |
+| Conventional Middleware Stack | Khoros 0.3.4 Architecture |
 |---|---|
 | Middleware libraries (SDL, GLFW, cglm, libwayland) | Pure ISO C23 + Raw Linux Syscalls + Vulkan 1.4 |
 | CPU-to-GPU mesh uploads every frame | Single 2 MiB BDA hugepage arena; GPU pulls directly |
-| CPU-bound frustum & occlusion loops | GPU compute shaders (`cull_hiz.slang`) with wave compaction |
+| Incomplete collision handling / external PhysX | 100% pairwise SAT collision (Sphere, Box, Capsule, Plane) |
+| Hardcoded mouse-only camera | Integrated 3D keyboard flight navigation (WASD/Space/C/R) + mouse |
 | Raw ALSA conflicts causing HDMI sound hijacking | Zero-middleware PipeWire/Pulse pipe streaming to desktop sink |
 | Unsynchronized audio timers with crackle | Sample-accurate modal synthesis with smooth envelope decays |
 | VSync-locked presentation only | Precision `--target-fps` pacing, `--unlocked` 300+ FPS, `--frames` governor |

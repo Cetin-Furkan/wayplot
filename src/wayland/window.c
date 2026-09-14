@@ -1348,6 +1348,37 @@ bool khr_window_run_opts(khr_topology_t* topo, khr_gfx_device_t* dev,
             }
         }
         seat.wheel = 0;
+
+        /* Interactive 3D Camera Flight Controls (WASD, Space, C, R) */
+        if (seat.w_down) {
+            khr_camera_zoom(&camera, 0.35f);
+            dirty = true;
+        }
+        if (seat.s_down) {
+            khr_camera_zoom(&camera, -0.35f);
+            dirty = true;
+        }
+        if (seat.a_down) {
+            khr_camera_pan(&camera, 12.0f, 0.0f);
+            dirty = true;
+        }
+        if (seat.d_down) {
+            khr_camera_pan(&camera, -12.0f, 0.0f);
+            dirty = true;
+        }
+        if (seat.space_down) {
+            khr_camera_pan(&camera, 0.0f, -12.0f);
+            dirty = true;
+        }
+        if (seat.c_down) {
+            khr_camera_pan(&camera, 0.0f, 12.0f);
+            dirty = true;
+        }
+        if (seat.r_pressed) {
+            khr_camera_look_at(&camera, (float[]){ 0.0f, 6.0f, 18.0f }, (float[]){ 0.0f, 0.0f, 0.0f }, (float[]){ 0.0f, 1.0f, 0.0f });
+            dirty = true;
+            seat.r_pressed = false;
+        }
         if (seat.f11_pressed) {
             if (shell.popup_live) {
                 khr_window_popup_teardown(&client, &shell, &popup_pool,
@@ -1624,9 +1655,11 @@ bool khr_window_run_opts(khr_topology_t* topo, khr_gfx_device_t* dev,
                     (void)snprintf(pacing_tag, sizeof(pacing_tag), " [%u FPS CAP]", target_fps);
                 }
 
-                printf("[TELEMETRY] %5.1f FPS (%5.2f ms) | CPU Proc: %4.1f%% (%4.2f ms) | GPU HW: %5.2f ms (%4.1f%% load) | Bodies: %u (%u meshes)%s\n",
+                uint32_t live_contacts = topo->sim.physics.contact_count;
+                printf("[TELEMETRY] %5.1f FPS (%5.2f ms) | CPU Proc: %4.1f%% (%4.2f ms) | GPU HW: %5.2f ms (%4.1f%% load) | Bodies: %u (%u meshes) | Contacts: %u%s\n",
                        fps, frame_ms, cpu_total_pct, cpu_frame_ms, gpu_hw_avg_ms, gpu_load_pct,
                        scene.instance_count, active_passes,
+                       live_contacts,
                        pacing_tag);
                 fflush(stdout);
 

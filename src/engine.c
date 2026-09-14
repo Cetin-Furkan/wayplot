@@ -8,8 +8,8 @@
 
 [[nodiscard]]
 const char* engine_get_banner(void) {
-    static const char banner[] = "=== Khoros Engine 0.3.3 (Linux 7.2 / C23 / io_uring / Vulkan 1.4) ===\n"
-                                 "  Caption: desktop audio auto-routing, dynamic multi-shape collision physics, and precision target FPS pacing.";
+    static const char banner[] = "=== Khoros Engine 0.3.4 (Linux 7.2 / C23 / io_uring / Vulkan 1.4) ===\n"
+                                 "  Caption: pairwise multi-shape SAT collision physics, interactive flight controls, and live contact manifold telemetry.";
     return banner;
 }
 

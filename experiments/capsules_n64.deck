@@ -1,0 +1,72 @@
+# khoros-run v1
+dt_s 0.01666667
+gravity 0.00000 -9.80665 0.00000
+floor_y -2.50
+seed 42
+ticks 600
+integrator symplectic_euler
+# 64 Dynamic Capsules (Cylinders) with SAT Narrowphase
+body id=0 shape=capsule r=0.528 mass=1.63 e=0.58 mu=0.31 x=1.39 y=1.23 z=-2.25 vx=-0.44 vy=0.24 vz=0.28
+body id=1 shape=capsule r=0.394 mass=2.38 e=0.66 mu=0.30 x=-2.81 y=5.55 z=-4.73 vx=-0.48 vy=0.15 vz=0.07
+body id=2 shape=capsule r=0.369 mass=1.65 e=0.67 mu=0.42 x=3.06 y=7.28 z=-1.60 vx=-0.55 vy=0.46 vz=-0.26
+body id=3 shape=capsule r=0.516 mass=2.43 e=0.67 mu=0.42 x=3.07 y=7.57 z=0.36 vx=0.76 vy=-0.12 vz=0.08
+body id=4 shape=capsule r=0.370 mass=1.92 e=0.63 mu=0.37 x=2.05 y=1.41 z=-2.72 vx=-0.34 vy=-0.42 vz=-0.43
+body id=5 shape=capsule r=0.384 mass=2.59 e=0.53 mu=0.38 x=-1.30 y=2.89 z=-2.33 vx=0.70 vy=0.15 vz=0.17
+body id=6 shape=capsule r=0.396 mass=1.55 e=0.56 mu=0.35 x=4.90 y=6.76 z=0.57 vx=0.30 vy=0.34 vz=0.44
+body id=7 shape=capsule r=0.533 mass=2.19 e=0.55 mu=0.35 x=-2.89 y=9.49 z=3.76 vx=-0.30 vy=0.16 vz=-0.17
+body id=8 shape=capsule r=0.550 mass=2.26 e=0.52 mu=0.31 x=0.61 y=3.36 z=0.85 vx=0.64 vy=-0.10 vz=-0.45
+body id=9 shape=capsule r=0.549 mass=2.29 e=0.69 mu=0.47 x=-3.90 y=6.65 z=2.92 vx=-0.12 vy=-0.44 vz=-0.19
+body id=10 shape=capsule r=0.372 mass=2.15 e=0.59 mu=0.49 x=-4.89 y=7.49 z=1.82 vx=0.06 vy=-0.23 vz=0.23
+body id=11 shape=capsule r=0.410 mass=2.46 e=0.62 mu=0.33 x=3.76 y=3.37 z=0.01 vx=-0.51 vy=0.41 vz=0.59
+body id=12 shape=capsule r=0.354 mass=2.89 e=0.68 mu=0.47 x=2.63 y=5.85 z=2.79 vx=0.05 vy=-0.50 vz=-0.28
+body id=13 shape=capsule r=0.364 mass=2.64 e=0.65 mu=0.33 x=-1.92 y=1.52 z=3.78 vx=0.72 vy=-0.41 vz=-0.02
+body id=14 shape=capsule r=0.458 mass=2.59 e=0.54 mu=0.36 x=-0.25 y=5.95 z=-2.35 vx=0.60 vy=-0.08 vz=-0.46
+body id=15 shape=capsule r=0.418 mass=2.38 e=0.55 mu=0.34 x=4.95 y=6.85 z=-0.62 vx=0.03 vy=-0.38 vz=-0.44
+body id=16 shape=capsule r=0.398 mass=2.50 e=0.54 mu=0.33 x=-4.29 y=6.68 z=-2.71 vx=0.65 vy=0.36 vz=-0.69
+body id=17 shape=capsule r=0.369 mass=2.15 e=0.58 mu=0.39 x=4.36 y=6.14 z=-0.27 vx=0.46 vy=0.31 vz=-0.50
+body id=18 shape=capsule r=0.522 mass=1.87 e=0.54 mu=0.39 x=2.29 y=7.06 z=4.84 vx=-0.64 vy=-0.10 vz=-0.26
+body id=19 shape=capsule r=0.460 mass=1.58 e=0.70 mu=0.47 x=-0.78 y=3.51 z=-2.50 vx=0.68 vy=-0.06 vz=0.58
+body id=20 shape=capsule r=0.430 mass=1.59 e=0.58 mu=0.50 x=4.69 y=9.34 z=3.49 vx=-0.53 vy=-0.01 vz=-0.46
+body id=21 shape=capsule r=0.461 mass=2.58 e=0.53 mu=0.36 x=-2.35 y=8.06 z=-0.45 vx=-0.12 vy=0.46 vz=0.79
+body id=22 shape=capsule r=0.451 mass=2.78 e=0.53 mu=0.49 x=4.69 y=6.21 z=0.42 vx=0.40 vy=-0.44 vz=0.13
+body id=23 shape=capsule r=0.528 mass=1.87 e=0.62 mu=0.42 x=-4.20 y=2.67 z=0.95 vx=0.28 vy=-0.26 vz=-0.61
+body id=24 shape=capsule r=0.398 mass=2.09 e=0.63 mu=0.36 x=-0.81 y=6.25 z=0.23 vx=0.70 vy=-0.30 vz=0.35
+body id=25 shape=capsule r=0.365 mass=1.82 e=0.55 mu=0.49 x=-1.84 y=7.77 z=-4.27 vx=-0.07 vy=0.50 vz=0.79
+body id=26 shape=capsule r=0.472 mass=2.98 e=0.63 mu=0.30 x=3.81 y=8.91 z=-1.30 vx=-0.55 vy=0.33 vz=0.33
+body id=27 shape=capsule r=0.371 mass=2.33 e=0.55 mu=0.42 x=3.17 y=3.69 z=1.63 vx=0.70 vy=-0.37 vz=-0.62
+body id=28 shape=capsule r=0.519 mass=1.64 e=0.58 mu=0.36 x=2.18 y=2.83 z=1.34 vx=-0.38 vy=-0.01 vz=0.65
+body id=29 shape=capsule r=0.436 mass=1.51 e=0.52 mu=0.48 x=-4.96 y=7.94 z=1.37 vx=-0.38 vy=0.24 vz=0.08
+body id=30 shape=capsule r=0.412 mass=2.85 e=0.66 mu=0.47 x=4.04 y=5.91 z=3.35 vx=0.13 vy=-0.35 vz=-0.60
+body id=31 shape=capsule r=0.431 mass=2.43 e=0.53 mu=0.49 x=3.99 y=2.89 z=-2.50 vx=-0.64 vy=0.28 vz=0.61
+body id=32 shape=capsule r=0.416 mass=2.90 e=0.66 mu=0.47 x=3.65 y=9.79 z=3.11 vx=0.61 vy=-0.48 vz=0.38
+body id=33 shape=capsule r=0.394 mass=2.72 e=0.59 mu=0.36 x=3.11 y=3.40 z=2.87 vx=-0.63 vy=0.37 vz=0.57
+body id=34 shape=capsule r=0.543 mass=1.92 e=0.63 mu=0.38 x=2.95 y=3.05 z=-4.76 vx=-0.49 vy=-0.17 vz=0.58
+body id=35 shape=capsule r=0.543 mass=1.90 e=0.52 mu=0.39 x=4.81 y=5.83 z=4.39 vx=-0.62 vy=0.47 vz=-0.51
+body id=36 shape=capsule r=0.401 mass=2.56 e=0.50 mu=0.49 x=2.29 y=3.82 z=1.06 vx=0.02 vy=-0.11 vz=0.12
+body id=37 shape=capsule r=0.483 mass=2.00 e=0.56 mu=0.47 x=0.38 y=7.47 z=2.42 vx=0.27 vy=-0.14 vz=-0.69
+body id=38 shape=capsule r=0.375 mass=2.13 e=0.69 mu=0.44 x=2.20 y=3.70 z=-1.91 vx=-0.15 vy=-0.10 vz=-0.33
+body id=39 shape=capsule r=0.436 mass=2.37 e=0.63 mu=0.39 x=4.03 y=6.54 z=-1.99 vx=0.08 vy=-0.50 vz=-0.34
+body id=40 shape=capsule r=0.367 mass=2.27 e=0.63 mu=0.37 x=-0.58 y=2.92 z=-0.27 vx=0.64 vy=0.30 vz=-0.53
+body id=41 shape=capsule r=0.399 mass=2.21 e=0.67 mu=0.31 x=3.18 y=7.76 z=1.73 vx=-0.44 vy=-0.30 vz=-0.76
+body id=42 shape=capsule r=0.481 mass=1.51 e=0.65 mu=0.45 x=-0.86 y=6.67 z=-3.06 vx=0.31 vy=-0.01 vz=-0.41
+body id=43 shape=capsule r=0.400 mass=2.77 e=0.59 mu=0.46 x=-3.93 y=4.83 z=-3.24 vx=0.73 vy=0.02 vz=-0.72
+body id=44 shape=capsule r=0.494 mass=2.26 e=0.67 mu=0.41 x=1.68 y=9.89 z=0.95 vx=0.72 vy=0.39 vz=0.18
+body id=45 shape=capsule r=0.503 mass=2.28 e=0.63 mu=0.35 x=3.97 y=7.69 z=-0.25 vx=-0.39 vy=-0.25 vz=0.22
+body id=46 shape=capsule r=0.396 mass=2.54 e=0.64 mu=0.31 x=-4.23 y=3.57 z=-2.28 vx=-0.29 vy=0.04 vz=-0.58
+body id=47 shape=capsule r=0.467 mass=2.54 e=0.67 mu=0.45 x=-0.92 y=5.88 z=-0.84 vx=-0.47 vy=-0.08 vz=0.65
+body id=48 shape=capsule r=0.434 mass=2.62 e=0.61 mu=0.42 x=-1.20 y=1.05 z=-1.48 vx=0.41 vy=0.35 vz=0.73
+body id=49 shape=capsule r=0.431 mass=1.75 e=0.59 mu=0.33 x=-2.79 y=2.97 z=-0.64 vx=-0.75 vy=-0.16 vz=0.29
+body id=50 shape=capsule r=0.377 mass=2.19 e=0.51 mu=0.38 x=1.22 y=1.24 z=-1.06 vx=0.10 vy=-0.47 vz=0.23
+body id=51 shape=capsule r=0.400 mass=1.62 e=0.50 mu=0.41 x=-2.88 y=3.94 z=2.61 vx=-0.19 vy=0.25 vz=0.53
+body id=52 shape=capsule r=0.540 mass=1.80 e=0.50 mu=0.33 x=5.00 y=4.15 z=1.50 vx=0.45 vy=0.15 vz=0.41
+body id=53 shape=capsule r=0.384 mass=2.41 e=0.65 mu=0.32 x=-3.74 y=7.03 z=0.64 vx=-0.45 vy=0.20 vz=0.43
+body id=54 shape=capsule r=0.542 mass=2.09 e=0.64 mu=0.32 x=3.19 y=9.68 z=-3.92 vx=-0.76 vy=-0.19 vz=0.28
+body id=55 shape=capsule r=0.374 mass=2.98 e=0.66 mu=0.37 x=1.91 y=6.65 z=-3.98 vx=0.44 vy=0.35 vz=0.16
+body id=56 shape=capsule r=0.371 mass=2.94 e=0.63 mu=0.47 x=-0.72 y=4.34 z=0.06 vx=-0.25 vy=0.35 vz=0.52
+body id=57 shape=capsule r=0.458 mass=2.23 e=0.59 mu=0.45 x=2.07 y=4.92 z=2.34 vx=0.74 vy=-0.23 vz=0.49
+body id=58 shape=capsule r=0.443 mass=2.42 e=0.58 mu=0.31 x=-2.32 y=8.67 z=3.31 vx=-0.66 vy=0.38 vz=-0.41
+body id=59 shape=capsule r=0.490 mass=1.91 e=0.50 mu=0.49 x=3.51 y=2.64 z=-2.88 vx=0.48 vy=-0.16 vz=0.61
+body id=60 shape=capsule r=0.448 mass=2.69 e=0.52 mu=0.34 x=-4.14 y=7.48 z=-0.11 vx=0.41 vy=0.19 vz=0.23
+body id=61 shape=capsule r=0.499 mass=2.00 e=0.64 mu=0.35 x=1.92 y=3.76 z=0.82 vx=-0.04 vy=0.03 vz=-0.12
+body id=62 shape=capsule r=0.387 mass=1.82 e=0.60 mu=0.44 x=-2.49 y=2.09 z=-3.07 vx=-0.61 vy=0.04 vz=0.42
+body id=63 shape=capsule r=0.386 mass=1.52 e=0.61 mu=0.35 x=4.77 y=5.72 z=-2.17 vx=-0.64 vy=-0.31 vz=-0.44

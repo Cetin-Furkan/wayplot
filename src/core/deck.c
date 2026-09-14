@@ -218,6 +218,13 @@ bool khr_deck_parse_string(khr_deck_t* deck, const char* text, size_t len) {
                 khr_rigid_body_init_sphere(b, pos, radius, mass, restitution, friction);
             } else if (shape == KHR_SHAPE_AABB) {
                 khr_rigid_body_init_aabb(b, pos, hx, mass, restitution, friction);
+            } else if (shape == KHR_SHAPE_CAPSULE) {
+                float p0[3] = { 0.0f, -0.45f, 0.0f };
+                float p1[3] = { 0.0f,  0.45f, 0.0f };
+                khr_rigid_body_init_capsule(b, p0, p1, radius, mass, restitution, friction);
+                b->position[0] = pos[0];
+                b->position[1] = pos[1];
+                b->position[2] = pos[2];
             } else if (shape == KHR_SHAPE_PLANE) {
                 float norm[3] = { 0.0f, 1.0f, 0.0f };
                 khr_rigid_body_init_plane(b, norm, pos[1], restitution, friction);

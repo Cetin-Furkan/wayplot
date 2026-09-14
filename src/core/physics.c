@@ -564,6 +564,301 @@ bool khr_collide_capsule_plane(const khr_rigid_body_t* capsule, uint32_t idx_cap
     return true;
 }
 
+static void khr_closest_pt_segment_segment(const float p1[3], const float q1[3],
+                                           const float p2[3], const float q2[3],
+                                           float* out_s, float* out_t,
+                                           float c1[3], float c2[3]) {
+    float d1[3], d2[3], r[3];
+    khr_vec3_sub(d1, q1, p1);
+    khr_vec3_sub(d2, q2, p2);
+    khr_vec3_sub(r, p1, p2);
+
+    float a = khr_vec3_dot(d1, d1);
+    float e = khr_vec3_dot(d2, d2);
+    float f = khr_vec3_dot(d2, r);
+
+    float s = 0.0f, t = 0.0f;
+
+    if (a <= 1e-7f && e <= 1e-7f) {
+        s = 0.0f;
+        t = 0.0f;
+    } else if (a <= 1e-7f) {
+        s = 0.0f;
+        t = fminf(1.0f, fmaxf(0.0f, f / e));
+    } else {
+        float c = khr_vec3_dot(d1, r);
+        if (e <= 1e-7f) {
+            t = 0.0f;
+            s = fminf(1.0f, fmaxf(0.0f, -c / a));
+        } else {
+            float b = khr_vec3_dot(d1, d2);
+            float denom = a * e - b * b;
+            if (fabsf(denom) > 1e-7f) {
+                s = fminf(1.0f, fmaxf(0.0f, (b * f - c * e) / denom));
+            } else {
+                s = 0.0f;
+            }
+            t = (b * s + f) / e;
+            if (t < 0.0f) {
+                t = 0.0f;
+                s = fminf(1.0f, fmaxf(0.0f, -c / a));
+            } else if (t > 1.0f) {
+                t = 1.0f;
+                s = fminf(1.0f, fmaxf(0.0f, (b - c) / a));
+            }
+        }
+    }
+
+    if (out_s != nullptr) *out_s = s;
+    if (out_t != nullptr) *out_t = t;
+
+    c1[0] = p1[0] + d1[0] * s;
+    c1[1] = p1[1] + d1[1] * s;
+    c1[2] = p1[2] + d1[2] * s;
+
+    c2[0] = p2[0] + d2[0] * t;
+    c2[1] = p2[1] + d2[1] * t;
+    c2[2] = p2[2] + d2[2] * t;
+}
+
+[[nodiscard]]
+bool khr_collide_capsule_capsule(const khr_rigid_body_t* a, uint32_t idx_a,
+                                 const khr_rigid_body_t* b, uint32_t idx_b,
+                                 khr_contact_t* out_contact) {
+    if (a == nullptr || b == nullptr || out_contact == nullptr) {
+        return false;
+    }
+
+    float pA0[3], pA1[3];
+    khr_quat_rotate_vec3(pA0, a->rotation, a->shape.capsule.p0);
+    khr_vec3_add(pA0, pA0, a->position);
+    khr_quat_rotate_vec3(pA1, a->rotation, a->shape.capsule.p1);
+    khr_vec3_add(pA1, pA1, a->position);
+
+    float pB0[3], pB1[3];
+    khr_quat_rotate_vec3(pB0, b->rotation, b->shape.capsule.p0);
+    khr_vec3_add(pB0, pB0, b->position);
+    khr_quat_rotate_vec3(pB1, b->rotation, b->shape.capsule.p1);
+    khr_vec3_add(pB1, pB1, b->position);
+
+    float c1[3], c2[3];
+    khr_closest_pt_segment_segment(pA0, pA1, pB0, pB1, nullptr, nullptr, c1, c2);
+
+    float diff[3];
+    khr_vec3_sub(diff, c2, c1);
+    float dist_sq = khr_vec3_len_sq(diff);
+    float r_sum = a->shape.capsule.radius + b->shape.capsule.radius;
+
+    if (dist_sq >= r_sum * r_sum) {
+        return false;
+    }
+
+    float dist = sqrtf(dist_sq);
+    float pen = r_sum - dist;
+
+    out_contact->body_a = idx_a;
+    out_contact->body_b = idx_b;
+    out_contact->penetration = pen;
+    out_contact->normal_impulse = 0.0f;
+    out_contact->tangent_impulse = 0.0f;
+
+    if (dist > 1e-6f) {
+        float inv_d = 1.0f / dist;
+        out_contact->normal[0] = diff[0] * inv_d;
+        out_contact->normal[1] = diff[1] * inv_d;
+        out_contact->normal[2] = diff[2] * inv_d;
+    } else {
+        out_contact->normal[0] = 0.0f;
+        out_contact->normal[1] = 1.0f;
+        out_contact->normal[2] = 0.0f;
+    }
+
+    float offset = a->shape.capsule.radius - 0.5f * pen;
+    out_contact->point[0] = c1[0] + out_contact->normal[0] * offset;
+    out_contact->point[1] = c1[1] + out_contact->normal[1] * offset;
+    out_contact->point[2] = c1[2] + out_contact->normal[2] * offset;
+    return true;
+}
+
+static inline float khr_dist_sq_pt_aabb(const float p[3], const float h[3]) {
+    float sq = 0.0f;
+    for (int i = 0; i < 3; i++) {
+        float v = p[i];
+        if (v < -h[i]) {
+            float d = -h[i] - v;
+            sq += d * d;
+        } else if (v > h[i]) {
+            float d = v - h[i];
+            sq += d * d;
+        }
+    }
+    return sq;
+}
+
+[[nodiscard]]
+bool khr_collide_capsule_aabb(const khr_rigid_body_t* capsule, uint32_t idx_capsule,
+                              const khr_rigid_body_t* aabb, uint32_t idx_aabb,
+                              khr_contact_t* out_contact) {
+    if (capsule == nullptr || aabb == nullptr || out_contact == nullptr) {
+        return false;
+    }
+
+    float p0_w[3], p1_w[3];
+    khr_quat_rotate_vec3(p0_w, capsule->rotation, capsule->shape.capsule.p0);
+    khr_vec3_add(p0_w, p0_w, capsule->position);
+    khr_quat_rotate_vec3(p1_w, capsule->rotation, capsule->shape.capsule.p1);
+    khr_vec3_add(p1_w, p1_w, capsule->position);
+
+    float rel0[3], rel1[3];
+    khr_vec3_sub(rel0, p0_w, aabb->position);
+    khr_vec3_sub(rel1, p1_w, aabb->position);
+
+    float loc0[3], loc1[3];
+    khr_quat_rotate_inv_vec3(loc0, aabb->rotation, rel0);
+    khr_quat_rotate_inv_vec3(loc1, aabb->rotation, rel1);
+
+    const float* h = aabb->shape.aabb.half_extents;
+
+    float best_t = 0.0f;
+    float p_test[3] = { loc0[0], loc0[1], loc0[2] };
+    float min_dsq = khr_dist_sq_pt_aabb(p_test, h);
+
+    p_test[0] = loc1[0]; p_test[1] = loc1[1]; p_test[2] = loc1[2];
+    float dsq1 = khr_dist_sq_pt_aabb(p_test, h);
+    if (dsq1 < min_dsq) {
+        min_dsq = dsq1;
+        best_t = 1.0f;
+    }
+
+    for (int i = 0; i < 3; i++) {
+        float d_coord = loc1[i] - loc0[i];
+        if (fabsf(d_coord) > 1e-6f) {
+            float inv_d = 1.0f / d_coord;
+            float tc[2] = {
+                (-h[i] - loc0[i]) * inv_d,
+                ( h[i] - loc0[i]) * inv_d
+            };
+            for (int k = 0; k < 2; k++) {
+                if (tc[k] > 0.0f && tc[k] < 1.0f) {
+                    float pt[3] = {
+                        loc0[0] + tc[k] * (loc1[0] - loc0[0]),
+                        loc0[1] + tc[k] * (loc1[1] - loc0[0]),
+                        loc0[2] + tc[k] * (loc1[2] - loc0[0])
+                    };
+                    float d = khr_dist_sq_pt_aabb(pt, h);
+                    if (d < min_dsq) {
+                        min_dsq = d;
+                        best_t = tc[k];
+                    }
+                }
+            }
+        }
+    }
+
+    float t_a = 0.0f, t_b = 1.0f;
+    for (int step = 0; step < 8; step++) {
+        float t_mid = 0.5f * (t_a + t_b);
+        float pt[3] = {
+            loc0[0] + t_mid * (loc1[0] - loc0[0]),
+            loc0[1] + t_mid * (loc1[1] - loc0[0]),
+            loc0[2] + t_mid * (loc1[2] - loc0[0])
+        };
+        float d = khr_dist_sq_pt_aabb(pt, h);
+        if (d < min_dsq) {
+            min_dsq = d;
+            best_t = t_mid;
+        }
+        float d_left = khr_dist_sq_pt_aabb((float[]){
+            loc0[0] + (t_mid - 0.05f) * (loc1[0] - loc0[0]),
+            loc0[1] + (t_mid - 0.05f) * (loc1[1] - loc0[0]),
+            loc0[2] + (t_mid - 0.05f) * (loc1[2] - loc0[0])
+        }, h);
+        float d_right = khr_dist_sq_pt_aabb((float[]){
+            loc0[0] + (t_mid + 0.05f) * (loc1[0] - loc0[0]),
+            loc0[1] + (t_mid + 0.05f) * (loc1[1] - loc0[0]),
+            loc0[2] + (t_mid + 0.05f) * (loc1[2] - loc0[0])
+        }, h);
+        if (d_left < d_right) {
+            t_b = t_mid;
+        } else {
+            t_a = t_mid;
+        }
+    }
+
+    float c_seg[3] = {
+        loc0[0] + best_t * (loc1[0] - loc0[0]),
+        loc0[1] + best_t * (loc1[1] - loc0[0]),
+        loc0[2] + best_t * (loc1[2] - loc0[0])
+    };
+
+    float c_box[3] = {
+        fminf(h[0], fmaxf(-h[0], c_seg[0])),
+        fminf(h[1], fmaxf(-h[1], c_seg[1])),
+        fminf(h[2], fmaxf(-h[2], c_seg[2]))
+    };
+
+    float v_loc[3] = {
+        c_box[0] - c_seg[0],
+        c_box[1] - c_seg[1],
+        c_box[2] - c_seg[2]
+    };
+    float dist_sq = khr_vec3_len_sq(v_loc);
+    float r = capsule->shape.capsule.radius;
+
+    float n_loc[3];
+    float penetration = 0.0f;
+
+    if (dist_sq > 1e-10f) {
+        float dist = sqrtf(dist_sq);
+        if (dist >= r) {
+            return false;
+        }
+        penetration = r - dist;
+        float inv_d = 1.0f / dist;
+        n_loc[0] = v_loc[0] * inv_d;
+        n_loc[1] = v_loc[1] * inv_d;
+        n_loc[2] = v_loc[2] * inv_d;
+    } else {
+        float dx = h[0] - fabsf(c_seg[0]);
+        float dy = h[1] - fabsf(c_seg[1]);
+        float dz = h[2] - fabsf(c_seg[2]);
+        if (dx < dy && dx < dz) {
+            penetration = r + dx;
+            n_loc[0] = (c_seg[0] >= 0.0f) ? 1.0f : -1.0f;
+            n_loc[1] = 0.0f;
+            n_loc[2] = 0.0f;
+        } else if (dy < dz) {
+            penetration = r + dy;
+            n_loc[0] = 0.0f;
+            n_loc[1] = (c_seg[1] >= 0.0f) ? 1.0f : -1.0f;
+            n_loc[2] = 0.0f;
+        } else {
+            penetration = r + dz;
+            n_loc[0] = 0.0f;
+            n_loc[1] = 0.0f;
+            n_loc[2] = (c_seg[2] >= 0.0f) ? 1.0f : -1.0f;
+        }
+    }
+
+    float n_world[3], pt_world[3];
+    khr_quat_rotate_vec3(n_world, aabb->rotation, n_loc);
+    khr_quat_rotate_vec3(pt_world, aabb->rotation, c_box);
+    khr_vec3_add(pt_world, pt_world, aabb->position);
+
+    out_contact->body_a = idx_capsule;
+    out_contact->body_b = idx_aabb;
+    out_contact->normal[0] = n_world[0];
+    out_contact->normal[1] = n_world[1];
+    out_contact->normal[2] = n_world[2];
+    out_contact->penetration = penetration;
+    out_contact->point[0] = pt_world[0];
+    out_contact->point[1] = pt_world[1];
+    out_contact->point[2] = pt_world[2];
+    out_contact->normal_impulse = 0.0f;
+    out_contact->tangent_impulse = 0.0f;
+    return true;
+}
+
 [[nodiscard]]
 bool khr_collide_bodies(const khr_rigid_body_t* a, uint32_t idx_a,
                         const khr_rigid_body_t* b, uint32_t idx_b,
@@ -607,6 +902,23 @@ bool khr_collide_bodies(const khr_rigid_body_t* a, uint32_t idx_a,
     }
     if (a->shape.type == KHR_SHAPE_PLANE && b->shape.type == KHR_SHAPE_CAPSULE) {
         return khr_collide_capsule_plane(b, idx_b, a, idx_a, out_contact);
+    }
+    if (a->shape.type == KHR_SHAPE_CAPSULE && b->shape.type == KHR_SHAPE_CAPSULE) {
+        return khr_collide_capsule_capsule(a, idx_a, b, idx_b, out_contact);
+    }
+    if (a->shape.type == KHR_SHAPE_CAPSULE && b->shape.type == KHR_SHAPE_AABB) {
+        return khr_collide_capsule_aabb(a, idx_a, b, idx_b, out_contact);
+    }
+    if (a->shape.type == KHR_SHAPE_AABB && b->shape.type == KHR_SHAPE_CAPSULE) {
+        bool hit = khr_collide_capsule_aabb(b, idx_b, a, idx_a, out_contact);
+        if (hit) {
+            out_contact->body_a = idx_a;
+            out_contact->body_b = idx_b;
+            out_contact->normal[0] = -out_contact->normal[0];
+            out_contact->normal[1] = -out_contact->normal[1];
+            out_contact->normal[2] = -out_contact->normal[2];
+        }
+        return hit;
     }
     return false;
 }

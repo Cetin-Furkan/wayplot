@@ -86,6 +86,7 @@ uint32_t khr_seat_consume(khr_wl_client_t* client, khr_seat_t* seat,
     seat->f11_pressed = false;
     seat->esc_pressed = false;
     seat->f_pressed = false;
+    seat->r_pressed = false;
     uint32_t count = 0;
     size_t offset = 0;
     int32_t axis_fixed = 0;
@@ -258,6 +259,12 @@ uint32_t khr_seat_consume(khr_wl_client_t* client, khr_seat_t* seat,
         } else if (seat->keyboard_id != 0 && hdr.object_id == seat->keyboard_id) {
             if (hdr.opcode == KHR_WL_KEYBOARD_EVENT_LEAVE) {
                 seat->shift_down = false;
+                seat->w_down = false;
+                seat->a_down = false;
+                seat->s_down = false;
+                seat->d_down = false;
+                seat->space_down = false;
+                seat->c_down = false;
                 count++;
             } else if (hdr.opcode == KHR_WL_KEYBOARD_EVENT_KEY && payload_len >= 16) {
                 uint32_t serial = 0, time = 0, key = 0, state = 0;
@@ -269,6 +276,18 @@ uint32_t khr_seat_consume(khr_wl_client_t* client, khr_seat_t* seat,
                     (void)time;
                     if (key == KHR_KEY_LEFTSHIFT || key == KHR_KEY_RIGHTSHIFT) {
                         seat->shift_down = (state == KHR_WL_KEY_PRESSED);
+                    } else if (key == KHR_KEY_W) {
+                        seat->w_down = (state == KHR_WL_KEY_PRESSED);
+                    } else if (key == KHR_KEY_A) {
+                        seat->a_down = (state == KHR_WL_KEY_PRESSED);
+                    } else if (key == KHR_KEY_S) {
+                        seat->s_down = (state == KHR_WL_KEY_PRESSED);
+                    } else if (key == KHR_KEY_D) {
+                        seat->d_down = (state == KHR_WL_KEY_PRESSED);
+                    } else if (key == KHR_KEY_SPACE) {
+                        seat->space_down = (state == KHR_WL_KEY_PRESSED);
+                    } else if (key == KHR_KEY_C) {
+                        seat->c_down = (state == KHR_WL_KEY_PRESSED);
                     } else if (state == KHR_WL_KEY_PRESSED) {
                         if (key == KHR_KEY_F11) {
                             seat->f11_pressed = true;
@@ -276,6 +295,8 @@ uint32_t khr_seat_consume(khr_wl_client_t* client, khr_seat_t* seat,
                             seat->esc_pressed = true;
                         } else if (key == KHR_KEY_F) {
                             seat->f_pressed = true;
+                        } else if (key == KHR_KEY_R) {
+                            seat->r_pressed = true;
                         }
                     }
                     if (seat->input_ring != nullptr) {
