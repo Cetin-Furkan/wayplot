@@ -1,0 +1,11 @@
+# khoros-run v1
+# Khoros Experiment Deck: Ballistic Free-Fall & Ground Restitution
+dt_s 0.016666667
+gravity 0 -9.80665 0
+floor_y -2.5
+seed 1
+ticks 600
+integrator symplectic_euler
+body id=0 shape=sphere r=0.5 mass=2.0 e=0.75 mu=0.4 x=0.0 y=5.0 z=0.0 vx=0.0 vy=0.0 vz=0.0
+body id=1 shape=sphere r=0.5 mass=1.5 e=0.75 mu=0.4 x=2.0 y=7.0 z=0.0 vx=-1.0 vy=0.0 vz=0.0
+body id=2 shape=sphere r=0.5 mass=1.0 e=0.75 mu=0.4 x=-2.0 y=6.0 z=0.0 vx=1.0 vy=0.0 vz=0.0

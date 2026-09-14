@@ -610,3 +610,240 @@ bool test_bda_arena_uring_registration(void) {
     khr_gfx_device_destroy(&dev);
     return true;
 }
+
+[[nodiscard]]
+bool test_bda_virtual_arena_pool_and_commit(void) {
+    khr_gfx_device_t dev = {};
+    TEST_ASSERT(khr_gfx_device_init(&dev, (dev_t)0), "khr_gfx_device_init failed");
+
+    khr_bda_arena_t arena = {};
+    constexpr size_t VIRTUAL_SZ = 1'073'741'824; /* 1 GiB */
+    constexpr size_t INITIAL_COMMIT = 2'097'152; /* 2 MiB */
+    TEST_ASSERT(khr_bda_arena_init_virtual(&dev, &arena, VIRTUAL_SZ, INITIAL_COMMIT),
+                "khr_bda_arena_init_virtual failed");
+    TEST_ASSERT_NOT_NULL(arena.host_ptr, "arena.host_ptr must be valid");
+    TEST_ASSERT(arena.is_virtual_pool, "is_virtual_pool must be true");
+    TEST_ASSERT_GE(arena.virtual_reserve_sz, VIRTUAL_SZ, "virtual_reserve_sz must be >= 1 GiB");
+    TEST_ASSERT_EQ(arena.committed_sz, INITIAL_COMMIT, "initial committed_sz must be 2 MiB");
+    TEST_ASSERT_EQ(arena.block_count, 1U, "block_count must be 1 initially");
+
+    /* Allocate within initial 2 MiB commit */
+    void* host1 = nullptr;
+    VkDeviceAddress gpu1 = 0;
+    TEST_ASSERT(khr_bda_arena_alloc(&arena, 1'024, 64, &host1, &gpu1), "alloc within block 0");
+    TEST_ASSERT_NOT_NULL(host1, "host1 not null");
+    TEST_ASSERT_NE(gpu1, 0U, "gpu1 non-zero");
+
+    /* Write pattern and verify CPU coherence */
+    *(volatile uint32_t*)host1 = 0xCAFEBABE;
+    TEST_ASSERT_EQ(*(volatile uint32_t*)host1, 0xCAFEBABEU, "host coherent readback");
+
+    /* If arena is imported, test dynamic commit of next 2 MiB hugepage block across boundary */
+    if (arena.is_imported) {
+        size_t big_alloc = 2'097'152;
+        void* host2 = nullptr;
+        VkDeviceAddress gpu2 = 0;
+        TEST_ASSERT(khr_bda_arena_alloc(&arena, big_alloc, 64, &host2, &gpu2),
+                    "alloc across 2 MiB boundary must trigger commit_more");
+        TEST_ASSERT_NOT_NULL(host2, "host2 not null");
+        TEST_ASSERT_NE(gpu2, 0U, "gpu2 non-zero");
+        TEST_ASSERT_GE(arena.committed_sz, 4'194'304, "committed_sz must grow to >= 4 MiB");
+        TEST_ASSERT_GE(arena.block_count, 2U, "block_count must grow to >= 2");
+
+        /* Write pattern in newly committed block and verify coherence */
+        *(volatile uint32_t*)host2 = 0x12345678;
+        TEST_ASSERT_EQ(*(volatile uint32_t*)host2, 0x12345678U, "host2 coherent readback");
+        /* Original block must still retain data */
+        TEST_ASSERT_EQ(*(volatile uint32_t*)host1, 0xCAFEBABEU, "host1 retained");
+    }
+
+    khr_bda_arena_destroy(&dev, &arena);
+    TEST_ASSERT_NULL(arena.host_ptr, "host_ptr must be null after destroy");
+    khr_gfx_device_destroy(&dev);
+    return true;
+}
+
+[[nodiscard]]
+bool test_bda_arena_static_region_and_freeze(void) {
+    khr_gfx_device_t dev = {};
+    TEST_ASSERT(khr_gfx_device_init(&dev, (dev_t)0), "khr_gfx_device_init failed");
+
+    khr_bda_arena_t arena = {};
+    constexpr size_t ARENA_SZ = 2'097'152;
+    TEST_ASSERT(khr_bda_arena_init(&dev, &arena, ARENA_SZ), "khr_bda_arena_init failed");
+
+    /* Allocate static assets */
+    void* static1 = nullptr;
+    VkDeviceAddress static1_gpu = 0;
+    TEST_ASSERT(khr_bda_arena_alloc_static(&arena, 256, 64, &static1, &static1_gpu), "alloc static 1");
+    TEST_ASSERT_NOT_NULL(static1, "static1 not null");
+    *(uint32_t*)static1 = 0x11223344;
+
+    void* static2 = nullptr;
+    VkDeviceAddress static2_gpu = 0;
+    TEST_ASSERT(khr_bda_arena_alloc_static(&arena, 512, 64, &static2, &static2_gpu), "alloc static 2");
+    TEST_ASSERT_NOT_NULL(static2, "static2 not null");
+    *(uint32_t*)static2 = 0x55667788;
+
+    size_t frozen_head = arena.head;
+    TEST_ASSERT_GT(frozen_head, 0U, "frozen_head > 0");
+
+    /* Freeze static asset region */
+    khr_bda_arena_freeze_static(&arena);
+    TEST_ASSERT(arena.static_frozen, "static_frozen must be true");
+    TEST_ASSERT_EQ(arena.static_head, frozen_head, "static_head must equal frozen_head");
+
+    /* Subsequent alloc_static must fail */
+    void* fail_static = nullptr;
+    VkDeviceAddress fail_gpu = 0;
+    TEST_ASSERT(!khr_bda_arena_alloc_static(&arena, 128, 64, &fail_static, &fail_gpu),
+                "alloc_static must fail after freeze");
+
+    /* Dynamic allocation above static region must succeed */
+    void* dyn1 = nullptr;
+    VkDeviceAddress dyn1_gpu = 0;
+    TEST_ASSERT(khr_bda_arena_alloc(&arena, 1'024, 64, &dyn1, &dyn1_gpu), "alloc dynamic above frozen");
+    TEST_ASSERT_NOT_NULL(dyn1, "dyn1 not null");
+    *(uint32_t*)dyn1 = 0x99AABBCC;
+    TEST_ASSERT_GT(arena.head, frozen_head, "arena.head must advance above frozen_head");
+
+    /* Reset arena: must reset ONLY dynamic allocations above static_head */
+    khr_bda_arena_reset(&arena);
+    TEST_ASSERT_EQ(arena.head, frozen_head, "reset must restore head to frozen static_head");
+
+    /* Verify static data is preserved */
+    TEST_ASSERT_EQ(*(uint32_t*)static1, 0x11223344U, "static1 data intact after reset");
+    TEST_ASSERT_EQ(*(uint32_t*)static2, 0x55667788U, "static2 data intact after reset");
+
+    /* Allocate dynamic again in the reclaimed transient region */
+    void* dyn2 = nullptr;
+    VkDeviceAddress dyn2_gpu = 0;
+    TEST_ASSERT(khr_bda_arena_alloc(&arena, 1'024, 64, &dyn2, &dyn2_gpu), "alloc dynamic after reset");
+    TEST_ASSERT_EQ(dyn2, dyn1, "dyn2 must reuse the reclaimed transient address space");
+
+    khr_bda_arena_destroy(&dev, &arena);
+    khr_gfx_device_destroy(&dev);
+    return true;
+}
+
+[[nodiscard]]
+bool test_bda_arena_slab_cache(void) {
+    khr_gfx_device_t dev = {};
+    TEST_ASSERT(khr_gfx_device_init(&dev, (dev_t)0), "khr_gfx_device_init failed");
+
+    khr_bda_arena_t arena = {};
+    TEST_ASSERT(khr_bda_arena_init(&dev, &arena, 2'097'152), "khr_bda_arena_init failed");
+
+    khr_slab_cache_t cache = {};
+    khr_slab_cache_init(&cache);
+    TEST_ASSERT_EQ(cache.buckets[0].item_size, 64U, "bucket 0 is 64B");
+    TEST_ASSERT_EQ(cache.buckets[1].item_size, 256U, "bucket 1 is 256B");
+    TEST_ASSERT_EQ(cache.buckets[2].item_size, 1'024U, "bucket 2 is 1K");
+    TEST_ASSERT_EQ(cache.buckets[3].item_size, 4'096U, "bucket 3 is 4K");
+
+    /* Test 64B bucket */
+    void* p64_1 = nullptr;
+    VkDeviceAddress gpu64_1 = 0;
+    TEST_ASSERT(khr_slab_alloc(&arena, &cache, 48, &p64_1, &gpu64_1), "slab_alloc 48B -> 64B bucket");
+    TEST_ASSERT_NOT_NULL(p64_1, "p64_1 not null");
+    TEST_ASSERT_EQ((uintptr_t)p64_1 % 64, 0U, "p64_1 64B aligned");
+
+    void* p64_2 = nullptr;
+    VkDeviceAddress gpu64_2 = 0;
+    TEST_ASSERT(khr_slab_alloc(&arena, &cache, 64, &p64_2, &gpu64_2), "slab_alloc 64B");
+    TEST_ASSERT_NE(p64_1, p64_2, "p64_1 != p64_2");
+
+    /* Free p64_1 and verify free-list reuse */
+    khr_slab_free(&cache, p64_1, gpu64_1, 64);
+    TEST_ASSERT_GT(cache.buckets[0].free_count, 0U, "free_count > 0");
+
+    void* p64_reused = nullptr;
+    VkDeviceAddress gpu64_reused = 0;
+    TEST_ASSERT(khr_slab_alloc(&arena, &cache, 64, &p64_reused, &gpu64_reused), "slab_alloc reuse");
+    TEST_ASSERT_EQ(p64_reused, p64_1, "LIFO free-list must reuse p64_1");
+    TEST_ASSERT_EQ(gpu64_reused, gpu64_1, "gpu address match on reuse");
+
+    /* Test 256B, 1KiB, 4KiB buckets */
+    void* p256 = nullptr;
+    VkDeviceAddress gpu256 = 0;
+    TEST_ASSERT(khr_slab_alloc(&arena, &cache, 200, &p256, &gpu256), "slab_alloc 256B");
+    TEST_ASSERT_NOT_NULL(p256, "p256 not null");
+
+    void* p1k = nullptr;
+    VkDeviceAddress gpu1k = 0;
+    TEST_ASSERT(khr_slab_alloc(&arena, &cache, 800, &p1k, &gpu1k), "slab_alloc 1KiB");
+    TEST_ASSERT_NOT_NULL(p1k, "p1k not null");
+
+    void* p4k = nullptr;
+    VkDeviceAddress gpu4k = 0;
+    TEST_ASSERT(khr_slab_alloc(&arena, &cache, 3'500, &p4k, &gpu4k), "slab_alloc 4KiB");
+    TEST_ASSERT_NOT_NULL(p4k, "p4k not null");
+
+    /* Test fallback for allocations > 4 KiB (direct bump from arena) */
+    void* p8k = nullptr;
+    VkDeviceAddress gpu8k = 0;
+    TEST_ASSERT(khr_slab_alloc(&arena, &cache, 8'192, &p8k, &gpu8k), "slab_alloc > 4KiB fallback");
+    TEST_ASSERT_NOT_NULL(p8k, "p8k not null");
+    /* Freeing > 4 KiB does not corrupt slab cache */
+    khr_slab_free(&cache, p8k, gpu8k, 8'192);
+
+    khr_bda_arena_destroy(&dev, &arena);
+    khr_gfx_device_destroy(&dev);
+    return true;
+}
+
+[[nodiscard]]
+bool test_bda_arena_frame_scratch(void) {
+    khr_gfx_device_t dev = {};
+    TEST_ASSERT(khr_gfx_device_init(&dev, (dev_t)0), "khr_gfx_device_init failed");
+
+    khr_bda_arena_t arena = {};
+    TEST_ASSERT(khr_bda_arena_init(&dev, &arena, 2'097'152), "khr_bda_arena_init failed");
+
+    khr_frame_scratch_t scratch = {};
+    constexpr size_t PER_FRAME_SZ = 65'536;
+    TEST_ASSERT(khr_frame_scratch_init(&arena, &scratch, PER_FRAME_SZ, 3), "frame_scratch_init 3 buffers");
+    TEST_ASSERT_EQ(scratch.num_buffers, 3U, "num_buffers is 3");
+    TEST_ASSERT_EQ(scratch.per_buffer_size, PER_FRAME_SZ, "per_buffer_size check");
+
+    /* Frame 0 allocation */
+    khr_frame_scratch_reset(&scratch, 0);
+    void* f0_a = nullptr;
+    VkDeviceAddress f0_a_gpu = 0;
+    TEST_ASSERT(khr_frame_scratch_alloc(&scratch, 128, 64, &f0_a, &f0_a_gpu), "frame 0 alloc 128B");
+    TEST_ASSERT_NOT_NULL(f0_a, "f0_a not null");
+    TEST_ASSERT_EQ((uintptr_t)f0_a % 64, 0U, "f0_a alignment");
+
+    /* Frame 1 allocation */
+    khr_frame_scratch_reset(&scratch, 1);
+    void* f1_a = nullptr;
+    VkDeviceAddress f1_a_gpu = 0;
+    TEST_ASSERT(khr_frame_scratch_alloc(&scratch, 256, 64, &f1_a, &f1_a_gpu), "frame 1 alloc 256B");
+    TEST_ASSERT_NOT_NULL(f1_a, "f1_a not null");
+    TEST_ASSERT_NE(f1_a, f0_a, "f1_a != f0_a (isolated buffer)");
+
+    /* Frame 2 allocation */
+    khr_frame_scratch_reset(&scratch, 2);
+    void* f2_a = nullptr;
+    VkDeviceAddress f2_a_gpu = 0;
+    TEST_ASSERT(khr_frame_scratch_alloc(&scratch, 512, 64, &f2_a, &f2_a_gpu), "frame 2 alloc 512B");
+    TEST_ASSERT_NOT_NULL(f2_a, "f2_a not null");
+
+    /* Frame 0 recycling: resetting frame 0 allows reusing its head from 0 */
+    khr_frame_scratch_reset(&scratch, 3); /* 3 % 3 = frame 0 */
+    TEST_ASSERT_EQ(scratch.current_index, 0U, "wrap-around to frame 0");
+    void* f0_recycled = nullptr;
+    VkDeviceAddress f0_recycled_gpu = 0;
+    TEST_ASSERT(khr_frame_scratch_alloc(&scratch, 128, 64, &f0_recycled, &f0_recycled_gpu), "frame 0 reuse");
+    TEST_ASSERT_EQ(f0_recycled, f0_a, "f0_recycled must equal original f0_a starting address");
+
+    /* Capacity exhaustion test */
+    void* overflow = nullptr;
+    TEST_ASSERT(!khr_frame_scratch_alloc(&scratch, PER_FRAME_SZ + 1, 64, &overflow, nullptr),
+                "overflow beyond per_buffer_size must fail");
+
+    khr_bda_arena_destroy(&dev, &arena);
+    khr_gfx_device_destroy(&dev);
+    return true;
+}
+

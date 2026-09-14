@@ -1,0 +1,1031 @@
+# khoros-run v1
+dt_s 0.01666667
+gravity 0.00000 -9.80665 0.00000
+floor_y -2.50
+seed 1
+ticks 600
+integrator symplectic_euler
+# 1024 Rigid Bodies (Max Engine Capacity)
+body id=0 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-10.66 y=12.56 z=0.33 vx=0.72 vy=-0.90 vz=-0.55
+body id=1 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=2.83 y=13.80 z=7.93 vx=0.10 vy=-0.27 vz=0.54
+body id=2 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=7.03 y=14.49 z=-7.28 vx=0.23 vy=-0.89 vz=0.63
+body id=3 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-1.41 y=19.74 z=5.18 vx=0.36 vy=-0.79 vz=-0.50
+body id=4 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=13.44 y=22.37 z=8.54 vx=1.00 vy=-0.49 vz=-0.85
+body id=5 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-4.47 y=13.82 z=-5.82 vx=-0.09 vy=-0.12 vz=0.41
+body id=6 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=2.17 y=1.57 z=5.90 vx=-0.27 vy=-0.58 vz=-0.20
+body id=7 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=2.40 y=12.46 z=-10.74 vx=0.01 vy=-0.25 vz=0.20
+body id=8 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-0.25 y=22.09 z=-6.76 vx=-0.16 vy=-0.07 vz=-0.04
+body id=9 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=0.50 y=1.58 z=-7.71 vx=-0.74 vy=-0.95 vz=0.41
+body id=10 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=10.83 y=3.36 z=3.42 vx=-0.06 vy=-0.52 vz=-0.54
+body id=11 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=10.81 y=15.41 z=-1.21 vx=-0.06 vy=-0.07 vz=0.97
+body id=12 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=1.28 y=13.88 z=4.75 vx=-0.38 vy=-0.20 vz=0.00
+body id=13 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-0.59 y=21.34 z=-1.87 vx=-0.41 vy=-0.73 vz=-0.93
+body id=14 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=4.36 y=14.74 z=-1.17 vx=0.05 vy=-0.51 vz=0.84
+body id=15 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-6.72 y=12.17 z=0.32 vx=0.65 vy=-0.19 vz=0.12
+body id=16 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=11.40 y=20.12 z=-5.13 vx=0.83 vy=-0.90 vz=0.38
+body id=17 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=7.98 y=12.85 z=-1.32 vx=0.93 vy=-0.03 vz=0.68
+body id=18 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-0.58 y=2.48 z=-6.54 vx=-0.00 vy=-0.90 vz=0.50
+body id=19 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-2.48 y=11.34 z=-13.61 vx=-1.00 vy=-0.42 vz=0.86
+body id=20 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-11.67 y=19.26 z=-7.06 vx=0.24 vy=-0.25 vz=0.91
+body id=21 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=4.72 y=15.61 z=-9.67 vx=-0.37 vy=-0.42 vz=0.54
+body id=22 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=12.60 y=12.32 z=6.17 vx=-0.73 vy=-0.78 vz=0.18
+body id=23 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=12.83 y=21.15 z=0.13 vx=-0.83 vy=-0.33 vz=0.87
+body id=24 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=7.94 y=22.05 z=-5.43 vx=-0.18 vy=-0.19 vz=0.04
+body id=25 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-8.49 y=1.33 z=-11.03 vx=0.78 vy=-0.95 vz=-0.31
+body id=26 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-4.10 y=18.70 z=-13.28 vx=0.02 vy=-0.67 vz=-0.39
+body id=27 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-4.87 y=3.79 z=12.57 vx=0.14 vy=-0.20 vz=-0.69
+body id=28 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=0.55 y=10.97 z=-4.58 vx=0.20 vy=-0.32 vz=-0.86
+body id=29 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-2.82 y=5.50 z=11.80 vx=-0.91 vy=-0.46 vz=0.68
+body id=30 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-1.35 y=18.36 z=-8.72 vx=0.42 vy=-0.12 vz=-0.74
+body id=31 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=0.84 y=19.06 z=0.47 vx=0.91 vy=-0.84 vz=0.69
+body id=32 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-3.08 y=10.78 z=-2.41 vx=-0.84 vy=-0.70 vz=-0.31
+body id=33 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-6.62 y=12.44 z=7.85 vx=-0.17 vy=-0.53 vz=-0.35
+body id=34 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-0.50 y=3.76 z=8.30 vx=0.59 vy=-0.18 vz=0.70
+body id=35 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-7.52 y=22.93 z=10.60 vx=0.29 vy=-0.59 vz=0.57
+body id=36 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=9.79 y=16.42 z=12.91 vx=-0.30 vy=-0.84 vz=0.12
+body id=37 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=2.03 y=13.38 z=-10.93 vx=0.43 vy=-0.44 vz=0.14
+body id=38 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-8.00 y=7.78 z=-6.49 vx=0.11 vy=-0.90 vz=-0.47
+body id=39 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=12.74 y=4.94 z=5.17 vx=0.52 vy=-0.28 vz=-0.63
+body id=40 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=3.64 y=12.65 z=-6.25 vx=0.67 vy=-0.71 vz=-0.37
+body id=41 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-6.70 y=2.45 z=-2.47 vx=0.80 vy=-0.22 vz=-0.17
+body id=42 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-13.57 y=3.22 z=-13.36 vx=-0.75 vy=-0.31 vz=0.15
+body id=43 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=12.21 y=9.06 z=7.83 vx=0.21 vy=-0.35 vz=0.23
+body id=44 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=11.89 y=8.27 z=-7.96 vx=-0.07 vy=-0.02 vz=0.76
+body id=45 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=5.22 y=20.81 z=5.08 vx=0.85 vy=-0.61 vz=0.89
+body id=46 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-4.02 y=17.91 z=-1.77 vx=-0.95 vy=-0.30 vz=-0.42
+body id=47 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=12.83 y=19.40 z=-10.58 vx=0.54 vy=-0.68 vz=0.81
+body id=48 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=1.18 y=8.88 z=1.70 vx=0.44 vy=-0.89 vz=0.24
+body id=49 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-10.69 y=3.89 z=-4.09 vx=0.30 vy=-0.34 vz=-0.94
+body id=50 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=2.19 y=9.19 z=-3.25 vx=-0.52 vy=-0.58 vz=-0.56
+body id=51 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-10.49 y=13.49 z=4.52 vx=0.87 vy=-0.32 vz=-0.21
+body id=52 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-6.86 y=4.40 z=-13.35 vx=-0.45 vy=-0.52 vz=-0.47
+body id=53 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-5.19 y=22.72 z=2.62 vx=0.68 vy=-0.45 vz=0.30
+body id=54 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=12.92 y=12.82 z=-6.57 vx=0.27 vy=-0.25 vz=-0.37
+body id=55 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=4.42 y=1.26 z=13.39 vx=-0.06 vy=-0.03 vz=0.36
+body id=56 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=10.14 y=22.33 z=11.37 vx=-0.20 vy=-0.02 vz=0.90
+body id=57 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-7.49 y=20.07 z=-4.38 vx=-0.60 vy=-0.64 vz=0.27
+body id=58 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=1.37 y=11.90 z=8.08 vx=0.16 vy=-0.81 vz=0.26
+body id=59 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-9.69 y=21.56 z=12.61 vx=0.63 vy=-0.16 vz=0.40
+body id=60 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=8.27 y=15.70 z=-11.64 vx=-0.25 vy=-0.27 vz=-0.72
+body id=61 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=6.71 y=23.97 z=-13.49 vx=-0.57 vy=-0.15 vz=0.16
+body id=62 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=2.03 y=22.98 z=-3.34 vx=0.93 vy=-0.48 vz=0.29
+body id=63 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-9.57 y=12.70 z=-11.60 vx=0.47 vy=-0.67 vz=-0.48
+body id=64 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-12.84 y=14.63 z=8.04 vx=-0.68 vy=-0.71 vz=0.08
+body id=65 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-4.00 y=23.37 z=-8.72 vx=0.49 vy=-0.99 vz=0.21
+body id=66 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-0.56 y=10.72 z=8.74 vx=0.80 vy=-0.02 vz=0.99
+body id=67 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-9.22 y=12.87 z=-8.97 vx=0.08 vy=-0.84 vz=0.77
+body id=68 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=0.42 y=21.29 z=4.02 vx=-1.00 vy=-0.63 vz=-0.26
+body id=69 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-7.95 y=4.55 z=3.08 vx=-0.75 vy=-0.01 vz=-0.03
+body id=70 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=10.47 y=17.71 z=-3.33 vx=0.23 vy=-0.35 vz=-0.30
+body id=71 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=11.47 y=3.78 z=0.53 vx=0.66 vy=-0.32 vz=-0.09
+body id=72 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=2.39 y=2.90 z=7.81 vx=-0.82 vy=-0.51 vz=-0.38
+body id=73 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=7.09 y=6.20 z=-4.90 vx=0.01 vy=-0.67 vz=0.81
+body id=74 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=6.27 y=20.72 z=-2.71 vx=-0.65 vy=-0.19 vz=-0.56
+body id=75 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=5.30 y=9.02 z=8.04 vx=-0.18 vy=-0.20 vz=-0.24
+body id=76 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-9.68 y=18.09 z=4.39 vx=-0.74 vy=-0.73 vz=0.67
+body id=77 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-5.04 y=20.35 z=-1.56 vx=-0.71 vy=-0.37 vz=-0.53
+body id=78 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=13.22 y=13.91 z=-10.55 vx=-0.41 vy=-0.54 vz=-0.20
+body id=79 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-13.39 y=17.48 z=4.88 vx=-0.33 vy=-0.32 vz=0.85
+body id=80 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=11.44 y=20.49 z=12.68 vx=0.34 vy=-0.45 vz=-0.58
+body id=81 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-4.14 y=8.60 z=11.84 vx=0.45 vy=-0.99 vz=0.12
+body id=82 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-6.94 y=8.68 z=4.04 vx=-0.17 vy=-0.22 vz=-0.05
+body id=83 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=10.90 y=8.79 z=-12.95 vx=-0.56 vy=-0.88 vz=0.70
+body id=84 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-6.48 y=1.41 z=-8.14 vx=-0.09 vy=-0.72 vz=0.26
+body id=85 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-11.79 y=16.93 z=1.09 vx=-0.98 vy=-0.90 vz=-0.34
+body id=86 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-7.86 y=11.66 z=2.97 vx=-0.66 vy=-0.69 vz=0.14
+body id=87 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=5.93 y=16.67 z=1.66 vx=-0.78 vy=-0.73 vz=-0.16
+body id=88 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-8.81 y=17.89 z=13.68 vx=0.98 vy=-0.09 vz=0.32
+body id=89 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-4.44 y=8.99 z=2.98 vx=-0.49 vy=-0.12 vz=0.68
+body id=90 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-12.97 y=12.27 z=-13.39 vx=0.62 vy=-0.75 vz=0.51
+body id=91 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-8.44 y=7.29 z=9.58 vx=-0.20 vy=-0.78 vz=-0.89
+body id=92 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-2.50 y=2.48 z=6.22 vx=0.32 vy=-0.32 vz=0.53
+body id=93 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-5.64 y=12.10 z=-11.46 vx=0.02 vy=-0.48 vz=-0.35
+body id=94 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-5.10 y=8.81 z=-8.93 vx=0.98 vy=-0.14 vz=-0.65
+body id=95 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-6.79 y=22.79 z=10.40 vx=0.04 vy=-0.62 vz=-0.79
+body id=96 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=3.06 y=5.94 z=-1.01 vx=-0.58 vy=-0.49 vz=0.05
+body id=97 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=0.38 y=19.21 z=-6.42 vx=0.75 vy=-0.51 vz=0.12
+body id=98 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=9.54 y=8.49 z=13.92 vx=-0.22 vy=-0.38 vz=0.08
+body id=99 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-9.74 y=13.68 z=13.43 vx=0.46 vy=-0.87 vz=0.63
+body id=100 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=4.40 y=2.40 z=4.67 vx=-0.93 vy=-0.21 vz=0.88
+body id=101 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-8.99 y=7.15 z=1.13 vx=-0.29 vy=-0.54 vz=-0.63
+body id=102 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-12.50 y=5.27 z=-9.69 vx=0.28 vy=-0.51 vz=0.09
+body id=103 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-13.19 y=6.08 z=-3.80 vx=0.09 vy=-0.53 vz=0.49
+body id=104 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-9.66 y=8.46 z=6.01 vx=-0.92 vy=-0.99 vz=-0.81
+body id=105 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=2.41 y=17.21 z=8.78 vx=-0.49 vy=-0.24 vz=-0.67
+body id=106 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-8.64 y=19.78 z=-2.16 vx=-0.13 vy=-0.17 vz=-0.66
+body id=107 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-7.71 y=23.26 z=-8.04 vx=-0.68 vy=-0.01 vz=-0.16
+body id=108 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-2.15 y=20.69 z=5.74 vx=0.94 vy=-0.37 vz=-0.12
+body id=109 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=12.54 y=14.95 z=-11.43 vx=0.79 vy=-0.26 vz=-0.77
+body id=110 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-11.79 y=17.44 z=3.42 vx=-0.68 vy=-0.83 vz=0.28
+body id=111 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-8.70 y=22.80 z=13.53 vx=-0.94 vy=-0.03 vz=0.30
+body id=112 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=11.58 y=19.16 z=-5.96 vx=-0.27 vy=-0.99 vz=0.04
+body id=113 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=10.83 y=20.33 z=-0.33 vx=-0.72 vy=-0.21 vz=0.12
+body id=114 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=13.15 y=11.49 z=3.04 vx=0.19 vy=-0.07 vz=0.34
+body id=115 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-4.86 y=6.86 z=5.10 vx=-0.08 vy=-0.65 vz=0.65
+body id=116 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=0.71 y=13.20 z=-11.25 vx=-0.45 vy=-0.96 vz=0.18
+body id=117 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-12.03 y=22.22 z=1.80 vx=-0.23 vy=-0.35 vz=0.15
+body id=118 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-1.21 y=12.01 z=-13.38 vx=0.80 vy=-0.87 vz=-0.79
+body id=119 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-11.43 y=13.30 z=-6.86 vx=0.94 vy=-0.25 vz=-0.86
+body id=120 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=2.85 y=3.75 z=12.99 vx=0.81 vy=-0.28 vz=-0.39
+body id=121 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-0.82 y=8.41 z=11.11 vx=0.38 vy=-0.60 vz=0.03
+body id=122 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=9.76 y=10.63 z=-0.31 vx=0.19 vy=-0.56 vz=0.54
+body id=123 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=2.47 y=14.58 z=-0.48 vx=-0.97 vy=-0.05 vz=-0.23
+body id=124 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-13.05 y=11.70 z=-10.07 vx=-0.52 vy=-0.48 vz=-0.47
+body id=125 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-1.91 y=17.91 z=-13.26 vx=0.20 vy=-0.48 vz=0.91
+body id=126 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-10.58 y=9.48 z=-7.93 vx=-0.85 vy=-0.83 vz=-0.19
+body id=127 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-10.89 y=3.43 z=13.72 vx=-0.20 vy=-0.99 vz=-0.61
+body id=128 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-6.65 y=19.41 z=0.69 vx=0.82 vy=-0.92 vz=-0.66
+body id=129 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=11.52 y=6.03 z=9.58 vx=0.61 vy=-0.44 vz=0.80
+body id=130 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=1.39 y=1.82 z=12.88 vx=0.96 vy=-0.31 vz=0.68
+body id=131 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=0.43 y=22.48 z=12.80 vx=0.80 vy=-0.03 vz=0.30
+body id=132 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=13.19 y=2.08 z=-11.45 vx=0.30 vy=-0.72 vz=-0.99
+body id=133 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=3.30 y=2.00 z=11.89 vx=-0.86 vy=-0.30 vz=0.09
+body id=134 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=1.33 y=12.88 z=1.13 vx=-0.01 vy=-0.95 vz=-0.30
+body id=135 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=1.03 y=11.67 z=-7.22 vx=-0.97 vy=-0.61 vz=-0.82
+body id=136 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=4.90 y=5.10 z=-7.37 vx=0.12 vy=-0.50 vz=-0.33
+body id=137 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-6.19 y=15.86 z=-9.27 vx=-0.82 vy=-0.66 vz=0.50
+body id=138 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-10.35 y=22.63 z=10.15 vx=0.56 vy=-0.18 vz=-0.05
+body id=139 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=5.42 y=16.79 z=-4.97 vx=-0.01 vy=-0.88 vz=-1.00
+body id=140 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-3.37 y=23.21 z=-0.06 vx=-0.16 vy=-0.43 vz=0.02
+body id=141 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-4.03 y=18.08 z=2.56 vx=0.30 vy=-0.76 vz=-0.25
+body id=142 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-7.15 y=7.99 z=4.91 vx=0.36 vy=-0.43 vz=-0.39
+body id=143 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=0.88 y=23.37 z=-4.41 vx=0.47 vy=-0.29 vz=0.18
+body id=144 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-7.21 y=11.84 z=12.37 vx=0.21 vy=-0.50 vz=0.32
+body id=145 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-10.83 y=3.93 z=3.16 vx=-0.38 vy=-0.59 vz=-0.50
+body id=146 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-1.56 y=7.80 z=-9.78 vx=0.27 vy=-0.99 vz=0.17
+body id=147 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-11.31 y=20.13 z=-1.57 vx=-0.86 vy=-0.61 vz=-0.45
+body id=148 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=7.54 y=17.74 z=9.26 vx=-0.50 vy=-0.26 vz=-0.18
+body id=149 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-5.70 y=8.20 z=-9.29 vx=0.22 vy=-0.97 vz=-0.57
+body id=150 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=5.57 y=17.39 z=7.28 vx=-0.19 vy=-0.13 vz=0.33
+body id=151 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-9.36 y=3.33 z=-3.22 vx=0.20 vy=-0.36 vz=-0.21
+body id=152 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=3.26 y=7.97 z=1.20 vx=0.94 vy=-0.31 vz=-0.30
+body id=153 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=11.82 y=6.58 z=0.24 vx=-0.93 vy=-0.38 vz=-0.61
+body id=154 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-9.24 y=10.90 z=2.25 vx=-0.11 vy=-0.62 vz=-0.01
+body id=155 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-12.34 y=8.06 z=-12.99 vx=0.19 vy=-0.66 vz=-0.40
+body id=156 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-2.41 y=23.63 z=3.62 vx=0.07 vy=-0.17 vz=0.89
+body id=157 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-6.00 y=16.29 z=12.79 vx=0.01 vy=-0.17 vz=-0.30
+body id=158 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-3.09 y=6.07 z=-2.20 vx=-0.14 vy=-0.38 vz=0.82
+body id=159 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=9.92 y=19.41 z=1.66 vx=-0.24 vy=-0.14 vz=0.73
+body id=160 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-13.18 y=6.43 z=-9.11 vx=0.24 vy=-0.53 vz=0.63
+body id=161 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-1.81 y=5.36 z=-13.13 vx=-0.83 vy=-0.90 vz=-0.57
+body id=162 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-10.55 y=14.83 z=3.81 vx=0.99 vy=-0.37 vz=-0.17
+body id=163 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-5.01 y=21.64 z=-11.29 vx=-0.87 vy=-0.66 vz=-0.70
+body id=164 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=3.57 y=3.29 z=-11.05 vx=0.64 vy=-0.13 vz=0.11
+body id=165 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-0.40 y=14.67 z=-10.51 vx=-0.31 vy=-0.85 vz=-0.07
+body id=166 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=9.93 y=3.29 z=13.95 vx=0.59 vy=-0.58 vz=0.89
+body id=167 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-11.45 y=16.77 z=-2.15 vx=0.98 vy=-0.56 vz=-0.88
+body id=168 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-0.68 y=18.19 z=13.94 vx=-0.18 vy=-0.57 vz=-0.86
+body id=169 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=5.96 y=13.05 z=-2.11 vx=-0.30 vy=-0.83 vz=0.71
+body id=170 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=2.87 y=19.20 z=-6.77 vx=0.60 vy=-0.21 vz=0.39
+body id=171 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-3.78 y=18.31 z=-2.51 vx=0.27 vy=-0.42 vz=0.24
+body id=172 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-5.06 y=20.73 z=10.27 vx=-0.38 vy=-0.26 vz=0.21
+body id=173 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-8.92 y=10.64 z=-13.05 vx=0.22 vy=-0.47 vz=-0.42
+body id=174 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=6.68 y=20.99 z=-8.18 vx=0.86 vy=-0.27 vz=-0.12
+body id=175 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-3.98 y=12.90 z=12.67 vx=-0.38 vy=-0.13 vz=-0.51
+body id=176 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=11.69 y=14.82 z=-4.55 vx=-0.36 vy=-0.08 vz=0.28
+body id=177 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=4.51 y=10.34 z=-2.12 vx=-0.08 vy=-0.62 vz=-0.79
+body id=178 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-3.57 y=19.95 z=-1.94 vx=0.36 vy=-0.42 vz=0.14
+body id=179 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-3.97 y=18.49 z=-3.18 vx=-0.30 vy=-0.75 vz=-0.04
+body id=180 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-3.92 y=11.72 z=2.89 vx=0.73 vy=-0.71 vz=0.95
+body id=181 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=8.21 y=3.67 z=-4.74 vx=-0.48 vy=-0.70 vz=0.73
+body id=182 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=5.87 y=1.05 z=-7.89 vx=-0.84 vy=-0.82 vz=0.42
+body id=183 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=12.18 y=23.10 z=1.11 vx=-0.79 vy=-0.39 vz=0.03
+body id=184 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=3.29 y=7.65 z=-10.97 vx=-0.16 vy=-0.88 vz=1.00
+body id=185 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=11.42 y=19.27 z=-11.99 vx=0.18 vy=-0.26 vz=-0.22
+body id=186 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-10.17 y=23.31 z=1.73 vx=-0.95 vy=-0.23 vz=-0.43
+body id=187 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=11.82 y=13.81 z=9.37 vx=-0.12 vy=-0.07 vz=-0.17
+body id=188 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-9.81 y=15.71 z=13.58 vx=-0.67 vy=-0.60 vz=-0.90
+body id=189 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-1.31 y=14.21 z=9.00 vx=-0.12 vy=-0.36 vz=0.57
+body id=190 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-5.95 y=18.96 z=8.30 vx=-0.14 vy=-0.73 vz=0.48
+body id=191 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=0.67 y=4.47 z=-5.00 vx=0.53 vy=-0.31 vz=-0.94
+body id=192 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-11.11 y=11.73 z=-11.84 vx=-0.22 vy=-0.93 vz=0.99
+body id=193 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-3.72 y=16.41 z=-6.26 vx=-0.56 vy=-0.66 vz=-0.81
+body id=194 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=1.09 y=3.56 z=1.22 vx=0.38 vy=-0.54 vz=-0.30
+body id=195 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=7.95 y=4.17 z=-9.81 vx=0.10 vy=-0.32 vz=-0.22
+body id=196 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=2.46 y=11.83 z=-8.65 vx=0.52 vy=-0.06 vz=-0.05
+body id=197 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=11.47 y=14.69 z=3.45 vx=-0.43 vy=-0.02 vz=0.07
+body id=198 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=13.69 y=8.94 z=12.19 vx=0.44 vy=-0.53 vz=0.84
+body id=199 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=11.68 y=4.49 z=-1.28 vx=0.78 vy=-0.05 vz=0.43
+body id=200 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-8.18 y=3.84 z=13.09 vx=0.64 vy=-0.93 vz=-0.37
+body id=201 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-5.64 y=23.34 z=5.66 vx=0.67 vy=-0.07 vz=-0.42
+body id=202 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-1.82 y=21.15 z=4.32 vx=0.87 vy=-0.99 vz=0.97
+body id=203 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-8.34 y=15.40 z=-5.08 vx=-0.49 vy=-0.02 vz=0.68
+body id=204 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=5.12 y=13.43 z=3.24 vx=-0.91 vy=-0.16 vz=0.15
+body id=205 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-0.22 y=16.76 z=5.32 vx=-0.88 vy=-0.35 vz=0.75
+body id=206 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-8.35 y=22.57 z=1.54 vx=0.05 vy=-0.20 vz=0.07
+body id=207 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=7.37 y=15.64 z=10.83 vx=0.57 vy=-0.57 vz=0.87
+body id=208 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-12.54 y=14.76 z=-0.77 vx=0.74 vy=-0.53 vz=-0.76
+body id=209 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=11.63 y=20.83 z=12.81 vx=-0.47 vy=-0.76 vz=-0.55
+body id=210 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-8.19 y=23.68 z=-1.12 vx=0.37 vy=-0.88 vz=0.48
+body id=211 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=0.77 y=9.08 z=-2.97 vx=0.61 vy=-0.36 vz=0.63
+body id=212 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=5.63 y=7.94 z=-5.38 vx=-0.14 vy=-0.58 vz=-0.13
+body id=213 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-1.89 y=3.06 z=-3.47 vx=-0.26 vy=-0.78 vz=0.09
+body id=214 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=2.71 y=18.66 z=12.81 vx=-0.48 vy=-0.68 vz=0.43
+body id=215 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=6.48 y=19.57 z=9.89 vx=-0.34 vy=-0.91 vz=-0.61
+body id=216 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-6.50 y=2.82 z=-9.08 vx=0.44 vy=-0.77 vz=-0.38
+body id=217 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-2.62 y=20.36 z=-12.80 vx=-0.45 vy=-0.04 vz=0.77
+body id=218 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-5.88 y=3.11 z=-12.70 vx=0.67 vy=-0.22 vz=-0.33
+body id=219 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=8.66 y=18.50 z=10.89 vx=0.02 vy=-0.26 vz=-0.16
+body id=220 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-10.65 y=16.77 z=-10.66 vx=-0.89 vy=-0.13 vz=-0.51
+body id=221 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-4.88 y=14.27 z=-5.11 vx=-0.55 vy=-0.39 vz=-0.46
+body id=222 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=5.03 y=21.94 z=1.84 vx=-0.45 vy=-0.52 vz=-0.08
+body id=223 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=0.50 y=17.51 z=6.77 vx=0.53 vy=-0.87 vz=0.61
+body id=224 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-2.87 y=5.13 z=12.97 vx=0.24 vy=-0.60 vz=0.12
+body id=225 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-13.79 y=13.86 z=-12.05 vx=0.77 vy=-0.02 vz=-0.91
+body id=226 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-5.22 y=4.01 z=-13.41 vx=-0.90 vy=-0.98 vz=0.89
+body id=227 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-1.58 y=2.17 z=7.06 vx=0.19 vy=-0.51 vz=0.94
+body id=228 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-12.91 y=11.42 z=-8.42 vx=-0.38 vy=-0.01 vz=-0.05
+body id=229 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=5.43 y=16.97 z=-11.30 vx=-0.16 vy=-0.29 vz=0.71
+body id=230 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=11.15 y=8.03 z=-7.33 vx=-0.83 vy=-0.99 vz=-0.94
+body id=231 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=0.33 y=22.79 z=-12.61 vx=-0.39 vy=-0.37 vz=-0.99
+body id=232 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-13.80 y=4.83 z=-8.49 vx=-0.11 vy=-0.91 vz=-0.14
+body id=233 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-11.24 y=21.89 z=-9.01 vx=0.18 vy=-0.09 vz=-0.84
+body id=234 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=13.95 y=10.63 z=-12.82 vx=0.41 vy=-0.22 vz=0.55
+body id=235 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=10.14 y=11.33 z=-13.43 vx=-0.32 vy=-0.50 vz=0.44
+body id=236 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=2.37 y=15.24 z=-8.29 vx=0.70 vy=-0.93 vz=0.75
+body id=237 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-8.67 y=12.30 z=9.51 vx=0.98 vy=-0.32 vz=-0.80
+body id=238 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-2.25 y=9.46 z=10.48 vx=-0.73 vy=-0.42 vz=0.75
+body id=239 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=2.77 y=22.04 z=13.58 vx=0.85 vy=-0.33 vz=-0.06
+body id=240 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-4.46 y=6.98 z=11.31 vx=-0.89 vy=-0.60 vz=0.93
+body id=241 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=8.84 y=3.22 z=-0.05 vx=0.57 vy=-0.48 vz=0.97
+body id=242 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=8.78 y=14.38 z=-8.51 vx=0.10 vy=-0.91 vz=-0.47
+body id=243 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-1.25 y=23.65 z=5.14 vx=0.36 vy=-0.84 vz=-0.47
+body id=244 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=8.80 y=18.23 z=-2.61 vx=0.62 vy=-0.48 vz=-0.66
+body id=245 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-13.30 y=16.16 z=3.13 vx=0.96 vy=-0.99 vz=0.46
+body id=246 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=6.02 y=4.08 z=6.19 vx=-0.69 vy=-0.85 vz=0.49
+body id=247 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-10.19 y=4.75 z=-7.74 vx=-0.07 vy=-0.02 vz=0.57
+body id=248 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=5.12 y=14.66 z=5.58 vx=-0.91 vy=-0.94 vz=1.00
+body id=249 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-10.64 y=23.67 z=2.46 vx=0.11 vy=-0.99 vz=-0.76
+body id=250 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-10.63 y=21.93 z=-12.47 vx=-0.79 vy=-0.77 vz=0.25
+body id=251 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-4.40 y=5.09 z=2.56 vx=0.78 vy=-0.56 vz=0.89
+body id=252 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=13.65 y=11.82 z=12.35 vx=0.61 vy=-0.08 vz=-0.21
+body id=253 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-13.08 y=12.76 z=-11.33 vx=0.71 vy=-0.60 vz=-0.78
+body id=254 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-11.37 y=13.16 z=-4.33 vx=-0.88 vy=-0.96 vz=-0.67
+body id=255 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-8.03 y=10.31 z=7.33 vx=0.16 vy=-0.40 vz=-0.33
+body id=256 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-6.72 y=3.91 z=-5.72 vx=-0.21 vy=-0.68 vz=-0.36
+body id=257 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-12.16 y=20.99 z=6.89 vx=-0.76 vy=-0.27 vz=0.96
+body id=258 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-12.52 y=5.45 z=10.68 vx=-0.03 vy=-0.93 vz=0.44
+body id=259 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=10.53 y=11.91 z=12.86 vx=-0.75 vy=-0.24 vz=0.72
+body id=260 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-7.66 y=15.49 z=-11.96 vx=-0.32 vy=-0.63 vz=0.19
+body id=261 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=1.57 y=10.35 z=1.27 vx=0.54 vy=-0.68 vz=-0.56
+body id=262 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-3.17 y=1.96 z=11.71 vx=0.87 vy=-0.86 vz=-0.30
+body id=263 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-9.62 y=9.15 z=-9.57 vx=-0.26 vy=-0.28 vz=-0.83
+body id=264 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=0.89 y=4.16 z=4.25 vx=0.64 vy=-0.19 vz=0.97
+body id=265 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-5.91 y=14.05 z=10.11 vx=-0.73 vy=-0.79 vz=0.02
+body id=266 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=6.65 y=2.51 z=-7.64 vx=0.60 vy=-0.27 vz=0.81
+body id=267 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-10.34 y=5.02 z=-7.95 vx=0.62 vy=-0.48 vz=0.33
+body id=268 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-3.43 y=12.25 z=11.19 vx=0.58 vy=-0.54 vz=-0.21
+body id=269 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-5.90 y=1.27 z=-5.46 vx=-0.66 vy=-0.16 vz=0.04
+body id=270 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-4.90 y=16.62 z=-6.83 vx=0.51 vy=-0.57 vz=0.67
+body id=271 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-12.03 y=17.22 z=3.20 vx=0.80 vy=-0.37 vz=-0.02
+body id=272 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-6.86 y=15.55 z=-2.69 vx=-0.92 vy=-0.17 vz=0.84
+body id=273 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-0.92 y=6.15 z=-7.63 vx=0.45 vy=-0.34 vz=-0.32
+body id=274 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-6.03 y=10.06 z=12.56 vx=-0.98 vy=-0.59 vz=-0.32
+body id=275 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-6.58 y=6.06 z=-8.31 vx=-0.07 vy=-0.21 vz=0.35
+body id=276 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-9.33 y=13.51 z=-0.44 vx=-0.78 vy=-0.38 vz=0.84
+body id=277 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-2.76 y=6.86 z=-2.81 vx=0.20 vy=-0.19 vz=-0.91
+body id=278 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-7.17 y=5.11 z=-5.23 vx=0.08 vy=-0.18 vz=0.84
+body id=279 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=9.14 y=9.95 z=4.98 vx=-0.99 vy=-0.66 vz=0.01
+body id=280 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=12.41 y=9.14 z=-2.55 vx=-0.40 vy=-0.94 vz=0.12
+body id=281 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-9.10 y=16.21 z=10.91 vx=0.15 vy=-0.83 vz=-0.64
+body id=282 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=2.26 y=13.25 z=-1.64 vx=0.15 vy=-0.75 vz=0.82
+body id=283 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=6.10 y=12.45 z=-10.85 vx=-0.95 vy=-0.43 vz=0.20
+body id=284 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-0.01 y=16.39 z=-13.18 vx=0.51 vy=-0.19 vz=-0.67
+body id=285 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-13.65 y=12.34 z=12.38 vx=0.26 vy=-0.20 vz=0.92
+body id=286 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-9.95 y=15.21 z=-6.69 vx=-0.63 vy=-0.50 vz=-0.71
+body id=287 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=5.65 y=17.89 z=8.71 vx=-0.45 vy=-0.73 vz=-0.87
+body id=288 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-0.92 y=11.10 z=-2.10 vx=0.61 vy=-0.73 vz=-0.67
+body id=289 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-8.18 y=10.93 z=-0.71 vx=-0.12 vy=-0.40 vz=-0.83
+body id=290 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-11.43 y=9.56 z=12.73 vx=0.72 vy=-0.24 vz=-0.42
+body id=291 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-1.62 y=19.17 z=13.39 vx=-0.21 vy=-0.87 vz=-0.30
+body id=292 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-9.18 y=13.23 z=2.57 vx=-0.93 vy=-0.79 vz=-0.66
+body id=293 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-10.44 y=10.94 z=-2.91 vx=-0.17 vy=-0.41 vz=0.95
+body id=294 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-9.34 y=20.21 z=-7.84 vx=-0.62 vy=-0.23 vz=-0.66
+body id=295 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=1.83 y=18.10 z=-0.31 vx=-0.26 vy=-0.97 vz=0.92
+body id=296 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-10.44 y=18.23 z=3.36 vx=-0.70 vy=-0.82 vz=-0.02
+body id=297 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-9.21 y=9.86 z=-5.01 vx=0.14 vy=-0.81 vz=-0.80
+body id=298 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=5.53 y=5.99 z=-4.86 vx=-0.14 vy=-0.20 vz=0.42
+body id=299 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=11.04 y=6.95 z=-13.89 vx=0.72 vy=-0.92 vz=-0.25
+body id=300 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=12.62 y=7.60 z=-13.08 vx=0.81 vy=-0.57 vz=-0.28
+body id=301 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=3.75 y=7.54 z=6.70 vx=0.84 vy=-0.97 vz=0.26
+body id=302 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=5.94 y=8.44 z=11.34 vx=0.09 vy=-0.03 vz=-0.78
+body id=303 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=8.46 y=2.47 z=7.90 vx=-0.14 vy=-0.74 vz=0.37
+body id=304 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=1.52 y=20.16 z=11.09 vx=0.02 vy=-0.10 vz=0.22
+body id=305 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=9.21 y=18.90 z=12.03 vx=-0.16 vy=-0.08 vz=-0.97
+body id=306 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-12.26 y=14.24 z=12.86 vx=0.66 vy=-0.29 vz=0.89
+body id=307 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=12.29 y=8.10 z=-12.19 vx=-0.80 vy=-0.65 vz=-0.02
+body id=308 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=6.79 y=6.69 z=3.70 vx=-0.73 vy=-0.93 vz=0.34
+body id=309 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-4.17 y=14.15 z=6.89 vx=0.71 vy=-0.39 vz=0.67
+body id=310 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=12.53 y=20.36 z=1.40 vx=0.01 vy=-0.17 vz=0.48
+body id=311 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-6.06 y=14.89 z=-7.01 vx=-0.85 vy=-0.70 vz=-0.56
+body id=312 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=3.53 y=5.96 z=-3.29 vx=0.13 vy=-0.56 vz=-0.36
+body id=313 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=13.85 y=10.60 z=-4.86 vx=0.89 vy=-0.86 vz=-0.08
+body id=314 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-6.57 y=17.53 z=-13.68 vx=0.16 vy=-0.02 vz=0.00
+body id=315 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=6.52 y=9.49 z=0.61 vx=-0.29 vy=-0.56 vz=0.62
+body id=316 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-10.14 y=8.54 z=0.93 vx=-0.35 vy=-0.23 vz=-0.85
+body id=317 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=0.58 y=23.44 z=5.74 vx=-0.48 vy=-0.36 vz=-0.20
+body id=318 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-7.94 y=12.38 z=-3.87 vx=-0.18 vy=-0.30 vz=-0.68
+body id=319 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=4.16 y=15.84 z=1.14 vx=-0.76 vy=-0.69 vz=-0.58
+body id=320 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-11.91 y=15.08 z=11.51 vx=0.85 vy=-0.78 vz=-0.94
+body id=321 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-6.33 y=11.38 z=-3.20 vx=0.35 vy=-0.22 vz=0.04
+body id=322 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-2.68 y=14.04 z=1.05 vx=-0.38 vy=-0.20 vz=0.39
+body id=323 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-11.90 y=10.91 z=-12.11 vx=0.65 vy=-0.35 vz=0.30
+body id=324 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-12.72 y=21.98 z=-2.07 vx=0.27 vy=-0.58 vz=-0.54
+body id=325 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=13.30 y=5.33 z=2.33 vx=0.71 vy=-0.64 vz=-0.45
+body id=326 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-2.71 y=18.47 z=0.31 vx=0.46 vy=-0.07 vz=-0.30
+body id=327 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-1.73 y=3.60 z=-0.11 vx=0.92 vy=-0.72 vz=-0.22
+body id=328 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-5.71 y=4.92 z=-9.89 vx=0.96 vy=-0.06 vz=-0.63
+body id=329 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=9.39 y=13.60 z=-10.41 vx=0.97 vy=-0.18 vz=-0.96
+body id=330 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-9.60 y=9.45 z=3.51 vx=0.53 vy=-0.20 vz=-0.11
+body id=331 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-12.22 y=12.19 z=0.47 vx=-0.01 vy=-0.75 vz=0.15
+body id=332 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=12.94 y=18.79 z=-10.64 vx=0.19 vy=-0.46 vz=0.80
+body id=333 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-4.34 y=12.28 z=-2.48 vx=-0.98 vy=-0.63 vz=0.93
+body id=334 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-5.84 y=13.17 z=11.53 vx=0.45 vy=-0.34 vz=0.36
+body id=335 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=5.74 y=17.10 z=-2.49 vx=-0.88 vy=-0.45 vz=-0.01
+body id=336 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-4.51 y=2.60 z=10.99 vx=-0.48 vy=-0.70 vz=0.04
+body id=337 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-12.11 y=11.41 z=0.58 vx=0.86 vy=-0.59 vz=-0.44
+body id=338 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=8.98 y=4.19 z=-12.00 vx=-0.83 vy=-0.83 vz=-0.72
+body id=339 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-12.47 y=18.64 z=-1.22 vx=-0.94 vy=-0.47 vz=-0.05
+body id=340 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-0.23 y=12.65 z=13.90 vx=-0.32 vy=-0.70 vz=-0.05
+body id=341 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-11.55 y=3.56 z=12.32 vx=-0.23 vy=-0.11 vz=-0.64
+body id=342 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=3.12 y=18.01 z=13.97 vx=-0.62 vy=-0.55 vz=0.91
+body id=343 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=10.42 y=7.45 z=7.49 vx=0.97 vy=-0.73 vz=-0.36
+body id=344 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-10.66 y=8.46 z=-8.17 vx=0.27 vy=-0.55 vz=-0.19
+body id=345 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-0.54 y=19.43 z=5.51 vx=-0.39 vy=-0.92 vz=0.94
+body id=346 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-8.53 y=6.15 z=-9.37 vx=0.51 vy=-0.63 vz=0.97
+body id=347 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=12.36 y=21.63 z=10.91 vx=-0.02 vy=-0.89 vz=-0.65
+body id=348 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-1.47 y=6.79 z=10.21 vx=-0.97 vy=-0.78 vz=-0.92
+body id=349 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=7.82 y=7.41 z=0.56 vx=-0.38 vy=-0.07 vz=0.65
+body id=350 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=9.24 y=23.00 z=9.23 vx=-0.61 vy=-0.42 vz=0.76
+body id=351 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=0.33 y=18.56 z=11.73 vx=-0.80 vy=-0.71 vz=0.23
+body id=352 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-4.65 y=11.92 z=10.41 vx=0.82 vy=-0.93 vz=0.56
+body id=353 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=12.39 y=9.79 z=-9.26 vx=0.30 vy=-0.93 vz=-0.73
+body id=354 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=5.41 y=4.44 z=8.58 vx=0.42 vy=-0.36 vz=-0.21
+body id=355 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=10.91 y=2.80 z=4.99 vx=0.58 vy=-0.29 vz=-0.64
+body id=356 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=11.33 y=15.35 z=13.98 vx=0.08 vy=-0.64 vz=0.86
+body id=357 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=3.14 y=2.36 z=-0.77 vx=-0.85 vy=-0.00 vz=-0.28
+body id=358 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=1.10 y=18.82 z=-4.09 vx=0.16 vy=-0.57 vz=-0.35
+body id=359 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-11.39 y=19.82 z=0.31 vx=-0.90 vy=-0.02 vz=0.26
+body id=360 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-1.31 y=8.18 z=-3.22 vx=0.74 vy=-0.04 vz=-0.10
+body id=361 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-9.00 y=4.90 z=9.73 vx=0.04 vy=-0.48 vz=-0.54
+body id=362 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=12.19 y=4.91 z=-2.80 vx=-0.31 vy=-0.39 vz=-0.93
+body id=363 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=2.47 y=4.94 z=-7.40 vx=0.61 vy=-0.79 vz=0.59
+body id=364 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-4.47 y=19.63 z=6.10 vx=-0.99 vy=-0.58 vz=0.82
+body id=365 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-10.44 y=19.63 z=-3.65 vx=-0.53 vy=-0.67 vz=0.12
+body id=366 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-7.33 y=7.06 z=-0.05 vx=-0.38 vy=-0.65 vz=0.20
+body id=367 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=11.23 y=8.35 z=12.20 vx=0.46 vy=-0.64 vz=0.27
+body id=368 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=6.60 y=20.65 z=2.71 vx=0.89 vy=-0.46 vz=-0.07
+body id=369 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=7.24 y=5.46 z=-2.61 vx=0.26 vy=-0.31 vz=-0.11
+body id=370 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-13.69 y=6.67 z=-3.80 vx=0.72 vy=-0.59 vz=-0.99
+body id=371 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-0.17 y=18.52 z=-12.53 vx=0.47 vy=-0.89 vz=0.36
+body id=372 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=4.08 y=6.01 z=6.97 vx=0.32 vy=-0.59 vz=-0.71
+body id=373 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-7.32 y=19.55 z=8.66 vx=0.42 vy=-0.20 vz=-0.05
+body id=374 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=5.35 y=11.45 z=6.37 vx=-0.06 vy=-0.97 vz=-0.98
+body id=375 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-12.66 y=9.83 z=-9.61 vx=-0.07 vy=-0.87 vz=-0.45
+body id=376 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-6.22 y=4.66 z=-5.74 vx=-0.55 vy=-0.36 vz=0.55
+body id=377 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-6.53 y=3.75 z=-5.88 vx=0.38 vy=-0.51 vz=-0.19
+body id=378 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-6.28 y=16.64 z=-9.29 vx=0.90 vy=-0.90 vz=-0.36
+body id=379 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=11.05 y=10.11 z=4.09 vx=-0.03 vy=-0.55 vz=0.59
+body id=380 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=4.51 y=19.52 z=12.83 vx=-0.96 vy=-0.44 vz=0.83
+body id=381 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-11.54 y=22.51 z=6.74 vx=0.08 vy=-0.42 vz=-0.61
+body id=382 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-7.86 y=4.63 z=2.69 vx=-0.94 vy=-0.06 vz=-0.05
+body id=383 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=2.88 y=6.15 z=-11.59 vx=-0.31 vy=-0.97 vz=0.96
+body id=384 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-3.11 y=3.74 z=2.68 vx=0.76 vy=-0.03 vz=-0.39
+body id=385 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-6.49 y=11.33 z=-1.31 vx=0.02 vy=-0.50 vz=0.01
+body id=386 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=4.64 y=22.24 z=-0.95 vx=-0.09 vy=-0.57 vz=-0.88
+body id=387 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=11.43 y=21.29 z=-8.65 vx=-0.37 vy=-0.29 vz=-0.16
+body id=388 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=5.68 y=1.99 z=-1.80 vx=0.10 vy=-0.06 vz=-0.33
+body id=389 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=6.87 y=7.39 z=-4.78 vx=-0.44 vy=-0.52 vz=-0.62
+body id=390 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=3.72 y=11.55 z=7.36 vx=0.52 vy=-0.58 vz=0.34
+body id=391 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=5.20 y=5.35 z=12.93 vx=0.56 vy=-0.74 vz=-0.81
+body id=392 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=12.00 y=3.77 z=0.17 vx=0.65 vy=-0.79 vz=-0.05
+body id=393 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-8.85 y=2.20 z=-5.30 vx=0.33 vy=-0.10 vz=-0.38
+body id=394 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-10.86 y=5.99 z=-11.11 vx=0.33 vy=-0.52 vz=-0.07
+body id=395 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=5.81 y=7.61 z=5.45 vx=0.32 vy=-0.01 vz=0.29
+body id=396 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-11.64 y=6.31 z=7.18 vx=-0.30 vy=-0.20 vz=0.77
+body id=397 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=12.57 y=16.76 z=-3.53 vx=0.26 vy=-0.27 vz=0.36
+body id=398 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-4.89 y=11.11 z=7.07 vx=-0.74 vy=-0.58 vz=-0.92
+body id=399 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=12.46 y=4.21 z=4.39 vx=-0.65 vy=-0.61 vz=-0.63
+body id=400 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=2.71 y=5.79 z=-1.49 vx=-0.15 vy=-0.10 vz=0.22
+body id=401 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-11.97 y=9.69 z=4.39 vx=0.53 vy=-0.93 vz=-0.46
+body id=402 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=1.89 y=3.29 z=0.34 vx=-0.44 vy=-0.07 vz=0.24
+body id=403 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=2.72 y=19.63 z=12.15 vx=-0.06 vy=-0.31 vz=0.83
+body id=404 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-0.89 y=15.05 z=10.72 vx=-0.73 vy=-0.64 vz=0.28
+body id=405 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-13.71 y=6.83 z=-10.81 vx=0.56 vy=-0.69 vz=0.70
+body id=406 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=12.10 y=1.69 z=8.66 vx=-0.68 vy=-0.21 vz=0.21
+body id=407 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=12.38 y=23.30 z=-5.50 vx=0.20 vy=-0.11 vz=0.98
+body id=408 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=10.24 y=7.84 z=12.78 vx=-0.30 vy=-0.90 vz=-0.15
+body id=409 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-0.62 y=22.58 z=0.98 vx=-0.15 vy=-0.78 vz=-0.78
+body id=410 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=2.64 y=2.07 z=-0.81 vx=0.06 vy=-0.11 vz=0.95
+body id=411 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=9.01 y=17.67 z=-0.54 vx=-0.91 vy=-0.04 vz=0.20
+body id=412 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=2.10 y=16.94 z=2.55 vx=-0.21 vy=-0.04 vz=-0.73
+body id=413 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-3.10 y=5.15 z=1.87 vx=-0.77 vy=-0.55 vz=0.29
+body id=414 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-1.34 y=21.48 z=6.40 vx=-0.41 vy=-0.26 vz=0.15
+body id=415 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=9.61 y=13.58 z=6.84 vx=0.61 vy=-0.09 vz=-0.48
+body id=416 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-4.97 y=4.06 z=13.50 vx=-0.31 vy=-0.97 vz=-0.49
+body id=417 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-7.50 y=8.53 z=11.56 vx=0.15 vy=-0.58 vz=-0.91
+body id=418 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-8.50 y=5.78 z=-11.51 vx=-0.11 vy=-0.21 vz=-0.19
+body id=419 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=1.25 y=14.79 z=8.01 vx=-0.23 vy=-0.07 vz=-0.80
+body id=420 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=5.78 y=11.02 z=-9.04 vx=0.83 vy=-0.74 vz=-0.77
+body id=421 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-7.40 y=8.48 z=-8.80 vx=-0.04 vy=-0.55 vz=-0.60
+body id=422 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-13.08 y=2.01 z=10.29 vx=0.22 vy=-0.18 vz=0.96
+body id=423 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=6.46 y=22.20 z=-3.59 vx=-0.39 vy=-0.47 vz=0.09
+body id=424 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-12.99 y=2.70 z=0.13 vx=-0.91 vy=-0.03 vz=-0.73
+body id=425 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=3.13 y=17.65 z=-12.32 vx=-0.25 vy=-0.73 vz=0.86
+body id=426 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=10.50 y=12.48 z=-10.46 vx=-0.53 vy=-0.22 vz=-0.68
+body id=427 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=9.38 y=13.27 z=-0.31 vx=0.29 vy=-0.21 vz=-0.93
+body id=428 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-6.51 y=20.70 z=-7.04 vx=0.87 vy=-0.93 vz=-0.77
+body id=429 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=1.49 y=7.04 z=7.37 vx=0.74 vy=-0.81 vz=-0.20
+body id=430 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=9.95 y=1.73 z=-11.45 vx=-0.68 vy=-0.82 vz=0.25
+body id=431 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=5.46 y=9.82 z=-2.01 vx=-0.71 vy=-0.99 vz=-0.35
+body id=432 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-4.61 y=13.98 z=7.63 vx=-0.53 vy=-0.85 vz=-0.74
+body id=433 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=13.57 y=1.49 z=4.83 vx=0.57 vy=-0.91 vz=-0.18
+body id=434 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-1.51 y=2.47 z=12.86 vx=-0.15 vy=-0.30 vz=-0.50
+body id=435 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-11.50 y=16.30 z=1.47 vx=-0.76 vy=-0.28 vz=0.41
+body id=436 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=4.45 y=20.54 z=-9.15 vx=-0.59 vy=-0.21 vz=-0.32
+body id=437 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=4.02 y=12.66 z=1.12 vx=0.29 vy=-0.53 vz=-0.25
+body id=438 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=8.14 y=19.98 z=-8.30 vx=0.16 vy=-0.46 vz=-0.78
+body id=439 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=13.03 y=4.90 z=-5.76 vx=0.22 vy=-0.00 vz=-0.40
+body id=440 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=13.75 y=21.16 z=-7.09 vx=0.58 vy=-0.68 vz=-0.05
+body id=441 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-0.78 y=3.39 z=12.40 vx=0.10 vy=-0.18 vz=0.79
+body id=442 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=8.03 y=11.36 z=7.11 vx=0.51 vy=-0.41 vz=0.73
+body id=443 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-10.59 y=15.06 z=5.62 vx=-0.61 vy=-0.40 vz=-0.32
+body id=444 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-9.99 y=3.72 z=4.32 vx=0.54 vy=-0.22 vz=-0.18
+body id=445 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-0.38 y=4.22 z=3.75 vx=-0.47 vy=-0.89 vz=-0.36
+body id=446 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-2.54 y=5.22 z=10.46 vx=0.72 vy=-0.89 vz=0.70
+body id=447 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=4.99 y=22.99 z=6.32 vx=0.78 vy=-0.12 vz=0.10
+body id=448 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-6.06 y=9.01 z=3.52 vx=0.39 vy=-0.74 vz=-0.86
+body id=449 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-4.75 y=2.24 z=7.74 vx=-0.45 vy=-0.97 vz=0.07
+body id=450 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=6.93 y=14.61 z=12.99 vx=-0.40 vy=-0.36 vz=0.18
+body id=451 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=12.18 y=2.48 z=3.71 vx=-0.80 vy=-1.00 vz=-0.95
+body id=452 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=8.97 y=12.01 z=-6.66 vx=0.60 vy=-0.34 vz=-0.93
+body id=453 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=10.30 y=20.51 z=7.46 vx=-0.43 vy=-0.28 vz=-0.87
+body id=454 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=0.66 y=8.92 z=10.68 vx=-0.32 vy=-0.25 vz=-0.87
+body id=455 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-11.09 y=14.46 z=-3.11 vx=-0.71 vy=-0.96 vz=0.28
+body id=456 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-2.81 y=7.30 z=-13.94 vx=-0.60 vy=-0.97 vz=-0.08
+body id=457 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-6.00 y=9.37 z=-5.62 vx=-0.05 vy=-0.55 vz=-0.33
+body id=458 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-7.53 y=8.58 z=-9.92 vx=0.36 vy=-0.29 vz=-0.88
+body id=459 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=13.85 y=1.45 z=9.97 vx=-0.35 vy=-0.77 vz=-0.00
+body id=460 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-13.67 y=16.86 z=-13.66 vx=0.96 vy=-0.89 vz=0.38
+body id=461 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-0.08 y=20.89 z=10.81 vx=-0.97 vy=-0.55 vz=0.80
+body id=462 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-10.53 y=11.77 z=-10.32 vx=0.47 vy=-0.17 vz=0.62
+body id=463 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-6.06 y=21.09 z=-12.43 vx=-0.25 vy=-0.43 vz=-0.51
+body id=464 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-11.53 y=5.34 z=-8.51 vx=0.94 vy=-0.99 vz=0.29
+body id=465 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-9.66 y=7.16 z=-6.49 vx=0.26 vy=-0.88 vz=-0.15
+body id=466 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-4.76 y=5.75 z=-12.98 vx=-0.24 vy=-0.61 vz=0.93
+body id=467 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-8.01 y=20.08 z=2.88 vx=0.88 vy=-0.62 vz=-0.29
+body id=468 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=5.49 y=10.58 z=4.81 vx=-0.03 vy=-0.42 vz=0.25
+body id=469 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-1.14 y=7.31 z=-5.75 vx=0.84 vy=-0.89 vz=-0.92
+body id=470 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=8.91 y=23.28 z=-10.41 vx=0.67 vy=-0.18 vz=-0.35
+body id=471 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-3.77 y=16.69 z=2.77 vx=-0.94 vy=-0.24 vz=-0.50
+body id=472 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=12.11 y=7.66 z=-6.35 vx=-0.56 vy=-0.85 vz=0.79
+body id=473 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-1.48 y=8.90 z=-0.26 vx=-0.11 vy=-0.05 vz=-0.46
+body id=474 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=8.31 y=9.28 z=-5.66 vx=-0.57 vy=-0.90 vz=0.16
+body id=475 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-6.39 y=17.12 z=-11.89 vx=-0.62 vy=-0.73 vz=0.46
+body id=476 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-0.82 y=3.30 z=-9.73 vx=0.76 vy=-0.35 vz=0.06
+body id=477 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-4.48 y=20.78 z=3.61 vx=0.24 vy=-0.94 vz=0.72
+body id=478 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=10.12 y=7.61 z=-3.72 vx=-0.14 vy=-0.85 vz=-0.18
+body id=479 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=12.74 y=8.75 z=13.02 vx=0.43 vy=-0.87 vz=-0.58
+body id=480 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-3.54 y=10.85 z=11.46 vx=0.52 vy=-0.59 vz=-0.24
+body id=481 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-4.50 y=8.76 z=-9.95 vx=-0.34 vy=-0.91 vz=-0.12
+body id=482 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-7.76 y=15.95 z=-2.06 vx=0.33 vy=-0.35 vz=-0.29
+body id=483 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=0.52 y=8.16 z=-10.22 vx=-0.05 vy=-0.58 vz=-0.34
+body id=484 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=1.24 y=21.09 z=-6.01 vx=-0.73 vy=-0.50 vz=0.58
+body id=485 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-3.84 y=1.97 z=5.22 vx=0.55 vy=-0.75 vz=-0.17
+body id=486 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=10.36 y=1.85 z=12.27 vx=-0.58 vy=-0.12 vz=0.46
+body id=487 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=5.58 y=9.83 z=5.02 vx=-0.53 vy=-0.52 vz=-0.37
+body id=488 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-0.40 y=21.66 z=10.75 vx=-0.66 vy=-0.38 vz=0.09
+body id=489 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-6.50 y=13.17 z=-4.56 vx=-0.66 vy=-0.23 vz=0.60
+body id=490 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=4.88 y=4.15 z=0.87 vx=0.85 vy=-0.40 vz=0.17
+body id=491 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=0.37 y=15.21 z=11.86 vx=-0.64 vy=-0.12 vz=0.25
+body id=492 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-7.99 y=2.21 z=-4.46 vx=0.32 vy=-0.56 vz=0.95
+body id=493 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-13.68 y=4.19 z=-0.40 vx=-0.30 vy=-0.13 vz=-0.83
+body id=494 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-2.48 y=4.71 z=-6.44 vx=-0.47 vy=-0.58 vz=-0.53
+body id=495 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=9.26 y=6.03 z=8.48 vx=0.68 vy=-0.19 vz=0.23
+body id=496 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=2.27 y=16.51 z=3.44 vx=0.41 vy=-0.62 vz=0.95
+body id=497 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=7.60 y=10.64 z=11.85 vx=-0.94 vy=-0.68 vz=-0.44
+body id=498 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=2.55 y=20.70 z=0.06 vx=-0.47 vy=-0.86 vz=-0.56
+body id=499 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=6.56 y=9.93 z=-2.45 vx=0.62 vy=-0.67 vz=0.14
+body id=500 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=6.29 y=22.08 z=6.40 vx=0.44 vy=-0.23 vz=0.86
+body id=501 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=11.49 y=18.62 z=-8.26 vx=-0.52 vy=-0.01 vz=0.13
+body id=502 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-7.05 y=19.33 z=-2.67 vx=-0.20 vy=-0.26 vz=0.41
+body id=503 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=1.23 y=2.11 z=-2.11 vx=-0.76 vy=-0.76 vz=0.88
+body id=504 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=1.85 y=8.16 z=-3.95 vx=-0.22 vy=-0.29 vz=-0.76
+body id=505 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=0.22 y=17.78 z=-10.15 vx=0.87 vy=-0.34 vz=-0.85
+body id=506 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-0.61 y=18.85 z=-11.07 vx=-0.97 vy=-0.31 vz=0.80
+body id=507 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-6.41 y=1.62 z=-0.88 vx=0.53 vy=-0.74 vz=0.80
+body id=508 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=2.82 y=1.65 z=1.84 vx=0.79 vy=-0.91 vz=0.12
+body id=509 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-5.33 y=8.47 z=7.15 vx=-0.41 vy=-0.07 vz=0.95
+body id=510 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-3.18 y=12.17 z=11.11 vx=0.95 vy=-0.61 vz=-0.20
+body id=511 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=8.86 y=12.72 z=-7.67 vx=0.04 vy=-0.72 vz=-0.51
+body id=512 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=5.37 y=16.91 z=-6.41 vx=-0.55 vy=-0.99 vz=-0.32
+body id=513 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-5.61 y=15.45 z=-11.62 vx=-0.80 vy=-0.36 vz=-0.44
+body id=514 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-3.66 y=7.30 z=0.88 vx=-0.69 vy=-0.99 vz=-0.67
+body id=515 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-12.90 y=10.68 z=-0.34 vx=0.19 vy=-0.99 vz=0.49
+body id=516 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-10.28 y=3.48 z=9.32 vx=-0.04 vy=-0.14 vz=0.24
+body id=517 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=3.93 y=20.81 z=4.95 vx=0.01 vy=-0.25 vz=-0.90
+body id=518 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=8.54 y=11.91 z=1.58 vx=0.43 vy=-0.58 vz=0.11
+body id=519 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=13.38 y=15.71 z=10.71 vx=0.92 vy=-0.63 vz=-0.14
+body id=520 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=6.74 y=1.61 z=-12.75 vx=-0.07 vy=-0.49 vz=0.23
+body id=521 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=2.80 y=14.47 z=-11.42 vx=-0.96 vy=-0.64 vz=-0.18
+body id=522 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=2.83 y=13.75 z=-2.69 vx=-0.33 vy=-0.45 vz=0.85
+body id=523 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=5.45 y=2.89 z=-4.33 vx=-0.60 vy=-0.75 vz=-0.79
+body id=524 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-10.04 y=13.01 z=-4.84 vx=0.10 vy=-0.16 vz=0.23
+body id=525 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=11.33 y=7.22 z=-2.63 vx=0.24 vy=-0.61 vz=-0.46
+body id=526 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=6.12 y=22.58 z=-10.76 vx=0.90 vy=-0.74 vz=0.90
+body id=527 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=0.33 y=18.07 z=13.51 vx=-0.64 vy=-0.24 vz=0.51
+body id=528 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-3.81 y=23.64 z=-6.43 vx=0.62 vy=-0.04 vz=0.42
+body id=529 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=2.58 y=5.89 z=9.25 vx=-0.01 vy=-0.59 vz=0.00
+body id=530 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-6.56 y=3.62 z=-13.00 vx=0.48 vy=-0.16 vz=-0.00
+body id=531 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-11.67 y=4.37 z=-9.41 vx=0.69 vy=-0.22 vz=0.70
+body id=532 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-9.22 y=23.67 z=3.18 vx=0.04 vy=-0.38 vz=0.64
+body id=533 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=3.90 y=13.20 z=-0.87 vx=-0.53 vy=-0.21 vz=-0.47
+body id=534 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=6.27 y=1.85 z=-0.29 vx=-0.37 vy=-0.73 vz=0.07
+body id=535 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=13.33 y=15.06 z=13.24 vx=0.85 vy=-0.50 vz=0.24
+body id=536 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-9.12 y=19.71 z=-9.97 vx=0.15 vy=-0.88 vz=0.80
+body id=537 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-0.00 y=1.91 z=11.74 vx=-0.90 vy=-0.28 vz=-0.03
+body id=538 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=12.86 y=20.30 z=-0.42 vx=-0.79 vy=-0.58 vz=-0.17
+body id=539 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-8.45 y=7.15 z=3.81 vx=0.10 vy=-1.00 vz=0.84
+body id=540 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-8.12 y=16.54 z=10.59 vx=-0.95 vy=-0.98 vz=-0.36
+body id=541 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-12.16 y=11.38 z=5.71 vx=-0.28 vy=-0.83 vz=0.91
+body id=542 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-5.75 y=5.82 z=-9.26 vx=0.59 vy=-0.55 vz=0.53
+body id=543 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=2.41 y=10.79 z=-0.49 vx=-0.81 vy=-0.51 vz=0.39
+body id=544 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=8.91 y=18.34 z=-6.93 vx=0.55 vy=-0.90 vz=0.40
+body id=545 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=3.09 y=9.62 z=-0.29 vx=-0.88 vy=-0.91 vz=-0.55
+body id=546 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-3.16 y=3.14 z=-6.77 vx=-0.80 vy=-0.23 vz=0.93
+body id=547 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-4.44 y=22.07 z=-6.74 vx=0.38 vy=-0.57 vz=0.47
+body id=548 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-13.18 y=23.08 z=9.49 vx=0.79 vy=-0.26 vz=0.57
+body id=549 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=6.48 y=15.85 z=-8.50 vx=0.85 vy=-0.73 vz=0.76
+body id=550 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-4.92 y=1.07 z=-6.74 vx=0.47 vy=-0.69 vz=-0.35
+body id=551 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-11.36 y=23.17 z=-13.79 vx=0.94 vy=-0.30 vz=0.29
+body id=552 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-10.95 y=14.47 z=-8.05 vx=0.38 vy=-0.23 vz=-0.44
+body id=553 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=7.94 y=8.85 z=9.24 vx=-0.62 vy=-0.30 vz=0.86
+body id=554 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-8.22 y=17.99 z=-9.48 vx=0.89 vy=-0.07 vz=-0.02
+body id=555 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-5.59 y=23.20 z=-3.50 vx=0.67 vy=-0.83 vz=0.00
+body id=556 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-10.08 y=20.88 z=-5.98 vx=0.11 vy=-0.54 vz=0.32
+body id=557 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-13.49 y=21.18 z=7.38 vx=-0.35 vy=-0.77 vz=-0.92
+body id=558 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-8.66 y=14.17 z=7.38 vx=-0.32 vy=-0.32 vz=-0.12
+body id=559 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-12.75 y=13.55 z=-4.01 vx=-0.51 vy=-0.46 vz=-0.53
+body id=560 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=2.31 y=1.63 z=8.54 vx=-0.80 vy=-0.57 vz=0.79
+body id=561 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=13.18 y=8.13 z=6.00 vx=0.87 vy=-0.99 vz=-0.14
+body id=562 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=3.93 y=9.93 z=-2.98 vx=-0.41 vy=-0.48 vz=0.40
+body id=563 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=10.93 y=3.07 z=9.51 vx=-0.47 vy=-0.21 vz=-0.47
+body id=564 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-11.79 y=23.80 z=-3.36 vx=0.84 vy=-0.63 vz=-0.72
+body id=565 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=0.05 y=17.24 z=-8.58 vx=-0.52 vy=-0.21 vz=0.50
+body id=566 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=7.03 y=21.51 z=2.14 vx=-0.76 vy=-0.24 vz=-0.32
+body id=567 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=3.94 y=10.90 z=-9.28 vx=0.77 vy=-0.79 vz=-0.87
+body id=568 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=12.96 y=9.10 z=3.43 vx=-0.39 vy=-0.67 vz=0.15
+body id=569 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=2.82 y=12.15 z=1.09 vx=-0.13 vy=-0.55 vz=-0.59
+body id=570 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-13.71 y=13.67 z=3.13 vx=-0.49 vy=-0.83 vz=0.40
+body id=571 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-5.79 y=6.84 z=-4.64 vx=0.99 vy=-0.52 vz=-0.34
+body id=572 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-13.77 y=21.02 z=-9.70 vx=0.88 vy=-0.01 vz=-0.59
+body id=573 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=6.87 y=3.48 z=-11.18 vx=0.66 vy=-0.84 vz=-0.31
+body id=574 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-12.38 y=18.05 z=10.97 vx=-0.06 vy=-0.48 vz=0.31
+body id=575 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=11.49 y=9.83 z=6.38 vx=0.92 vy=-0.00 vz=0.89
+body id=576 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=6.23 y=13.82 z=-1.31 vx=0.27 vy=-0.25 vz=0.69
+body id=577 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=7.82 y=20.35 z=-0.81 vx=-0.20 vy=-0.10 vz=-0.85
+body id=578 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=10.61 y=4.66 z=-0.05 vx=-0.12 vy=-0.34 vz=0.62
+body id=579 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=2.18 y=3.84 z=-3.45 vx=-0.36 vy=-0.87 vz=-0.30
+body id=580 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-6.22 y=10.05 z=4.99 vx=0.29 vy=-0.56 vz=0.54
+body id=581 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-6.20 y=22.03 z=0.17 vx=-0.76 vy=-0.83 vz=-0.59
+body id=582 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=8.06 y=9.03 z=4.80 vx=-0.85 vy=-0.46 vz=0.86
+body id=583 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-7.50 y=9.62 z=-5.50 vx=-0.15 vy=-0.72 vz=0.96
+body id=584 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-8.32 y=5.01 z=-5.73 vx=-0.56 vy=-0.97 vz=-0.90
+body id=585 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=2.46 y=21.40 z=9.93 vx=0.67 vy=-0.50 vz=0.98
+body id=586 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-4.10 y=12.19 z=4.17 vx=-0.68 vy=-0.07 vz=-0.75
+body id=587 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-12.22 y=23.33 z=-3.14 vx=0.82 vy=-0.51 vz=0.72
+body id=588 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=7.73 y=17.11 z=-5.34 vx=0.52 vy=-0.22 vz=0.49
+body id=589 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=7.97 y=13.13 z=-2.33 vx=-0.38 vy=-0.69 vz=0.56
+body id=590 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=7.31 y=18.51 z=6.84 vx=0.53 vy=-0.21 vz=0.64
+body id=591 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-8.40 y=8.11 z=-8.83 vx=-0.40 vy=-0.48 vz=0.84
+body id=592 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-9.22 y=3.45 z=11.66 vx=0.59 vy=-0.53 vz=-0.05
+body id=593 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-11.24 y=18.28 z=3.90 vx=0.35 vy=-0.70 vz=0.94
+body id=594 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-9.74 y=22.78 z=-13.04 vx=0.78 vy=-0.23 vz=0.56
+body id=595 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=10.02 y=23.29 z=8.22 vx=0.92 vy=-0.47 vz=0.73
+body id=596 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-11.56 y=12.93 z=-10.23 vx=-0.51 vy=-0.07 vz=0.57
+body id=597 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=12.95 y=20.84 z=5.00 vx=0.25 vy=-0.32 vz=0.66
+body id=598 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=7.48 y=7.76 z=-10.79 vx=-0.18 vy=-0.63 vz=-0.34
+body id=599 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=0.11 y=5.02 z=7.86 vx=0.65 vy=-0.78 vz=0.11
+body id=600 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=7.88 y=18.29 z=-0.76 vx=-0.24 vy=-0.33 vz=0.07
+body id=601 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-9.38 y=14.62 z=-4.69 vx=0.04 vy=-0.07 vz=0.38
+body id=602 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=6.17 y=2.50 z=3.33 vx=-0.99 vy=-0.30 vz=-0.55
+body id=603 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-0.27 y=16.40 z=-10.73 vx=-0.07 vy=-0.38 vz=0.32
+body id=604 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-5.49 y=9.49 z=8.84 vx=0.83 vy=-0.78 vz=-0.27
+body id=605 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-6.76 y=9.52 z=10.22 vx=-0.63 vy=-0.24 vz=0.88
+body id=606 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=12.24 y=20.47 z=13.93 vx=-0.12 vy=-0.68 vz=0.22
+body id=607 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=12.02 y=2.27 z=3.16 vx=-0.55 vy=-0.84 vz=-0.32
+body id=608 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-8.43 y=20.53 z=-10.76 vx=0.72 vy=-0.78 vz=0.77
+body id=609 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=4.25 y=12.78 z=-6.53 vx=-0.24 vy=-0.20 vz=-0.67
+body id=610 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=6.36 y=14.11 z=-5.31 vx=0.16 vy=-0.06 vz=0.81
+body id=611 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=5.23 y=12.04 z=10.43 vx=0.12 vy=-0.57 vz=-0.66
+body id=612 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=4.29 y=21.11 z=10.03 vx=-0.71 vy=-0.83 vz=0.46
+body id=613 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-12.99 y=4.54 z=3.27 vx=0.12 vy=-0.92 vz=-0.40
+body id=614 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=0.68 y=2.25 z=-5.79 vx=-0.82 vy=-0.99 vz=0.52
+body id=615 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-0.90 y=12.51 z=2.42 vx=-0.05 vy=-0.41 vz=-0.71
+body id=616 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=10.31 y=2.49 z=-13.32 vx=0.86 vy=-0.14 vz=0.32
+body id=617 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=4.41 y=3.84 z=-4.63 vx=0.09 vy=-0.32 vz=0.63
+body id=618 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-2.57 y=17.40 z=11.37 vx=0.32 vy=-0.13 vz=-0.38
+body id=619 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=4.87 y=2.56 z=0.87 vx=-0.71 vy=-0.87 vz=-0.94
+body id=620 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=5.72 y=10.70 z=6.14 vx=-0.54 vy=-0.71 vz=0.09
+body id=621 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-4.66 y=13.75 z=-13.65 vx=0.15 vy=-0.22 vz=-0.61
+body id=622 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-11.83 y=2.05 z=10.48 vx=-0.56 vy=-0.14 vz=-0.71
+body id=623 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=2.98 y=23.67 z=-10.12 vx=0.25 vy=-0.23 vz=-0.62
+body id=624 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=1.68 y=17.87 z=9.50 vx=-0.12 vy=-0.19 vz=0.59
+body id=625 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-7.80 y=21.34 z=-3.71 vx=-0.28 vy=-0.50 vz=0.71
+body id=626 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-0.73 y=4.42 z=-5.19 vx=0.27 vy=-0.73 vz=-0.83
+body id=627 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-9.82 y=22.39 z=0.21 vx=0.64 vy=-0.18 vz=-0.40
+body id=628 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-12.54 y=11.67 z=11.27 vx=-0.41 vy=-0.19 vz=-0.38
+body id=629 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-4.37 y=7.29 z=0.36 vx=-0.63 vy=-0.50 vz=-0.64
+body id=630 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-3.96 y=1.89 z=-7.50 vx=-0.59 vy=-0.15 vz=0.87
+body id=631 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-6.65 y=16.45 z=-10.09 vx=-0.93 vy=-0.40 vz=0.95
+body id=632 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=7.51 y=15.45 z=10.91 vx=0.41 vy=-0.36 vz=-0.44
+body id=633 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-11.44 y=14.31 z=12.31 vx=-0.86 vy=-0.22 vz=0.94
+body id=634 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-5.16 y=1.30 z=-0.03 vx=-0.85 vy=-0.90 vz=-0.09
+body id=635 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-4.64 y=17.18 z=1.89 vx=0.46 vy=-0.19 vz=-0.48
+body id=636 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=2.01 y=4.78 z=-4.00 vx=0.33 vy=-0.34 vz=-0.19
+body id=637 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=8.12 y=3.72 z=1.20 vx=-0.57 vy=-0.54 vz=0.53
+body id=638 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=0.99 y=14.44 z=13.76 vx=-0.13 vy=-0.45 vz=0.68
+body id=639 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=1.24 y=21.34 z=-10.00 vx=-0.36 vy=-0.30 vz=0.26
+body id=640 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-1.69 y=5.20 z=3.13 vx=-0.31 vy=-0.47 vz=0.67
+body id=641 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=8.40 y=16.62 z=7.62 vx=0.88 vy=-0.56 vz=-0.39
+body id=642 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=6.64 y=7.00 z=4.16 vx=-0.26 vy=-0.51 vz=-0.23
+body id=643 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-6.18 y=17.86 z=-3.38 vx=0.73 vy=-0.82 vz=0.36
+body id=644 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-0.32 y=11.40 z=11.98 vx=-0.31 vy=-0.65 vz=0.14
+body id=645 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=5.12 y=16.99 z=-0.81 vx=-0.65 vy=-0.54 vz=-0.31
+body id=646 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=8.38 y=14.08 z=12.94 vx=-0.71 vy=-0.16 vz=-0.16
+body id=647 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=10.74 y=3.69 z=5.48 vx=0.53 vy=-0.65 vz=0.05
+body id=648 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-0.80 y=19.68 z=11.74 vx=0.01 vy=-0.76 vz=0.42
+body id=649 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-8.70 y=17.26 z=-3.67 vx=0.77 vy=-0.69 vz=-0.75
+body id=650 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=5.89 y=9.21 z=5.18 vx=0.25 vy=-0.95 vz=0.52
+body id=651 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-10.38 y=23.70 z=-0.05 vx=0.81 vy=-0.42 vz=-0.24
+body id=652 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-2.64 y=21.81 z=5.98 vx=-0.41 vy=-0.30 vz=-0.67
+body id=653 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=7.85 y=10.96 z=-1.10 vx=-0.83 vy=-0.55 vz=0.29
+body id=654 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-0.04 y=1.51 z=11.52 vx=0.68 vy=-0.21 vz=0.89
+body id=655 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=9.69 y=14.55 z=8.54 vx=0.44 vy=-0.00 vz=-0.36
+body id=656 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-1.64 y=9.72 z=-1.50 vx=-0.28 vy=-0.17 vz=-0.34
+body id=657 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=3.78 y=1.60 z=-11.67 vx=-0.30 vy=-0.42 vz=-0.25
+body id=658 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=6.65 y=13.83 z=6.31 vx=-0.77 vy=-0.92 vz=0.99
+body id=659 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=5.68 y=11.71 z=2.49 vx=-0.82 vy=-0.66 vz=-0.81
+body id=660 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-10.55 y=1.92 z=9.55 vx=-0.78 vy=-0.47 vz=-0.27
+body id=661 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=6.39 y=10.14 z=-12.67 vx=0.94 vy=-0.57 vz=0.83
+body id=662 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-8.43 y=20.27 z=-5.20 vx=-0.84 vy=-0.81 vz=-0.09
+body id=663 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-9.60 y=5.41 z=10.76 vx=-0.50 vy=-0.67 vz=-0.05
+body id=664 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=0.50 y=23.65 z=-1.39 vx=-0.43 vy=-0.53 vz=-0.97
+body id=665 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=1.46 y=23.24 z=-8.94 vx=-0.75 vy=-0.44 vz=-0.36
+body id=666 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-1.34 y=5.72 z=-0.26 vx=-0.53 vy=-0.85 vz=0.19
+body id=667 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=12.13 y=2.75 z=-6.41 vx=-0.44 vy=-0.05 vz=-0.02
+body id=668 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-3.72 y=12.88 z=11.09 vx=-0.46 vy=-0.50 vz=0.27
+body id=669 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-0.44 y=12.83 z=-4.20 vx=-0.20 vy=-0.20 vz=-0.78
+body id=670 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-12.73 y=2.08 z=-5.33 vx=0.63 vy=-0.54 vz=-0.14
+body id=671 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=4.86 y=17.66 z=-2.20 vx=0.19 vy=-0.88 vz=-0.31
+body id=672 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-0.79 y=8.34 z=6.00 vx=0.98 vy=-0.56 vz=-0.75
+body id=673 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=8.74 y=21.60 z=-8.32 vx=-0.17 vy=-0.28 vz=-0.06
+body id=674 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-4.76 y=11.92 z=4.64 vx=-0.14 vy=-0.83 vz=-0.74
+body id=675 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-5.28 y=4.93 z=-12.21 vx=-0.01 vy=-0.30 vz=-0.57
+body id=676 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=10.41 y=14.81 z=12.68 vx=-0.70 vy=-0.36 vz=-0.24
+body id=677 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-1.25 y=10.98 z=-0.73 vx=-0.11 vy=-0.05 vz=0.28
+body id=678 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=10.57 y=5.96 z=-6.74 vx=-0.66 vy=-0.52 vz=-0.91
+body id=679 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=3.79 y=23.93 z=-10.18 vx=-0.15 vy=-0.73 vz=0.73
+body id=680 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-8.54 y=8.58 z=-0.13 vx=-0.90 vy=-0.80 vz=-0.29
+body id=681 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=0.05 y=12.83 z=11.55 vx=-0.97 vy=-0.99 vz=0.26
+body id=682 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-11.74 y=22.52 z=-9.98 vx=0.91 vy=-0.96 vz=-0.99
+body id=683 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=6.85 y=6.70 z=-13.24 vx=0.12 vy=-0.47 vz=0.03
+body id=684 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-3.14 y=4.11 z=-11.27 vx=-0.27 vy=-0.04 vz=0.89
+body id=685 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=8.59 y=17.54 z=-5.23 vx=-0.66 vy=-0.09 vz=-0.79
+body id=686 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=1.49 y=10.20 z=12.06 vx=-0.45 vy=-0.94 vz=-0.54
+body id=687 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-6.32 y=1.85 z=-11.35 vx=-0.16 vy=-0.53 vz=-0.26
+body id=688 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=8.22 y=16.96 z=1.77 vx=-0.15 vy=-0.50 vz=-0.20
+body id=689 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=6.60 y=3.02 z=-4.87 vx=-0.02 vy=-0.62 vz=-0.54
+body id=690 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=6.28 y=23.72 z=8.09 vx=-0.30 vy=-0.90 vz=0.72
+body id=691 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-3.43 y=21.98 z=3.02 vx=-0.19 vy=-0.24 vz=-0.55
+body id=692 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=3.93 y=23.35 z=12.97 vx=0.81 vy=-0.87 vz=0.14
+body id=693 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-13.67 y=22.71 z=-1.56 vx=0.47 vy=-0.08 vz=0.11
+body id=694 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-6.81 y=2.32 z=-9.27 vx=-0.33 vy=-0.75 vz=0.71
+body id=695 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-1.30 y=16.69 z=-10.56 vx=-0.85 vy=-0.65 vz=-0.11
+body id=696 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=9.15 y=1.17 z=5.34 vx=0.68 vy=-0.65 vz=-0.40
+body id=697 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-8.77 y=4.37 z=0.82 vx=0.41 vy=-0.45 vz=-0.58
+body id=698 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-7.40 y=4.02 z=-12.25 vx=0.54 vy=-0.24 vz=-0.93
+body id=699 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=4.14 y=23.86 z=-6.64 vx=-0.91 vy=-0.91 vz=-0.05
+body id=700 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=13.09 y=14.51 z=-13.38 vx=-0.67 vy=-0.30 vz=0.32
+body id=701 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-6.24 y=1.50 z=3.41 vx=0.87 vy=-0.24 vz=-0.64
+body id=702 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=11.57 y=17.89 z=6.34 vx=0.25 vy=-0.49 vz=-0.07
+body id=703 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=7.48 y=11.55 z=-7.57 vx=-0.88 vy=-0.97 vz=0.50
+body id=704 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-3.04 y=13.58 z=-1.01 vx=0.56 vy=-0.87 vz=0.78
+body id=705 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=3.39 y=2.14 z=2.99 vx=0.93 vy=-0.57 vz=-0.10
+body id=706 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=0.03 y=4.58 z=-4.76 vx=0.50 vy=-0.22 vz=-0.76
+body id=707 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=10.75 y=19.81 z=-8.10 vx=0.29 vy=-0.74 vz=0.77
+body id=708 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=12.34 y=21.03 z=-0.73 vx=0.92 vy=-0.02 vz=-0.64
+body id=709 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=6.86 y=6.42 z=-13.31 vx=-0.00 vy=-0.18 vz=0.98
+body id=710 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-1.91 y=6.80 z=-6.70 vx=-0.65 vy=-0.57 vz=0.88
+body id=711 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=2.81 y=18.06 z=-3.35 vx=0.07 vy=-0.99 vz=0.28
+body id=712 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-12.20 y=15.40 z=12.99 vx=-0.73 vy=-0.26 vz=0.05
+body id=713 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-0.10 y=8.42 z=0.50 vx=0.52 vy=-0.75 vz=0.46
+body id=714 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=0.45 y=23.54 z=6.25 vx=0.24 vy=-0.86 vz=-0.30
+body id=715 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=4.31 y=11.43 z=-1.72 vx=0.15 vy=-0.38 vz=0.60
+body id=716 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=4.83 y=8.88 z=6.45 vx=-0.58 vy=-0.29 vz=0.72
+body id=717 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=4.74 y=16.68 z=4.74 vx=0.46 vy=-0.28 vz=0.26
+body id=718 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=0.40 y=21.95 z=-5.09 vx=0.01 vy=-0.47 vz=-0.77
+body id=719 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-4.75 y=9.39 z=-2.55 vx=-0.28 vy=-0.09 vz=-0.28
+body id=720 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-0.93 y=1.99 z=10.34 vx=0.97 vy=-0.85 vz=0.36
+body id=721 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=12.43 y=17.60 z=13.10 vx=-0.48 vy=-0.06 vz=-0.39
+body id=722 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=7.09 y=7.89 z=2.19 vx=-0.99 vy=-0.66 vz=0.94
+body id=723 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=13.29 y=2.25 z=-8.62 vx=0.45 vy=-0.37 vz=0.32
+body id=724 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=13.12 y=4.60 z=0.34 vx=-0.59 vy=-0.56 vz=0.35
+body id=725 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=5.67 y=11.31 z=-3.60 vx=0.19 vy=-0.37 vz=-0.09
+body id=726 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=5.57 y=3.69 z=-8.02 vx=-0.28 vy=-0.88 vz=-0.92
+body id=727 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=10.96 y=19.93 z=-4.10 vx=-0.23 vy=-0.74 vz=0.27
+body id=728 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-6.95 y=3.41 z=-4.80 vx=0.02 vy=-0.13 vz=0.22
+body id=729 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-5.10 y=13.78 z=7.73 vx=-0.03 vy=-0.66 vz=-0.09
+body id=730 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-9.11 y=19.14 z=10.00 vx=0.38 vy=-0.72 vz=-0.06
+body id=731 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=0.23 y=21.59 z=-10.80 vx=-0.88 vy=-0.22 vz=-0.53
+body id=732 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-10.55 y=7.52 z=4.21 vx=-0.39 vy=-0.19 vz=-0.51
+body id=733 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=5.62 y=10.75 z=4.14 vx=0.81 vy=-0.30 vz=-0.39
+body id=734 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=8.38 y=20.66 z=5.15 vx=-0.84 vy=-0.79 vz=-0.53
+body id=735 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-9.73 y=14.21 z=-0.65 vx=-0.39 vy=-0.51 vz=0.78
+body id=736 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=5.38 y=15.84 z=-6.87 vx=0.77 vy=-0.84 vz=0.45
+body id=737 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-9.54 y=12.91 z=4.66 vx=-0.56 vy=-0.37 vz=0.02
+body id=738 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-2.59 y=9.48 z=7.58 vx=-0.17 vy=-0.56 vz=-0.76
+body id=739 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=4.19 y=10.72 z=6.80 vx=-0.43 vy=-0.22 vz=-0.08
+body id=740 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=6.04 y=5.30 z=8.60 vx=0.29 vy=-0.19 vz=0.49
+body id=741 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=2.33 y=15.94 z=8.49 vx=0.24 vy=-0.05 vz=0.42
+body id=742 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-11.53 y=4.64 z=1.26 vx=0.99 vy=-0.70 vz=0.04
+body id=743 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-12.17 y=16.36 z=0.26 vx=-0.32 vy=-0.61 vz=0.20
+body id=744 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-4.11 y=12.38 z=13.79 vx=0.93 vy=-0.28 vz=0.38
+body id=745 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-13.13 y=17.71 z=9.90 vx=-0.87 vy=-0.50 vz=0.29
+body id=746 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-6.37 y=17.57 z=10.32 vx=0.28 vy=-0.28 vz=-0.37
+body id=747 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-3.65 y=8.81 z=-5.97 vx=-0.23 vy=-0.35 vz=0.98
+body id=748 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=8.74 y=8.55 z=-6.20 vx=0.72 vy=-0.58 vz=-0.74
+body id=749 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-3.73 y=7.76 z=-0.20 vx=-0.67 vy=-0.74 vz=-0.00
+body id=750 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-4.46 y=23.31 z=-7.37 vx=-0.55 vy=-0.47 vz=0.17
+body id=751 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=6.13 y=14.33 z=-1.90 vx=-0.69 vy=-0.92 vz=-0.59
+body id=752 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=3.78 y=23.66 z=-2.05 vx=-0.27 vy=-0.58 vz=0.13
+body id=753 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=0.69 y=18.70 z=7.56 vx=0.58 vy=-0.90 vz=0.08
+body id=754 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=2.02 y=23.17 z=7.15 vx=-0.61 vy=-0.71 vz=0.54
+body id=755 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-2.40 y=23.35 z=-13.60 vx=-0.89 vy=-0.07 vz=-0.87
+body id=756 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=3.71 y=14.05 z=1.35 vx=-0.34 vy=-1.00 vz=0.24
+body id=757 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-3.56 y=4.40 z=2.05 vx=-0.73 vy=-0.61 vz=0.60
+body id=758 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=12.23 y=7.21 z=-12.84 vx=-0.36 vy=-0.74 vz=0.38
+body id=759 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=7.64 y=18.77 z=-7.30 vx=-0.29 vy=-0.45 vz=0.60
+body id=760 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=5.91 y=8.43 z=-10.71 vx=0.61 vy=-0.65 vz=-0.36
+body id=761 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-0.80 y=4.95 z=6.76 vx=0.40 vy=-0.87 vz=-0.22
+body id=762 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-11.34 y=2.31 z=5.15 vx=-0.83 vy=-0.97 vz=0.68
+body id=763 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-0.27 y=11.67 z=11.94 vx=0.88 vy=-0.48 vz=0.05
+body id=764 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-11.15 y=20.54 z=-6.56 vx=-0.03 vy=-0.03 vz=0.72
+body id=765 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-12.88 y=12.01 z=4.74 vx=0.65 vy=-0.29 vz=0.49
+body id=766 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-10.71 y=9.05 z=-2.30 vx=-0.22 vy=-0.65 vz=0.10
+body id=767 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-12.33 y=7.75 z=-7.91 vx=-0.76 vy=-0.70 vz=0.32
+body id=768 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-11.81 y=6.01 z=6.31 vx=-0.45 vy=-0.53 vz=0.56
+body id=769 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-8.14 y=4.54 z=1.81 vx=0.83 vy=-0.49 vz=0.27
+body id=770 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=12.47 y=4.28 z=12.80 vx=0.25 vy=-0.68 vz=0.69
+body id=771 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-9.25 y=4.05 z=4.94 vx=-0.89 vy=-0.19 vz=0.28
+body id=772 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=3.80 y=14.10 z=6.91 vx=0.39 vy=-0.05 vz=0.16
+body id=773 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=0.73 y=9.19 z=-7.07 vx=0.81 vy=-0.64 vz=-0.95
+body id=774 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-13.99 y=19.00 z=5.65 vx=0.46 vy=-0.06 vz=-0.78
+body id=775 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=4.07 y=11.94 z=-3.54 vx=-0.98 vy=-0.07 vz=0.35
+body id=776 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-11.39 y=2.79 z=-13.46 vx=-0.17 vy=-0.91 vz=-0.12
+body id=777 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-9.10 y=5.69 z=1.83 vx=-0.47 vy=-0.02 vz=0.27
+body id=778 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-0.82 y=8.82 z=12.78 vx=-0.21 vy=-0.88 vz=-0.85
+body id=779 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-2.04 y=21.05 z=7.74 vx=0.41 vy=-0.98 vz=0.38
+body id=780 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-5.90 y=15.38 z=9.67 vx=-0.42 vy=-0.66 vz=0.70
+body id=781 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-5.06 y=9.85 z=-12.19 vx=0.07 vy=-0.47 vz=0.63
+body id=782 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-11.39 y=15.86 z=-10.17 vx=-0.72 vy=-0.60 vz=-0.39
+body id=783 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=4.70 y=15.70 z=-12.21 vx=-0.53 vy=-0.09 vz=0.32
+body id=784 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=11.59 y=9.21 z=-2.17 vx=0.51 vy=-0.08 vz=-0.24
+body id=785 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=0.93 y=15.00 z=-10.53 vx=-0.56 vy=-0.61 vz=-0.79
+body id=786 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-8.37 y=1.05 z=12.62 vx=-0.23 vy=-0.80 vz=-0.69
+body id=787 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=5.45 y=12.08 z=-13.07 vx=0.13 vy=-0.55 vz=0.18
+body id=788 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-11.44 y=23.88 z=1.54 vx=-0.11 vy=-0.07 vz=0.49
+body id=789 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-4.28 y=17.59 z=13.12 vx=-0.89 vy=-0.56 vz=-0.46
+body id=790 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=1.07 y=18.25 z=-5.38 vx=0.35 vy=-0.46 vz=-0.97
+body id=791 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=1.36 y=8.78 z=-10.46 vx=0.54 vy=-0.82 vz=0.35
+body id=792 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=13.62 y=20.74 z=-7.95 vx=0.25 vy=-0.31 vz=-0.90
+body id=793 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=9.17 y=11.38 z=-13.81 vx=0.36 vy=-0.30 vz=0.17
+body id=794 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=2.98 y=3.59 z=8.82 vx=-0.47 vy=-0.86 vz=-0.34
+body id=795 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-12.05 y=15.90 z=12.87 vx=0.73 vy=-0.64 vz=-0.09
+body id=796 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=1.16 y=2.42 z=11.05 vx=0.41 vy=-0.80 vz=0.24
+body id=797 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-1.52 y=17.22 z=-8.91 vx=0.03 vy=-0.23 vz=-0.53
+body id=798 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-0.61 y=4.73 z=-8.76 vx=-0.99 vy=-0.80 vz=-0.71
+body id=799 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-0.00 y=16.70 z=4.04 vx=0.57 vy=-0.56 vz=-0.56
+body id=800 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=0.17 y=10.86 z=5.13 vx=-0.20 vy=-0.76 vz=-0.46
+body id=801 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-2.10 y=7.69 z=-11.10 vx=0.04 vy=-0.59 vz=0.57
+body id=802 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=1.90 y=1.37 z=-10.96 vx=-0.09 vy=-0.36 vz=0.64
+body id=803 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=12.14 y=3.01 z=7.72 vx=0.67 vy=-0.84 vz=0.70
+body id=804 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-7.63 y=12.47 z=12.47 vx=-0.28 vy=-0.88 vz=-0.37
+body id=805 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=0.24 y=23.04 z=9.46 vx=0.50 vy=-0.67 vz=0.74
+body id=806 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-6.81 y=18.09 z=-3.77 vx=0.24 vy=-0.72 vz=-0.43
+body id=807 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=6.78 y=7.66 z=-13.44 vx=-0.68 vy=-0.31 vz=0.58
+body id=808 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-1.99 y=20.65 z=-12.66 vx=0.82 vy=-0.76 vz=0.54
+body id=809 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=7.58 y=4.37 z=-2.35 vx=0.69 vy=-0.95 vz=0.38
+body id=810 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-13.45 y=21.37 z=-1.45 vx=0.17 vy=-0.35 vz=0.25
+body id=811 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=7.95 y=8.40 z=8.80 vx=0.02 vy=-0.53 vz=0.99
+body id=812 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-11.58 y=23.20 z=11.87 vx=0.64 vy=-0.94 vz=0.93
+body id=813 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-8.12 y=14.52 z=2.63 vx=0.54 vy=-0.15 vz=-0.82
+body id=814 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=4.29 y=6.13 z=11.59 vx=-0.39 vy=-0.53 vz=-0.54
+body id=815 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-1.88 y=19.96 z=10.51 vx=0.66 vy=-0.78 vz=0.25
+body id=816 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-10.22 y=9.59 z=8.55 vx=0.49 vy=-0.06 vz=-0.26
+body id=817 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=12.58 y=19.61 z=-1.30 vx=-0.51 vy=-0.09 vz=-0.23
+body id=818 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-10.85 y=12.76 z=-0.91 vx=-0.09 vy=-0.63 vz=0.69
+body id=819 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-13.39 y=13.57 z=-5.01 vx=-0.82 vy=-0.14 vz=-0.36
+body id=820 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=11.15 y=16.94 z=-2.26 vx=0.94 vy=-0.28 vz=-0.36
+body id=821 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=13.86 y=12.33 z=7.97 vx=0.94 vy=-0.14 vz=0.14
+body id=822 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=10.98 y=18.58 z=-10.10 vx=-0.66 vy=-0.38 vz=0.24
+body id=823 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=0.34 y=9.92 z=7.25 vx=-0.62 vy=-0.92 vz=0.21
+body id=824 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-2.88 y=4.37 z=6.79 vx=0.16 vy=-0.11 vz=-0.54
+body id=825 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-9.54 y=20.25 z=-12.34 vx=0.71 vy=-0.50 vz=0.09
+body id=826 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=10.98 y=5.59 z=-1.97 vx=1.00 vy=-0.17 vz=0.17
+body id=827 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-9.60 y=17.50 z=4.16 vx=0.52 vy=-0.56 vz=-0.50
+body id=828 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-2.08 y=9.25 z=-12.78 vx=0.26 vy=-0.95 vz=0.35
+body id=829 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-8.16 y=2.18 z=-6.25 vx=0.20 vy=-0.01 vz=0.43
+body id=830 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=11.15 y=13.19 z=-9.99 vx=0.20 vy=-0.56 vz=-0.28
+body id=831 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-2.11 y=15.31 z=0.37 vx=0.77 vy=-1.00 vz=-0.19
+body id=832 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=13.88 y=23.19 z=8.76 vx=0.05 vy=-0.39 vz=-0.56
+body id=833 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=10.13 y=6.19 z=-12.97 vx=0.93 vy=-0.60 vz=0.98
+body id=834 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-1.03 y=18.39 z=9.61 vx=-0.89 vy=-0.22 vz=0.05
+body id=835 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-5.58 y=6.70 z=-4.34 vx=-0.71 vy=-0.34 vz=-0.35
+body id=836 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-11.03 y=22.40 z=-8.38 vx=0.04 vy=-0.57 vz=-0.75
+body id=837 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-7.88 y=12.13 z=-9.90 vx=0.11 vy=-0.97 vz=0.33
+body id=838 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-1.64 y=9.97 z=10.94 vx=-0.91 vy=-0.59 vz=0.09
+body id=839 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=10.49 y=10.91 z=-6.28 vx=-0.97 vy=-0.57 vz=0.47
+body id=840 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=7.75 y=8.54 z=12.85 vx=-0.18 vy=-0.21 vz=0.36
+body id=841 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=8.52 y=3.92 z=6.10 vx=-0.06 vy=-0.98 vz=0.18
+body id=842 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-6.67 y=13.02 z=-0.58 vx=-0.11 vy=-0.38 vz=-0.93
+body id=843 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-2.00 y=12.61 z=-10.90 vx=-0.03 vy=-0.05 vz=0.82
+body id=844 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-4.68 y=5.15 z=-5.14 vx=-0.55 vy=-0.89 vz=-0.82
+body id=845 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-6.16 y=11.31 z=-4.28 vx=-0.96 vy=-0.39 vz=-0.29
+body id=846 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-11.20 y=5.16 z=12.36 vx=-0.71 vy=-0.05 vz=-0.54
+body id=847 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=9.17 y=19.61 z=13.49 vx=-0.42 vy=-0.61 vz=-0.51
+body id=848 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=0.05 y=1.51 z=6.05 vx=0.26 vy=-0.19 vz=0.24
+body id=849 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-9.11 y=8.31 z=-11.96 vx=0.93 vy=-0.84 vz=0.71
+body id=850 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-3.64 y=9.84 z=13.87 vx=0.69 vy=-0.41 vz=-0.18
+body id=851 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=1.80 y=5.49 z=-4.38 vx=-0.93 vy=-0.14 vz=-0.19
+body id=852 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=13.65 y=22.38 z=-8.91 vx=-0.11 vy=-0.71 vz=-0.10
+body id=853 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-8.69 y=13.16 z=7.43 vx=-0.87 vy=-0.74 vz=-0.18
+body id=854 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-10.39 y=6.02 z=-5.74 vx=-0.21 vy=-0.60 vz=0.98
+body id=855 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-11.95 y=14.74 z=-8.97 vx=0.52 vy=-0.52 vz=0.77
+body id=856 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=9.61 y=1.83 z=0.72 vx=0.72 vy=-0.82 vz=0.14
+body id=857 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=6.61 y=19.91 z=-3.40 vx=0.13 vy=-0.58 vz=-0.55
+body id=858 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-1.96 y=15.45 z=-6.47 vx=-0.23 vy=-0.02 vz=0.83
+body id=859 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=6.39 y=19.24 z=-13.08 vx=-0.93 vy=-0.46 vz=-0.42
+body id=860 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=8.04 y=3.68 z=0.70 vx=-0.27 vy=-0.48 vz=0.34
+body id=861 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=7.73 y=23.40 z=3.81 vx=0.26 vy=-0.18 vz=-0.17
+body id=862 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=3.74 y=11.67 z=6.66 vx=-0.66 vy=-0.07 vz=0.69
+body id=863 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=6.42 y=19.81 z=-13.06 vx=-0.40 vy=-0.04 vz=0.63
+body id=864 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=3.73 y=8.93 z=10.02 vx=-0.90 vy=-0.04 vz=0.96
+body id=865 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-4.08 y=15.18 z=-13.59 vx=0.50 vy=-0.05 vz=-0.71
+body id=866 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-4.42 y=7.30 z=2.58 vx=-0.39 vy=-0.83 vz=-0.76
+body id=867 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-4.79 y=5.28 z=13.14 vx=0.92 vy=-0.32 vz=0.65
+body id=868 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-4.58 y=3.81 z=-1.08 vx=-0.26 vy=-0.30 vz=0.95
+body id=869 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=9.23 y=1.48 z=-5.71 vx=0.40 vy=-0.79 vz=0.84
+body id=870 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-10.26 y=13.52 z=-13.14 vx=-0.41 vy=-0.89 vz=-0.03
+body id=871 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-7.82 y=23.42 z=-8.67 vx=-0.34 vy=-0.53 vz=0.77
+body id=872 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-10.66 y=8.83 z=9.42 vx=-0.21 vy=-0.75 vz=0.05
+body id=873 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-3.44 y=5.98 z=-7.53 vx=0.35 vy=-0.09 vz=-0.98
+body id=874 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-10.17 y=12.51 z=4.37 vx=0.72 vy=-0.07 vz=-0.82
+body id=875 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=7.40 y=20.75 z=-1.20 vx=-0.62 vy=-0.17 vz=0.13
+body id=876 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-13.14 y=15.07 z=-10.51 vx=0.51 vy=-0.58 vz=0.33
+body id=877 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-13.77 y=19.95 z=13.97 vx=0.97 vy=-0.93 vz=0.99
+body id=878 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-11.00 y=8.97 z=-10.20 vx=0.09 vy=-0.82 vz=0.59
+body id=879 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=12.59 y=17.72 z=3.19 vx=0.31 vy=-0.73 vz=0.43
+body id=880 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-8.08 y=22.88 z=13.66 vx=0.95 vy=-0.87 vz=0.56
+body id=881 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-5.18 y=20.79 z=6.70 vx=-0.69 vy=-0.96 vz=0.85
+body id=882 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-1.78 y=9.46 z=-9.92 vx=0.27 vy=-0.16 vz=-0.78
+body id=883 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-1.48 y=9.02 z=-10.25 vx=-0.81 vy=-0.11 vz=0.84
+body id=884 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-4.13 y=14.28 z=-4.64 vx=-0.09 vy=-0.40 vz=-0.54
+body id=885 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=6.17 y=22.62 z=-11.93 vx=0.72 vy=-0.33 vz=0.65
+body id=886 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-6.51 y=7.13 z=-4.84 vx=0.98 vy=-0.45 vz=-0.28
+body id=887 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=4.12 y=20.59 z=2.90 vx=-0.38 vy=-0.19 vz=-0.11
+body id=888 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=0.60 y=1.67 z=-12.27 vx=-0.65 vy=-0.63 vz=-0.51
+body id=889 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=7.91 y=9.13 z=1.71 vx=0.41 vy=-0.25 vz=0.36
+body id=890 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-2.28 y=21.29 z=-7.92 vx=-0.39 vy=-0.77 vz=0.08
+body id=891 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-1.41 y=9.79 z=-13.15 vx=-0.54 vy=-0.16 vz=-0.80
+body id=892 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-12.47 y=13.47 z=-2.90 vx=-0.46 vy=-0.28 vz=0.63
+body id=893 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-8.47 y=23.07 z=13.85 vx=0.03 vy=-0.72 vz=0.16
+body id=894 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=13.93 y=21.24 z=3.94 vx=-0.16 vy=-0.76 vz=0.20
+body id=895 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-4.83 y=18.98 z=11.94 vx=-0.77 vy=-0.03 vz=-0.00
+body id=896 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=7.26 y=9.88 z=7.38 vx=-0.74 vy=-0.56 vz=-1.00
+body id=897 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-4.62 y=16.60 z=6.47 vx=0.94 vy=-0.64 vz=0.48
+body id=898 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-6.68 y=2.20 z=-4.65 vx=-0.59 vy=-0.36 vz=0.75
+body id=899 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=10.55 y=2.78 z=12.81 vx=0.29 vy=-0.27 vz=-0.60
+body id=900 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-1.20 y=19.22 z=12.60 vx=-0.41 vy=-0.43 vz=0.01
+body id=901 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-11.41 y=20.53 z=-10.89 vx=-0.78 vy=-0.50 vz=-0.77
+body id=902 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=3.80 y=19.17 z=0.07 vx=-0.09 vy=-0.58 vz=0.86
+body id=903 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=0.33 y=3.33 z=9.98 vx=-0.26 vy=-0.08 vz=-0.55
+body id=904 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-2.78 y=22.04 z=-5.80 vx=-0.05 vy=-0.82 vz=0.79
+body id=905 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-9.30 y=18.00 z=5.43 vx=-0.55 vy=-0.05 vz=-0.54
+body id=906 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=10.15 y=17.60 z=-9.23 vx=-0.67 vy=-0.41 vz=-0.74
+body id=907 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-13.17 y=10.99 z=-0.98 vx=-0.62 vy=-0.36 vz=0.14
+body id=908 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=8.25 y=4.99 z=-7.35 vx=-0.06 vy=-0.56 vz=-0.70
+body id=909 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-4.51 y=3.06 z=7.65 vx=0.78 vy=-0.85 vz=0.74
+body id=910 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=13.22 y=12.93 z=-7.53 vx=-0.28 vy=-0.92 vz=0.66
+body id=911 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=12.51 y=2.37 z=-5.66 vx=-0.61 vy=-0.81 vz=0.96
+body id=912 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-1.24 y=15.03 z=-2.49 vx=-0.23 vy=-0.22 vz=-0.95
+body id=913 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-13.75 y=10.13 z=-2.11 vx=0.03 vy=-0.12 vz=0.47
+body id=914 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=4.76 y=19.31 z=13.07 vx=-0.74 vy=-0.45 vz=0.95
+body id=915 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=4.94 y=15.10 z=2.76 vx=0.02 vy=-0.22 vz=0.23
+body id=916 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=10.77 y=3.22 z=2.21 vx=0.04 vy=-0.72 vz=-0.04
+body id=917 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=2.87 y=1.86 z=-11.39 vx=0.55 vy=-1.00 vz=-0.10
+body id=918 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-7.60 y=19.23 z=-1.40 vx=0.62 vy=-0.39 vz=-0.37
+body id=919 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=11.06 y=10.21 z=-10.61 vx=0.82 vy=-0.45 vz=0.51
+body id=920 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=7.29 y=21.78 z=4.44 vx=-0.59 vy=-0.58 vz=-0.26
+body id=921 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=3.47 y=9.38 z=6.45 vx=0.01 vy=-0.09 vz=-0.41
+body id=922 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=7.87 y=8.28 z=4.10 vx=0.73 vy=-0.26 vz=0.69
+body id=923 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=7.62 y=23.49 z=6.90 vx=0.51 vy=-0.55 vz=0.24
+body id=924 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-8.14 y=3.88 z=-5.36 vx=0.35 vy=-0.39 vz=-0.36
+body id=925 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=5.09 y=21.66 z=0.01 vx=0.13 vy=-0.62 vz=-0.42
+body id=926 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=7.16 y=22.84 z=-2.37 vx=-0.08 vy=-0.20 vz=0.35
+body id=927 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=6.81 y=5.00 z=-5.98 vx=-0.52 vy=-0.43 vz=-0.69
+body id=928 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=7.72 y=3.14 z=6.06 vx=-0.75 vy=-0.40 vz=-0.76
+body id=929 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=12.98 y=20.44 z=12.07 vx=0.39 vy=-0.34 vz=0.55
+body id=930 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-8.75 y=23.45 z=-6.39 vx=-0.79 vy=-0.85 vz=-0.32
+body id=931 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-6.66 y=12.19 z=6.41 vx=0.08 vy=-0.63 vz=-0.96
+body id=932 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=1.47 y=13.35 z=13.75 vx=-0.93 vy=-0.69 vz=0.79
+body id=933 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=10.09 y=3.87 z=-8.01 vx=-0.20 vy=-0.76 vz=-0.67
+body id=934 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-2.46 y=11.85 z=-7.52 vx=0.58 vy=-0.91 vz=0.60
+body id=935 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=6.53 y=2.51 z=-10.96 vx=0.14 vy=-0.38 vz=0.19
+body id=936 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-2.29 y=20.10 z=-0.07 vx=-0.86 vy=-0.41 vz=-0.30
+body id=937 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-1.76 y=22.41 z=0.92 vx=-0.54 vy=-0.78 vz=0.99
+body id=938 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-7.88 y=11.19 z=4.85 vx=0.99 vy=-0.06 vz=0.58
+body id=939 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=12.98 y=22.91 z=8.47 vx=0.66 vy=-0.84 vz=0.59
+body id=940 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-12.08 y=14.02 z=-1.08 vx=0.89 vy=-0.88 vz=-0.04
+body id=941 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-9.48 y=5.38 z=-10.61 vx=-0.62 vy=-0.32 vz=-0.42
+body id=942 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-9.46 y=8.97 z=-3.65 vx=-0.68 vy=-0.66 vz=0.78
+body id=943 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=8.87 y=3.20 z=-0.89 vx=-0.58 vy=-0.58 vz=0.74
+body id=944 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-7.99 y=6.87 z=-2.49 vx=-0.76 vy=-0.18 vz=-0.45
+body id=945 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=12.94 y=17.30 z=7.34 vx=0.48 vy=-0.89 vz=-0.81
+body id=946 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=13.59 y=21.82 z=5.85 vx=0.47 vy=-0.91 vz=0.51
+body id=947 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=9.72 y=4.63 z=0.58 vx=-0.03 vy=-0.93 vz=0.28
+body id=948 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-4.53 y=3.42 z=3.79 vx=0.20 vy=-0.83 vz=-0.33
+body id=949 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=5.56 y=14.47 z=7.46 vx=-0.88 vy=-0.25 vz=-0.76
+body id=950 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-10.02 y=3.28 z=2.80 vx=-0.63 vy=-0.23 vz=-0.50
+body id=951 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-11.17 y=12.18 z=-1.82 vx=-0.83 vy=-0.94 vz=-0.86
+body id=952 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=1.82 y=20.03 z=5.44 vx=0.77 vy=-0.16 vz=0.96
+body id=953 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=7.31 y=7.12 z=3.90 vx=-0.53 vy=-0.08 vz=0.36
+body id=954 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-5.50 y=10.91 z=5.10 vx=0.27 vy=-0.61 vz=-0.51
+body id=955 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=9.85 y=22.44 z=13.52 vx=-0.85 vy=-0.74 vz=0.95
+body id=956 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-3.41 y=3.64 z=-13.71 vx=0.84 vy=-0.65 vz=0.77
+body id=957 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=10.93 y=3.93 z=-3.82 vx=-0.08 vy=-0.15 vz=0.21
+body id=958 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=10.56 y=10.19 z=11.64 vx=0.78 vy=-0.89 vz=0.56
+body id=959 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=3.80 y=9.79 z=-13.99 vx=0.32 vy=-0.97 vz=-0.19
+body id=960 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=3.89 y=6.38 z=11.55 vx=0.08 vy=-0.18 vz=0.78
+body id=961 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=0.12 y=10.73 z=-3.18 vx=0.76 vy=-0.88 vz=-0.57
+body id=962 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-8.76 y=15.64 z=1.88 vx=-0.60 vy=-0.28 vz=-0.15
+body id=963 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-5.79 y=12.37 z=5.93 vx=-0.75 vy=-0.92 vz=0.94
+body id=964 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-0.20 y=17.15 z=-2.79 vx=-0.68 vy=-0.09 vz=-0.68
+body id=965 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=5.11 y=19.40 z=4.16 vx=0.53 vy=-0.03 vz=0.32
+body id=966 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-12.69 y=9.66 z=-7.53 vx=0.23 vy=-0.50 vz=-0.72
+body id=967 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-1.58 y=3.72 z=-13.88 vx=-0.57 vy=-0.42 vz=0.51
+body id=968 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-8.87 y=20.98 z=2.95 vx=-0.32 vy=-0.06 vz=-0.62
+body id=969 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=1.18 y=20.32 z=-5.71 vx=-0.26 vy=-0.65 vz=0.79
+body id=970 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=1.34 y=5.93 z=-5.00 vx=0.31 vy=-0.45 vz=-0.24
+body id=971 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-10.35 y=6.24 z=-9.28 vx=0.27 vy=-0.27 vz=0.88
+body id=972 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=12.01 y=10.96 z=0.90 vx=-0.33 vy=-0.97 vz=-0.91
+body id=973 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-9.42 y=8.75 z=-4.01 vx=-0.04 vy=-0.71 vz=0.67
+body id=974 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=12.62 y=12.47 z=-7.14 vx=-0.15 vy=-0.65 vz=0.71
+body id=975 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-5.60 y=18.05 z=13.78 vx=-0.10 vy=-0.12 vz=0.07
+body id=976 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-5.82 y=5.07 z=-4.13 vx=0.45 vy=-0.05 vz=-0.44
+body id=977 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-6.97 y=1.83 z=-12.51 vx=0.66 vy=-0.03 vz=0.46
+body id=978 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-3.11 y=4.91 z=-12.01 vx=-0.40 vy=-0.37 vz=0.64
+body id=979 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=3.91 y=11.18 z=-12.09 vx=-0.89 vy=-0.34 vz=-0.24
+body id=980 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=10.58 y=12.38 z=-3.27 vx=0.53 vy=-0.52 vz=-0.01
+body id=981 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-11.38 y=13.44 z=10.41 vx=-0.41 vy=-0.01 vz=0.75
+body id=982 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-4.17 y=22.59 z=-8.20 vx=-0.11 vy=-0.39 vz=0.43
+body id=983 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=3.89 y=17.18 z=11.93 vx=-0.71 vy=-0.21 vz=-0.94
+body id=984 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=9.09 y=21.29 z=9.69 vx=0.27 vy=-0.37 vz=-0.42
+body id=985 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-13.12 y=3.41 z=-3.76 vx=-0.39 vy=-0.70 vz=0.02
+body id=986 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-13.20 y=20.48 z=5.58 vx=-0.67 vy=-0.85 vz=0.29
+body id=987 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-3.93 y=17.97 z=-10.02 vx=-0.95 vy=-0.10 vz=0.75
+body id=988 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-0.24 y=23.44 z=-7.40 vx=0.14 vy=-0.50 vz=0.77
+body id=989 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=4.56 y=19.72 z=-9.12 vx=-0.17 vy=-0.37 vz=0.88
+body id=990 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-6.42 y=2.48 z=1.90 vx=0.90 vy=-0.18 vz=0.35
+body id=991 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-12.83 y=20.33 z=-2.94 vx=-0.70 vy=-0.86 vz=-0.84
+body id=992 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-5.32 y=19.68 z=-3.81 vx=0.81 vy=-0.40 vz=0.91
+body id=993 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=11.63 y=17.83 z=-3.73 vx=-0.32 vy=-0.35 vz=0.59
+body id=994 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-10.31 y=9.97 z=-3.84 vx=0.75 vy=-0.78 vz=0.96
+body id=995 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-13.27 y=8.21 z=-13.15 vx=-0.06 vy=-0.86 vz=0.71
+body id=996 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=4.58 y=19.78 z=-9.50 vx=0.36 vy=-0.15 vz=-0.08
+body id=997 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-9.55 y=16.86 z=6.16 vx=0.84 vy=-0.46 vz=-0.39
+body id=998 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=1.83 y=20.37 z=8.28 vx=-0.73 vy=-0.35 vz=-0.50
+body id=999 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=9.90 y=15.70 z=-13.86 vx=-0.82 vy=-0.84 vz=0.10
+body id=1000 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-3.06 y=23.31 z=6.19 vx=0.31 vy=-0.54 vz=0.17
+body id=1001 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=8.78 y=13.24 z=6.26 vx=0.43 vy=-0.59 vz=-0.20
+body id=1002 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-11.07 y=5.78 z=13.62 vx=-0.05 vy=-0.15 vz=0.49
+body id=1003 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=4.10 y=2.71 z=12.47 vx=-0.99 vy=-0.54 vz=0.94
+body id=1004 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-9.36 y=13.38 z=-13.86 vx=-0.80 vy=-0.20 vz=0.68
+body id=1005 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-13.04 y=21.80 z=-12.93 vx=0.48 vy=-0.26 vz=0.54
+body id=1006 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=4.21 y=10.79 z=-13.96 vx=0.83 vy=-0.67 vz=0.92
+body id=1007 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-9.72 y=16.53 z=4.40 vx=0.70 vy=-0.84 vz=-0.50
+body id=1008 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=13.48 y=10.22 z=-5.76 vx=0.29 vy=-0.26 vz=0.33
+body id=1009 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=6.09 y=20.11 z=12.37 vx=-0.58 vy=-0.28 vz=0.65
+body id=1010 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=12.81 y=21.06 z=-5.74 vx=0.01 vy=-0.99 vz=0.63
+body id=1011 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-3.23 y=14.53 z=-5.47 vx=-0.70 vy=-0.57 vz=-0.67
+body id=1012 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-12.95 y=5.20 z=0.91 vx=0.22 vy=-0.92 vz=-0.32
+body id=1013 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=11.88 y=18.22 z=-9.85 vx=-0.22 vy=-0.71 vz=0.08
+body id=1014 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-5.86 y=2.26 z=-4.23 vx=-0.46 vy=-0.40 vz=-0.77
+body id=1015 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=2.02 y=5.34 z=13.94 vx=-0.28 vy=-0.52 vz=-0.64
+body id=1016 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=11.72 y=7.44 z=-12.21 vx=0.13 vy=-0.03 vz=-0.47
+body id=1017 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=2.06 y=9.83 z=-2.51 vx=-0.38 vy=-0.75 vz=0.43
+body id=1018 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=2.32 y=16.15 z=-2.08 vx=-0.73 vy=-0.55 vz=0.38
+body id=1019 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-8.25 y=1.31 z=-4.22 vx=0.74 vy=-0.52 vz=0.03
+body id=1020 shape=aabb hx=0.30 hy=0.30 hz=0.30 mass=1.0 e=0.5 mu=0.5 x=-6.22 y=18.70 z=0.81 vx=0.17 vy=-0.84 vz=0.75
+body id=1021 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-0.48 y=17.14 z=12.01 vx=0.76 vy=-0.87 vz=-0.70
+body id=1022 shape=sphere r=0.30 mass=1.0 e=0.7 mu=0.4 x=-0.72 y=19.90 z=4.97 vx=-0.49 vy=-0.03 vz=-0.47

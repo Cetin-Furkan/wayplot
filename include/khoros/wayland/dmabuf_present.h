@@ -75,6 +75,9 @@ typedef struct {
      * the compositor's dma-buf while it still scans the last frame. */
     khr_dmabuf_pslot_t retiring[KHR_DMABUF_PRESENT_SLOTS];
     bool     has_retiring;
+    uint64_t retiring_point;
+    khr_card_pipeline_t card_pipe;
+    bool     card_pipe_live;
     uint32_t next_slot;
     uint32_t width;
     uint32_t height;
@@ -82,6 +85,8 @@ typedef struct {
     uint32_t releases;
     uint32_t created_count;
     uint32_t failed_count;
+    uint64_t modifiers[64];
+    uint32_t modifier_count;
 } khr_dmabuf_present_t;
 
 /* Bind dmabuf + syncobj manager, create the syncobj endpoint, the DRM
@@ -103,6 +108,11 @@ bool khr_dmabuf_present_init(khr_gfx_device_t* dev, khr_wl_client_t* client,
 [[nodiscard]]
 bool khr_dmabuf_present_resize(khr_gfx_device_t* dev, khr_dmabuf_present_t* p,
                                uint32_t w, uint32_t h);
+
+/* Non-blocking check: true when the GPU and compositor are both done with retiring slots. */
+[[nodiscard]]
+bool khr_dmabuf_present_can_drop_retired(khr_gfx_device_t* dev,
+                                         const khr_dmabuf_present_t* p);
 
 /* Destroy retiring slots (call after the new size is attached). */
 void khr_dmabuf_present_drop_retired(khr_gfx_device_t* dev,
@@ -131,7 +141,7 @@ bool khr_dmabuf_present_commit_cards(khr_gfx_device_t* dev,
                                      VkDeviceAddress cards_addr,
                                      uint32_t card_count);
 
-/* Cards plus mesh (preferred) or plot ribbon in the client rect. */
+/* Cards plus mesh, plot ribbon, or GPU-driven PBR scene in the client rect. */
 [[nodiscard]]
 bool khr_dmabuf_present_commit_scene(khr_gfx_device_t* dev,
                                      khr_dmabuf_present_t* p,
@@ -141,6 +151,7 @@ bool khr_dmabuf_present_commit_scene(khr_gfx_device_t* dev,
                                      const khr_plot_push_t* plot_push,
                                      const khr_mesh_pipeline_t* mesh,
                                      const khr_mesh_push_t* mesh_push,
+                                     const khr_gpu_scene_pass_t* gpu_scene,
                                      const khr_gizmo_pass_t* gizmo,
                                      uint32_t plot_top_px);
 

@@ -384,4 +384,106 @@ Added 3 deep integration tests validating direct descriptor features end-to-end:
 - Stress loops: 20 consecutive test runner iterations passed without a single failure or memory leak.
 - `make run`: Verified clean topology startup, Ring A/B config, and MSG_RING IPC.
 
+---
 
+## [2026-09-14T12:04:01+03:00] - Pillars 6 & 7: Streaming Audio Engine over io_uring Direct Buffers & Decoupled Action-Mapping Input System
+
+### 1. Implementation Overview:
+Completed and fully verified both final architectural pillars (Pillar 6 and Pillar 7) in 100% pure ISO C23 with zero middleware libraries:
+
+1. **Pillar 6: Streaming Audio Engine over io_uring Direct Buffers**:
+   - **Zero-Middleware ALSA PCM Driver (`include/khoros/audio/alsa.h`, `src/audio/alsa.c`)**:
+     - Direct kernel UAPI interaction with `/dev/snd/pcmC*D*p` via raw `ioctl` (`SNDRV_PCM_IOCTL_HW_REFINE`, `SNDRV_PCM_IOCTL_HW_PARAMS`, `SNDRV_PCM_IOCTL_SW_PARAMS`, `SNDRV_PCM_IOCTL_PREPARE`).
+     - Configures 48 kHz, stereo 16-bit interleaved PCM (`SNDRV_PCM_FORMAT_S16_LE`), 512-frame periods (~10.66 ms).
+     - Automated xrun (`-EPIPE`) underrun recovery via re-prepare.
+     - Graceful fallback to non-blocking pipe sink in headless/containerized environments.
+   - **SIMD-Accelerated 3D Audio Mixer (`include/khoros/audio/mixer.h`, `src/audio/mixer.c`)**:
+     - Equal-power constant-power stereo panning law ($\theta = \frac{\pi}{4}(1 + \text{pan})$).
+     - Distance attenuation with configurable inner radius, cutoff radius, and rolloff factor.
+     - Universal Doppler frequency shift ($f' = f \cdot \frac{c + v_{o\to s}}{c - v_{s\to o}}$) with supersonic boundary protection.
+     - AVX2 vectorized 8-wide float accumulation and saturation limiter / int16 conversion.
+     - 64-voice polyphony management with quietest-voice stealing and lifecycle management (play, pause, resume, stop).
+   - **Streaming Audio Engine (`include/khoros/audio/audio.h`, `src/audio/audio.c`)**:
+     - Multi-buffered chunk ring (`KHR_AUDIO_RING_BUFFER_COUNT = 4`, 512 frames/chunk).
+     - Pre-registered direct buffers with io_uring (`IORING_REGISTER_BUFFERS`).
+     - Microsecond pacing via kernel `timerfd` (`timerfd_create`, `CLOCK_MONOTONIC`).
+     - Asynchronous submission via `khr_uring_prep_write_fixed` / ALSA PCM direct write.
+
+2. **Pillar 7: Decoupled Action-Mapping Input System**:
+   - **Lock-Free SPSC Input Ring Buffer (`include/khoros/core/input.h`, `src/core/input.c`)**:
+     - Single-producer (presentation thread) single-consumer (120 Hz fixed-tick sim) ring buffer with power-of-two capacity (256 entries).
+     - Cache-line separated atomic head/tail (`_Atomic uint32_t` with 60-byte padding) eliminating false sharing.
+     - Non-blocking push, pop, and batch drain operations.
+   - **Action & Axis Mapping Engine (`khr_action_map_t`)**:
+     - Digital action edge detection (`is_down`, `just_pressed`, `just_released`, `press_count`).
+     - Analog axis processing: digital key pairs, mouse relative delta, mouse wheel.
+     - Configurable inner deadzones with linear remapping above threshold.
+     - Non-linear response curves (linear, quadratic, cubic).
+     - Exponential moving average temporal low-pass smoothing.
+   - **Fixed-Tick Simulation Sampling & Sub-Tick Render Interpolation**:
+     - Fixed-tick worker samples and processes inputs at deterministic 120 Hz boundaries.
+     - Render thread queries sub-tick interpolation (`khr_action_map_sample_axis(..., alpha)`) across frame intervals $\alpha \in [0.0, 1.0]$.
+   - **Wayland Seat Wire Event Forwarding (`src/wayland/seat.c`, `include/khoros/wayland/seat.h`)**:
+     - `khr_seat_attach_input_ring`: automatically routes decoded wire protocol pointer motion, buttons, axis/wheel, and keyboard keys directly into the lock-free input ring without blocking.
+
+3. **io_uring Subsystem Enhancement (`include/khoros/uring/ring.h`, `src/uring/ring.c`)**:
+   - Implemented `khr_uring_prep_write_fixed` supporting registered direct buffer writes via `IORING_OP_WRITE_FIXED`.
+
+### 2. Test Suite Expansion (143 -> 154 Tests, 4282 Assertions):
+- Added **Suite 12: Streaming Audio Engine & SIMD 3D Audio Mixer (Pillar 6)** (5 tests):
+  - `test_audio_clip_and_pool_contracts`: validates clip memory layout, BDA addresses, 60-byte listener contracts, and sample buffers.
+  - `test_audio_spatial_attenuation_and_panning`: validates inverse distance curves, inner/outer radii, and equal-power stereo panning across 3D coordinates.
+  - `test_audio_doppler_frequency_shift`: validates pitch shifts for approaching and receding sources/observers and supersonic clamping.
+  - `test_audio_mixer_polyphony_and_simd_vectorization`: validates multi-voice mixing, AVX2 SIMD accumulation, volume limiter, and pause/resume/stop.
+  - `test_audio_engine_io_uring_direct_streaming`: validates direct buffer registration, timerfd pacing, and io_uring streaming to sink.
+- Added **Suite 13: Decoupled Action-Mapping Input System (Pillar 7)** (6 tests):
+  - `test_input_ring_spsc_lockfree_stress`: concurrent multi-threaded producer/consumer stress test over 500 events validating FIFO order and thread safety.
+  - `test_action_map_digital_edge_transitions`: validates `is_down`, `just_pressed`, and `just_released` one-shot edge transitions.
+  - `test_action_map_analog_deadzone_and_curves`: validates deadzone thresholds, remapping, and quadratic response curves.
+  - `test_action_map_temporal_smoothing`: validates low-pass filter smoothing across multiple tick windows.
+  - `test_action_map_fixed_tick_subtick_interpolation`: validates continuous render interpolation across $\alpha \in [0.0, 1.0]$.
+  - `test_wayland_seat_input_ring_forwarding`: validates decoding and forwarding of Wayland wire motion, button, and key events.
+
+### 3. Verification Snapshot:
+- `make`: Compiles with 0 warnings and 0 errors.
+- `make test`: 154 Passed | 0 Failed | 0 Skipped | 154 Total (4282 assertions checked, 100% pass rate).
+- `make lint`: 100% pass rate (zero banned headers or libraries).
+- `make sanitize`: 154 Passed | 0 Failed | 0 Skipped under AddressSanitizer & UndefinedBehaviorSanitizer (clean pass, 0 memory leaks, 0 UB).
+
+---
+
+## [2026-09-14T12:15:00+03:00] - Audio AVX2 Memory Alignment Fix, Input Digital Axis Decoupling, Ring Overflow Diagnostics & Test Expansion (160 Tests)
+
+### 1. Defects Identified & Resolved:
+1. **AVX2 General Protection Fault (`#GP` / SIGSEGV) on Looping Audio Clips (`src/audio/mixer.c`)**:
+   - In `khr_audio_mix_chunk_s16()`, `_mm256_load_ps` and `_mm256_store_ps` were utilized on `&mixer->accum_l[i + k]`. While `accum_l` is aligned to 64 bytes at index 0, when playing a looped clip whose frame count is not a multiple of 8 (e.g. 10 frames), `i` increments by `chunk_len`, producing an unaligned index (e.g., `accum_l + 10` = offset 40 bytes, not a multiple of 32). Calling aligned load/store on unaligned memory triggers an immediate CPU `#GP` fault / SIGSEGV. Replaced with `_mm256_loadu_ps` and `_mm256_storeu_ps`.
+2. **Audio Clip Zero-Sample-Rate Fallback & Voice Deactivation (`src/audio/mixer.c`)**:
+   - If a clip's `sample_rate` was 0, `rate_ratio` evaluated to 0.0, causing `playhead` to never advance and trapping the voice in an infinite loop. Added automatic fallback `clip_sr = clip->sample_rate > 0 ? clip->sample_rate : mixer->sample_rate` and minimum `rate_ratio` floor of `1e-4`.
+   - Added immediate voice deactivation check (`if (!v->loop && v->playhead >= (double)clip_frames) v->active = false;`) at the completion of each mix chunk to prevent finished non-looping voices from lingering active.
+3. **Headless Audio Mock Sink Descriptor Leak & Pipe Buffer Exhaustion (`src/audio/audio.c`)**:
+   - Fallback path previously called `pipe2(pipefds, O_NONBLOCK | O_CLOEXEC)`, passing `pipefds[1]` to the mock sink while leaking `pipefds[0]` permanently. Furthermore, after ~64 KiB of audio frames, the unread pipe filled up, causing subsequent non-blocking writes to return `-EAGAIN`. Replaced with `open("/dev/null", O_WRONLY | O_CLOEXEC)` which has infinite capacity, never leaks read descriptors, and never fails with `-EAGAIN`.
+4. **Audio io_uring Direct Buffer CQE Draining (`src/audio/audio.c`)**:
+   - Changed single `if (khr_uring_peek_cqe)` in `khr_audio_engine_tick` to a draining loop `while (khr_uring_peek_cqe)` to harvest all completed buffer writes. Added CQE draining loop to `khr_audio_engine_destroy` before `khr_uring_unregister_buffers` to eliminate potential `EBUSY` kernel lock errors.
+5. **Digital Key Axis Mapping Broken Without Action Bindings (`src/core/input.c`)**:
+   - `khr_action_map_tick()` only evaluated `pos_down` and `neg_down` by searching `map->actions` for matching keycodes. If a caller bound an axis via `khr_action_map_bind_axis_digital(&map, axis, pos_key, neg_key, scale)` without separately creating digital action bindings for those keys, the axis never produced any input. Resolved by introducing `keys_down[KHR_MAX_KEY_CODES]` and `buttons_down[KHR_MAX_BUTTON_CODES]` directly on `khr_action_map_t` for raw keycode evaluation while maintaining action compatibility.
+6. **Relative Mouse Motion Hard Clamping (`src/core/input.c`, `include/khoros/core/input.h`)**:
+   - `khr_action_map_init()` hardcoded `min_clamp = -1.0f` and `max_clamp = 1.0f` for all axes, causing relative mouse motions (pixel deltas scaled for camera rotation) to be clipped at 1.0. Updated `khr_action_map_bind_axis_mouse()` to default to `[-10000.0f, +10000.0f]` and added `khr_action_map_set_axis_clamp()` for custom range configuration.
+7. **Input Ring Buffer Overflow Tracking (`src/core/input.c`, `include/khoros/core/input.h`)**:
+   - Added atomic `overflow_count` to `khr_input_ring_t` and `khr_input_ring_overflow_count()` to monitor dropped events when input bursts exceed the 256-event ring buffer capacity.
+8. **Decoupled Input Ring & Action Mapper Wired into Window Loop (`src/wayland/window.c`)**:
+   - Wired `khr_input_ring_t` and `khr_action_map_t` into `khr_window_run()`, attaching the input ring to `khr_seat_t` via `khr_seat_attach_input_ring()` and ticking the action map per frame.
+
+### 2. Test Suite Expansion (154 -> 160 Tests, 4663 Assertions):
+- Added to **Suite 12**:
+  - `test_audio_sample_rate_conversion`: verifies 44.1 kHz CD audio playback and linear resampling on a 48 kHz mixer, verifying correct frame consumption and deactivation.
+  - `test_audio_unaligned_clip_loop_avx2`: tests AVX2 fast-path playback of a 10-frame unaligned clip looping across chunk boundaries without `#GP` faults.
+  - `test_audio_zero_sample_rate_fallback`: tests clip with `sample_rate = 0` defaulting to mixer rate and terminating without infinite hang.
+- Added to **Suite 13**:
+  - `test_action_map_digital_axis_raw_keys`: tests `khr_action_map_bind_axis_digital` using raw keycodes without separate action bindings.
+  - `test_input_ring_burst_saturation_and_overflow`: verifies ring overflow tracking and drop counting under 300-event burst saturation.
+  - `test_action_map_unbounded_mouse_clamp`: verifies mouse delta propagation above 1.0 and custom axis clamping.
+
+### 3. Verification Snapshot:
+- `make lint`: 100% clean pass (pure ISO C23, zero banned headers, zero banned libraries).
+- `make test`: 160 Passed | 0 Failed | 0 Skipped | 160 Total (4663 assertions checked, 100% pass rate).
+- `make sanitize`: 160 Passed | 0 Failed | 0 Skipped under AddressSanitizer & UndefinedBehaviorSanitizer (50.3s, clean memory and concurrency checks).

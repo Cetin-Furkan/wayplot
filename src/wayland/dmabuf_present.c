@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <drm/drm.h>
+#include <drm/drm_fourcc.h>
 #include <vulkan/vulkan.h>
 
 /* DRM timeline helpers on the device render node. All proven green on the
@@ -96,13 +97,17 @@ static void khr_dmp_retire_slot(khr_gfx_device_t* dev, khr_wl_client_t* client,
 [[nodiscard]]
 static bool khr_dmp_init_slot(khr_gfx_device_t* dev, khr_wl_client_t* client,
                               uint32_t dmabuf_id, uint32_t mgr_id,
-                              uint32_t w, uint32_t h, khr_dmabuf_pslot_t* slot) {
+                              uint32_t w, uint32_t h,
+                              const khr_card_pipeline_t* shared_pipe,
+                              const uint64_t* modifiers, uint32_t modifier_count,
+                              khr_dmabuf_pslot_t* slot) {
     if (dev == nullptr || client == nullptr || slot == nullptr ||
         dmabuf_id == 0 || mgr_id == 0) {
         return false;
     }
     *slot = (khr_dmabuf_pslot_t){};
-    if (!khr_dmabuf_slot_init(dev, &slot->gfx, w, h)) {
+    if (!khr_dmabuf_slot_init_shared_with_modifiers(dev, &slot->gfx, w, h, shared_pipe,
+                                                    modifiers, modifier_count)) {
         return false;
     }
     const khr_dmabuf_image_t* img = &slot->gfx.img;
@@ -180,10 +185,46 @@ bool khr_dmabuf_present_init(khr_gfx_device_t* dev, khr_wl_client_t* client,
     close(acq_fd);
     out->acquire_tl_id = acq_tl;
 
+    if (!khr_card_pipeline_init(&out->card_pipe, dev, KHR_DMABUF_VK_FORMAT)) {
+        khr_dmabuf_present_destroy(dev, out);
+        return false;
+    }
+    out->card_pipe_live = true;
+
+    if (client->in_len > client->in_off) {
+        (void)khr_dmabuf_present_consume(out, client->in_buf + client->in_off,
+                                          client->in_len - client->in_off);
+    }
+
     for (uint32_t i = 0; i < KHR_DMABUF_PRESENT_SLOTS; i++) {
         if (!khr_dmp_init_slot(dev, client, out->dmabuf_id, out->mgr_id, w, h,
+                               &out->card_pipe, out->modifiers, out->modifier_count,
                                &out->slots[i])) {
             khr_dmabuf_present_destroy(dev, out);
+            return false;
+        }
+    }
+    return true;
+}
+
+[[nodiscard]]
+bool khr_dmabuf_present_can_drop_retired(khr_gfx_device_t* dev,
+                                         const khr_dmabuf_present_t* p) {
+    if (dev == nullptr || p == nullptr || !p->has_retiring) {
+        return false;
+    }
+    if (dev->device != VK_NULL_HANDLE && dev->acquire_sem != VK_NULL_HANDLE &&
+        p->retiring_point > 0) {
+        uint64_t done = 0;
+        if (vkGetSemaphoreCounterValue(dev->device, dev->acquire_sem, &done) != VK_SUCCESS) {
+            return false;
+        }
+        if (done < p->retiring_point) {
+            return false;
+        }
+    }
+    for (uint32_t i = 0; i < KHR_DMABUF_PRESENT_SLOTS; i++) {
+        if (p->retiring[i].busy) {
             return false;
         }
     }
@@ -204,6 +245,7 @@ bool khr_dmabuf_present_resize(khr_gfx_device_t* dev, khr_dmabuf_present_t* p,
     khr_dmabuf_pslot_t neu[KHR_DMABUF_PRESENT_SLOTS] = {};
     for (uint32_t i = 0; i < KHR_DMABUF_PRESENT_SLOTS; i++) {
         if (!khr_dmp_init_slot(dev, p->client, p->dmabuf_id, p->mgr_id, w, h,
+                               &p->card_pipe, p->modifiers, p->modifier_count,
                                &neu[i])) {
             for (uint32_t j = 0; j < i; j++) {
                 khr_dmp_retire_slot(dev, p->client, &neu[j]);
@@ -211,10 +253,28 @@ bool khr_dmabuf_present_resize(khr_gfx_device_t* dev, khr_dmabuf_present_t* p,
             return false;
         }
     }
-    khr_dmabuf_present_drop_retired(dev, p);
+    if (p->has_retiring) {
+        if (khr_dmabuf_present_can_drop_retired(dev, p)) {
+            khr_dmabuf_present_drop_retired(dev, p);
+        } else {
+            if (dev != nullptr && dev->device != VK_NULL_HANDLE &&
+                dev->acquire_sem != VK_NULL_HANDLE && p->retiring_point > 0) {
+                uint64_t want = p->retiring_point;
+                VkSemaphoreWaitInfo wi = {
+                    .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
+                    .semaphoreCount = 1,
+                    .pSemaphores = &dev->acquire_sem,
+                    .pValues = &want,
+                };
+                (void)vkWaitSemaphores(dev->device, &wi, 10'000'000ULL);
+            }
+            khr_dmabuf_present_drop_retired(dev, p);
+        }
+    }
     memcpy(p->retiring, p->slots, sizeof(p->slots));
     memcpy(p->slots, neu, sizeof(neu));
     p->has_retiring = true;
+    p->retiring_point = (dev != nullptr) ? dev->acquire_point : 0;
     p->width = w;
     p->height = h;
     p->next_slot = 0;
@@ -345,6 +405,7 @@ bool khr_dmabuf_present_commit_scene(khr_gfx_device_t* dev,
                                      const khr_plot_push_t* plot_push,
                                      const khr_mesh_pipeline_t* mesh,
                                      const khr_mesh_push_t* mesh_push,
+                                     const khr_gpu_scene_pass_t* gpu_scene,
                                      const khr_gizmo_pass_t* gizmo,
                                      uint32_t plot_top_px) {
     if (dev == nullptr || p == nullptr || p->client == nullptr ||
@@ -358,7 +419,8 @@ bool khr_dmabuf_present_commit_scene(khr_gfx_device_t* dev,
     khr_dmabuf_pslot_t* slot = &p->slots[idx];
     uint64_t point = dev->acquire_point + 1U;
     if (!khr_dmabuf_slot_render_scene(dev, &slot->gfx, cards_addr, card_count,
-                                      plot, plot_push, mesh, mesh_push, gizmo,
+                                      plot, plot_push, mesh, mesh_push,
+                                      gpu_scene, gizmo,
                                       plot_top_px, dev->acquire_sem, point)) {
         return false;
     }
@@ -444,6 +506,35 @@ uint32_t khr_dmabuf_present_consume(khr_dmabuf_present_t* p,
                     break;
                 }
             }
+        } else if (p->dmabuf_id != 0 && hdr.object_id == p->dmabuf_id &&
+                   hdr.opcode == 1 && hdr.size == 20 && body_len >= 12) {
+            /* zwp_linux_dmabuf_v1.modifier: format(4B), mod_hi(4B), mod_lo(4B) */
+            uint32_t fmt = 0;
+            uint32_t mod_hi = 0;
+            uint32_t mod_lo = 0;
+            memcpy(&fmt, body, 4);
+            memcpy(&mod_hi, body + 4, 4);
+            memcpy(&mod_lo, body + 8, 4);
+            uint64_t mod = ((uint64_t)mod_hi << 32) | (uint64_t)mod_lo;
+            if (fmt == DRM_FORMAT_ARGB8888 || fmt == DRM_FORMAT_XRGB8888) {
+                if (mod != DRM_FORMAT_MOD_INVALID && p->modifier_count < 64) {
+                    bool exists = false;
+                    for (uint32_t m = 0; m < p->modifier_count; m++) {
+                        if (p->modifiers[m] == mod) {
+                            exists = true;
+                            break;
+                        }
+                    }
+                    if (!exists) {
+                        p->modifiers[p->modifier_count++] = mod;
+                    }
+                }
+            }
+            count++;
+        } else if (p->dmabuf_id != 0 && hdr.object_id == p->dmabuf_id &&
+                   hdr.opcode == 0 && hdr.size == 12) {
+            /* zwp_linux_dmabuf_v1.format: format(4B) */
+            count++;
         }
         offset += hdr.size;
     }
@@ -465,5 +556,9 @@ void khr_dmabuf_present_destroy(khr_gfx_device_t* dev,
     }
     int drm_fd = (dev != nullptr) ? dev->drm_fd : -1;
     khr_dmp_destroy_timeline(drm_fd, p->acquire_handle);
+    if (p->card_pipe_live && dev != nullptr && dev->device != VK_NULL_HANDLE) {
+        khr_card_pipeline_destroy(&p->card_pipe);
+        p->card_pipe_live = false;
+    }
     *p = (khr_dmabuf_present_t){};
 }

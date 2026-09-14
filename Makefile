@@ -12,16 +12,17 @@ TEST_LOG_DIR = $(LOG_DIR)/test_logs
 TEST_LOG = $(TEST_LOG_DIR)/test_results.log
 FAIL_LOG = $(TEST_LOG_DIR)/failures.log
 
-CFLAGS ?= -std=c23 -D_GNU_SOURCE -O3 -pthread -Wall -Wextra -Wpedantic -Werror=vla -Iinclude --embed-dir=$(BIN_DIR) $(VULKAN_CFLAGS) -MMD -MP
+CFLAGS ?= -std=c23 -D_GNU_SOURCE -O3 -pthread -Wall -Wextra -Wpedantic -Werror=vla -mavx2 -mfma -Iinclude --embed-dir=$(BIN_DIR) $(VULKAN_CFLAGS) -MMD -MP
 TEST_CFLAGS ?= $(CFLAGS) -Itests
 
 # Sanitizer Flags (AddressSanitizer + UndefinedBehaviorSanitizer)
-SAN_CFLAGS ?= -std=c23 -D_GNU_SOURCE -O1 -g3 -pthread -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Wpedantic -Werror=vla -Iinclude --embed-dir=$(BIN_DIR) $(VULKAN_CFLAGS) -MMD -MP
+SAN_CFLAGS ?= -std=c23 -D_GNU_SOURCE -O1 -g3 -pthread -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Wpedantic -Werror=vla -mavx2 -mfma -Iinclude --embed-dir=$(BIN_DIR) $(VULKAN_CFLAGS) -MMD -MP
 SAN_TEST_CFLAGS ?= $(SAN_CFLAGS) -Itests
 
 TARGET = $(BIN_DIR)/engine
 TEST_TARGET = $(BIN_DIR)/test_runner
 SAN_TEST_TARGET = $(SAN_DIR)/test_runner_san
+BENCH_TARGET = $(BIN_DIR)/bench_n
 
 # Shader source and output definitions
 SHADER_DIR = shaders
@@ -29,10 +30,15 @@ SPV_DIR = $(BIN_DIR)/shaders
 
 SPV_TARGETS = $(SPV_DIR)/card.vert.spv $(SPV_DIR)/card.frag.spv \
               $(SPV_DIR)/plot.vert.spv $(SPV_DIR)/plot.frag.spv \
-              $(SPV_DIR)/mesh.vert.spv $(SPV_DIR)/mesh.frag.spv
+              $(SPV_DIR)/mesh.vert.spv $(SPV_DIR)/mesh.frag.spv \
+              $(SPV_DIR)/cull.comp.spv \
+              $(SPV_DIR)/mesh_instanced.vert.spv $(SPV_DIR)/mesh_instanced.frag.spv \
+              $(SPV_DIR)/hiz_downsample.comp.spv $(SPV_DIR)/cull_hiz.comp.spv \
+              $(SPV_DIR)/tex_synthesizer.comp.spv \
+              $(SPV_DIR)/grid.vert.spv $(SPV_DIR)/grid.frag.spv
 
 # Recursive source discovery
-SRCS = $(wildcard src/*.c) $(wildcard src/**/*.c)
+SRCS = $(filter-out src/bench_n.c, $(wildcard src/*.c) $(wildcard src/**/*.c))
 OBJS = $(patsubst src/%.c, $(BIN_DIR)/%.o, $(SRCS))
 SAN_OBJS = $(patsubst src/%.c, $(SAN_DIR)/%.o, $(SRCS))
 
@@ -40,10 +46,10 @@ TEST_SRCS = $(wildcard tests/*.c)
 TEST_OBJS = $(patsubst tests/%.c, $(BIN_DIR)/%.o, $(TEST_SRCS))
 SAN_TEST_OBJS = $(patsubst tests/%.c, $(SAN_DIR)/%.o, $(TEST_SRCS))
 
-DEPS = $(OBJS:.o=.d) $(TEST_OBJS:.o=.d) $(BIN_DIR)/main.d \
+DEPS = $(OBJS:.o=.d) $(TEST_OBJS:.o=.d) $(BIN_DIR)/main.d $(BIN_DIR)/bench_n.d \
        $(SAN_OBJS:.o=.d) $(SAN_TEST_OBJS:.o=.d)
 
-.PHONY: all clean run test lint sanitize shaders
+.PHONY: all clean run test lint sanitize shaders bench
 
 all: $(TARGET)
 
@@ -67,15 +73,27 @@ $(SPV_DIR):
 # Slang compiler rules
 $(SPV_DIR)/%.vert.spv: $(SHADER_DIR)/%.slang | $(SPV_DIR)
 	@mkdir -p $(dir $@)
-	$(SLANGC) $< $(SLANGFLAGS) -stage vertex -entry vs_main -o $@
+	$(SLANGC) $< -I$(SHADER_DIR) $(SLANGFLAGS) -stage vertex -entry vs_main -o $@
 
 $(SPV_DIR)/%.frag.spv: $(SHADER_DIR)/%.slang | $(SPV_DIR)
 	@mkdir -p $(dir $@)
-	$(SLANGC) $< $(SLANGFLAGS) -stage fragment -entry fs_main -o $@
+	$(SLANGC) $< -I$(SHADER_DIR) $(SLANGFLAGS) -stage fragment -entry fs_main -o $@
+
+$(SPV_DIR)/%.comp.spv: $(SHADER_DIR)/%.slang | $(SPV_DIR)
+	@mkdir -p $(dir $@)
+	$(SLANGC) $< -I$(SHADER_DIR) $(SLANGFLAGS) -stage compute -entry cs_main -o $@
 
 # Shaders must be compiled before graphics pipeline object files (for C23 #embed)
 $(BIN_DIR)/gfx/pipeline.o: $(SPV_TARGETS)
 $(SAN_DIR)/gfx/pipeline.o: $(SPV_TARGETS)
+$(BIN_DIR)/gfx/cull_pipeline.o: $(SPV_TARGETS)
+$(SAN_DIR)/gfx/cull_pipeline.o: $(SPV_TARGETS)
+$(BIN_DIR)/gfx/hiz.o: $(SPV_TARGETS)
+$(SAN_DIR)/gfx/hiz.o: $(SPV_TARGETS)
+$(BIN_DIR)/gfx/texture_synth.o: $(SPV_TARGETS)
+$(SAN_DIR)/gfx/texture_synth.o: $(SPV_TARGETS)
+$(BIN_DIR)/gfx/grid.o: $(SPV_TARGETS)
+$(SAN_DIR)/gfx/grid.o: $(SPV_TARGETS)
 
 # Standard build recipes
 $(BIN_DIR)/%.o: src/%.c
@@ -89,7 +107,13 @@ $(BIN_DIR)/%.o: tests/%.c
 $(BIN_DIR)/main.o: main.c | $(BIN_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
+$(BIN_DIR)/bench_n.o: src/bench_n.c | $(BIN_DIR)
+	$(CC) $(CFLAGS) -c $< -o $@
+
 $(TARGET): $(BIN_DIR)/main.o $(OBJS) | $(BIN_DIR)
+	$(CC) $(CFLAGS) $^ -o $@ $(VULKAN_LIBS)
+
+$(BENCH_TARGET): $(BIN_DIR)/bench_n.o $(OBJS) | $(BIN_DIR)
 	$(CC) $(CFLAGS) $^ -o $@ $(VULKAN_LIBS)
 
 $(TEST_TARGET): $(TEST_OBJS) $(OBJS) | $(BIN_DIR)
@@ -141,6 +165,9 @@ lint:
 		printf "\033[92mPASSED\033[0m\n"; \
 	fi
 	@printf "\033[92m✔ All architectural rules verified successfully.\033[0m\n"
+
+bench: $(BENCH_TARGET)
+	@./$(BENCH_TARGET)
 
 run: $(TARGET)
 	./$(TARGET)

@@ -1,0 +1,16 @@
+# khoros-run v1
+dt_s 0.01666667
+gravity 0.00000 -9.80665 0.00000
+floor_y -2.50
+seed 1
+ticks 600
+integrator symplectic_euler
+# 8 AABB boxes in a vertical stack drop
+body id=0 shape=aabb hx=0.45 hy=0.45 hz=0.45 mass=1.0 e=0.2 mu=0.7 x=0.00 y=-1.50 z=0.00 vx=0.0 vy=0.0 vz=0.0
+body id=1 shape=aabb hx=0.45 hy=0.45 hz=0.45 mass=1.0 e=0.2 mu=0.7 x=0.00 y=-0.40 z=0.00 vx=0.0 vy=0.0 vz=0.0
+body id=2 shape=aabb hx=0.45 hy=0.45 hz=0.45 mass=1.0 e=0.2 mu=0.7 x=0.00 y=0.70 z=0.00 vx=0.0 vy=0.0 vz=0.0
+body id=3 shape=aabb hx=0.45 hy=0.45 hz=0.45 mass=1.0 e=0.2 mu=0.7 x=0.00 y=1.80 z=0.00 vx=0.0 vy=0.0 vz=0.0
+body id=4 shape=aabb hx=0.45 hy=0.45 hz=0.45 mass=1.0 e=0.2 mu=0.7 x=0.00 y=2.90 z=0.00 vx=0.0 vy=0.0 vz=0.0
+body id=5 shape=aabb hx=0.45 hy=0.45 hz=0.45 mass=1.0 e=0.2 mu=0.7 x=0.00 y=4.00 z=0.00 vx=0.0 vy=0.0 vz=0.0
+body id=6 shape=aabb hx=0.45 hy=0.45 hz=0.45 mass=1.0 e=0.2 mu=0.7 x=0.00 y=5.10 z=0.00 vx=0.0 vy=0.0 vz=0.0
+body id=7 shape=aabb hx=0.45 hy=0.45 hz=0.45 mass=1.0 e=0.2 mu=0.7 x=0.00 y=6.20 z=0.00 vx=0.0 vy=0.0 vz=0.0

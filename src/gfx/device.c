@@ -7,6 +7,7 @@
 #include <sys/stat.h>
 #include <sys/sysmacros.h>
 #include <unistd.h>
+#include <stdlib.h>
 
 static int khr_drm_open_render_node(dev_t render_dev) {
     if (render_dev == (dev_t)0) {
@@ -64,6 +65,8 @@ static void khr_check_device_extensions(VkPhysicalDevice phy, khr_device_candida
             c->has_drm_properties = true;
         } else if (strcmp(name, VK_EXT_HOST_IMAGE_COPY_EXTENSION_NAME) == 0) {
             c->has_host_copy_ext = true;
+        } else if (strcmp(name, VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME) == 0) {
+            c->has_desc_buffer_ext = true;
         }
     }
 }
@@ -188,7 +191,9 @@ static bool khr_query_device_candidate(VkPhysicalDevice phy, khr_device_candidat
         }
     }
 
+    c->fdesc_buf.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT;
     c->fhost.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_HOST_IMAGE_COPY_FEATURES;
+    c->fhost.pNext = c->has_desc_buffer_ext ? &c->fdesc_buf : nullptr;
     c->f6.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_6_FEATURES;
     c->f6.pNext = &c->fhost;
     c->f5.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAINTENANCE_5_FEATURES;
@@ -393,6 +398,8 @@ bool khr_gfx_device_init(khr_gfx_device_t* d, dev_t compositor_dev) {
     d->has_push_descriptor = best_cand.f14.pushDescriptor;
     d->has_maintenance5 = best_cand.f5.maintenance5 == VK_TRUE;
     d->has_maintenance6 = best_cand.f6.maintenance6 == VK_TRUE;
+    d->is_uma = best_cand.has_uma_memory_type ||
+                (best_cand.props.deviceType == VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU);
 
     VkPhysicalDeviceVulkan14Properties p14 = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_PROPERTIES,
@@ -428,6 +435,14 @@ bool khr_gfx_device_init(khr_gfx_device_t* d, dev_t compositor_dev) {
         enableM6.pNext = feat_tail;
         feat_tail = &enableM6;
     }
+    VkPhysicalDeviceDescriptorBufferFeaturesEXT enableDescBuf = {
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT,
+    };
+    if (best_cand.has_desc_buffer_ext && best_cand.fdesc_buf.descriptorBuffer) {
+        enableDescBuf.descriptorBuffer = VK_TRUE;
+        enableDescBuf.pNext = feat_tail;
+        feat_tail = &enableDescBuf;
+    }
     if (best_cand.is_vulkan_1_4 && best_cand.f5.maintenance5) {
         enableM5.maintenance5 = VK_TRUE;
         enableM5.pNext = feat_tail;
@@ -455,6 +470,12 @@ bool khr_gfx_device_init(khr_gfx_device_t* d, dev_t compositor_dev) {
         .bufferDeviceAddress = VK_TRUE,
         .timelineSemaphore = VK_TRUE,
         .scalarBlockLayout = best_cand.f12.scalarBlockLayout,
+        .drawIndirectCount = best_cand.f12.drawIndirectCount,
+        .descriptorIndexing = best_cand.f12.descriptorIndexing,
+        .shaderSampledImageArrayNonUniformIndexing = best_cand.f12.shaderSampledImageArrayNonUniformIndexing,
+        .descriptorBindingPartiallyBound = best_cand.f12.descriptorBindingPartiallyBound,
+        .descriptorBindingVariableDescriptorCount = best_cand.f12.descriptorBindingVariableDescriptorCount,
+        .runtimeDescriptorArray = best_cand.f12.runtimeDescriptorArray,
     };
 
     /* Build unique queue creation infos (zero-heap de-duplication) */
@@ -504,7 +525,7 @@ bool khr_gfx_device_init(khr_gfx_device_t* d, dev_t compositor_dev) {
         }
     }
 
-    const char* device_extensions[8];
+    const char* device_extensions[16];
     uint32_t num_exts = 0;
     device_extensions[num_exts++] = VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME;
     device_extensions[num_exts++] = VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME;
@@ -519,6 +540,9 @@ bool khr_gfx_device_init(khr_gfx_device_t* d, dev_t compositor_dev) {
      * transfer engine despite the feature bit being on (observed on HW). */
     if (best_cand.has_host_copy_ext) {
         device_extensions[num_exts++] = VK_EXT_HOST_IMAGE_COPY_EXTENSION_NAME;
+    }
+    if (best_cand.has_desc_buffer_ext && best_cand.fdesc_buf.descriptorBuffer) {
+        device_extensions[num_exts++] = VK_EXT_DESCRIPTOR_BUFFER_EXTENSION_NAME;
     }
 
     VkDeviceCreateInfo dci = {
@@ -559,6 +583,32 @@ bool khr_gfx_device_init(khr_gfx_device_t* d, dev_t compositor_dev) {
             (PFN_vkGetMemoryHostPointerPropertiesEXT)vkGetDeviceProcAddr(
                 d->device, "vkGetMemoryHostPointerPropertiesEXT");
         d->has_external_memory_host = (d->vkGetMemoryHostPointerPropertiesEXT != nullptr);
+    }
+
+    if (best_cand.has_desc_buffer_ext && best_cand.fdesc_buf.descriptorBuffer) {
+        d->has_descriptor_buffer = true;
+        VkPhysicalDeviceDescriptorBufferPropertiesEXT desc_props = {
+            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_PROPERTIES_EXT,
+        };
+        VkPhysicalDeviceProperties2 p2 = {
+            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
+            .pNext = &desc_props,
+        };
+        vkGetPhysicalDeviceProperties2(d->phy, &p2);
+        d->descriptor_buffer_props = desc_props;
+
+        d->vkGetDescriptorSetLayoutSizeEXT =
+            (PFN_vkGetDescriptorSetLayoutSizeEXT)vkGetDeviceProcAddr(d->device, "vkGetDescriptorSetLayoutSizeEXT");
+        d->vkGetDescriptorSetLayoutBindingOffsetEXT =
+            (PFN_vkGetDescriptorSetLayoutBindingOffsetEXT)vkGetDeviceProcAddr(d->device, "vkGetDescriptorSetLayoutBindingOffsetEXT");
+        d->vkGetDescriptorEXT =
+            (PFN_vkGetDescriptorEXT)vkGetDeviceProcAddr(d->device, "vkGetDescriptorEXT");
+        d->vkCmdBindDescriptorBuffersEXT =
+            (PFN_vkCmdBindDescriptorBuffersEXT)vkGetDeviceProcAddr(d->device, "vkCmdBindDescriptorBuffersEXT");
+        d->vkCmdSetDescriptorBufferOffsetsEXT =
+            (PFN_vkCmdSetDescriptorBufferOffsetsEXT)vkGetDeviceProcAddr(d->device, "vkCmdSetDescriptorBufferOffsetsEXT");
+        d->vkCmdBindDescriptorBufferEmbeddedSamplersEXT =
+            (PFN_vkCmdBindDescriptorBufferEmbeddedSamplersEXT)vkGetDeviceProcAddr(d->device, "vkCmdBindDescriptorBufferEmbeddedSamplersEXT");
     }
 
     if (!d->vkGetMemoryFdKHR || !d->vkGetSemaphoreFdKHR ||
@@ -663,6 +713,21 @@ VkSampleCountFlagBits khr_gfx_sample_count(const khr_gfx_device_t* d) {
     if (d == nullptr || d->phy == VK_NULL_HANDLE) {
         return VK_SAMPLE_COUNT_1_BIT;
     }
+    const char* env_msaa = getenv("KHR_GFX_MSAA");
+    if (env_msaa != nullptr) {
+        if (strcmp(env_msaa, "1") == 0) return VK_SAMPLE_COUNT_1_BIT;
+        if (strcmp(env_msaa, "2") == 0) return VK_SAMPLE_COUNT_2_BIT;
+        if (strcmp(env_msaa, "4") == 0) return VK_SAMPLE_COUNT_4_BIT;
+    }
+
+    /* On Integrated GPUs / APUs (Intel Iris Xe / Arc, AMD Radeon 700M/800M),
+     * CPU, GPU, and KMS display scanout share the same narrow memory bus.
+     * 4x MSAA exhausts bandwidth by quadrupling depth/color allocation and forcing
+     * resolve passes. Defaulting to 1x eliminates >75% of framebuffer DRAM traffic. */
+    if (d->is_uma) {
+        return VK_SAMPLE_COUNT_1_BIT;
+    }
+
     VkPhysicalDeviceProperties props = {};
     vkGetPhysicalDeviceProperties(d->phy, &props);
     VkSampleCountFlags f = props.limits.framebufferColorSampleCounts &

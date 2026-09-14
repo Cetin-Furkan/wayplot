@@ -1,4 +1,5 @@
 #include "khoros/gfx/frame.h"
+#include "khoros/gfx/depth.h"
 
 #include <string.h>
 
@@ -245,6 +246,135 @@ static void khr_frame_barrier(VkCommandBuffer cmd,
 }
 
 [[nodiscard]]
+static bool khr_frame_submit_and_readback(khr_gfx_device_t* d, khr_gfx_frame_t* f,
+                                          uint8_t out_bgra[4]) {
+    VkImageMemoryBarrier2 to_read = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+        .srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+        .srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+        .dstStageMask = f->use_host_copy ? VK_PIPELINE_STAGE_2_NONE
+                                         : VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+        .dstAccessMask = f->use_host_copy ? VK_ACCESS_2_NONE
+                                          : VK_ACCESS_2_TRANSFER_READ_BIT,
+        .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .newLayout = f->use_host_copy ? VK_IMAGE_LAYOUT_GENERAL
+                                      : VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .image = f->image,
+        .subresourceRange = {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .baseMipLevel = 0,
+            .levelCount = 1,
+            .baseArrayLayer = 0,
+            .layerCount = 1,
+        },
+    };
+    khr_frame_barrier(f->cmd, &to_read, nullptr);
+
+    if (!f->use_host_copy) {
+        VkBufferImageCopy region = {
+            .bufferOffset = 0,
+            .bufferRowLength = 0, /* tightly packed */
+            .bufferImageHeight = 0,
+            .imageSubresource = {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .mipLevel = 0,
+                .baseArrayLayer = 0,
+                .layerCount = 1,
+            },
+            .imageOffset = { 0, 0, 0 },
+            .imageExtent = { f->w, f->h, 1 },
+        };
+        vkCmdCopyImageToBuffer(f->cmd, f->image,
+                               VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                               f->readback, 1, &region);
+        VkMemoryBarrier2 read_bar = {
+            .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+            .srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            .srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            .dstStageMask = VK_PIPELINE_STAGE_2_HOST_BIT,
+            .dstAccessMask = VK_ACCESS_2_HOST_READ_BIT,
+        };
+        khr_frame_barrier(f->cmd, nullptr, &read_bar);
+    }
+    if (vkEndCommandBuffer(f->cmd) != VK_SUCCESS) {
+        return false;
+    }
+
+    uint64_t point = f->next_point++;
+    VkCommandBufferSubmitInfo cb_info = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+        .commandBuffer = f->cmd,
+    };
+    VkSemaphoreSubmitInfo sig_info = {
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+        .semaphore = f->timeline,
+        .value = point,
+        .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+    };
+    VkSubmitInfo2 submit = {
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+        .commandBufferInfoCount = 1,
+        .pCommandBufferInfos = &cb_info,
+        .signalSemaphoreInfoCount = 1,
+        .pSignalSemaphoreInfos = &sig_info,
+    };
+    khr_gfx_device_lock_queues(d);
+    VkResult sub_res = vkQueueSubmit2(d->gfx_queue, 1, &submit, VK_NULL_HANDLE);
+    khr_gfx_device_unlock_queues(d);
+    if (sub_res != VK_SUCCESS) {
+        return false;
+    }
+
+    VkSemaphoreWaitInfo wait = {
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
+        .semaphoreCount = 1,
+        .pSemaphores = &f->timeline,
+        .pValues = &point,
+    };
+    if (vkWaitSemaphores(d->device, &wait, KHR_FRAME_WAIT_NS) != VK_SUCCESS) {
+        return false;
+    }
+
+    if (f->use_host_copy) {
+        VkImageToMemoryCopy region = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_TO_MEMORY_COPY,
+            .pHostPointer = f->readback_host,
+            .memoryRowLength = 0,
+            .memoryImageHeight = 0,
+            .imageSubresource = {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .mipLevel = 0,
+                .baseArrayLayer = 0,
+                .layerCount = 1,
+            },
+            .imageOffset = { 0, 0, 0 },
+            .imageExtent = { f->w, f->h, 1 },
+        };
+        VkCopyImageToMemoryInfo info = {
+            .sType = VK_STRUCTURE_TYPE_COPY_IMAGE_TO_MEMORY_INFO,
+            .flags = 0,
+            .srcImage = f->image,
+            .srcImageLayout = VK_IMAGE_LAYOUT_GENERAL,
+            .regionCount = 1,
+            .pRegions = &region,
+        };
+        if (f->pfn_host_copy(d->device, &info) != VK_SUCCESS) {
+            return false;
+        }
+    }
+
+    uint8_t* px = (uint8_t*)f->readback_host +
+                  ((size_t)(f->h / 2) * f->w + (f->w / 2)) * 4;
+    out_bgra[0] = px[0];
+    out_bgra[1] = px[1];
+    out_bgra[2] = px[2];
+    out_bgra[3] = px[3];
+    return true;
+}
+
+[[nodiscard]]
 bool khr_gfx_frame_render_red_card(khr_gfx_device_t* d, khr_gfx_frame_t* f,
                                    khr_bda_arena_t* arena, uint8_t out_bgra[4]) {
     if (d == nullptr || d->device == VK_NULL_HANDLE || f == nullptr ||
@@ -373,140 +503,7 @@ bool khr_gfx_frame_render_red_card(khr_gfx_device_t* d, khr_gfx_frame_t* f,
     vkCmdDraw(f->cmd, 6, 1, 0, 0);
     vkCmdEndRendering(f->cmd);
 
-    VkImageMemoryBarrier2 to_read = {
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-        .srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
-        .srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
-        .dstStageMask = f->use_host_copy ? VK_PIPELINE_STAGE_2_NONE
-                                         : VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-        .dstAccessMask = f->use_host_copy ? VK_ACCESS_2_NONE
-                                          : VK_ACCESS_2_TRANSFER_READ_BIT,
-        .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        .newLayout = f->use_host_copy ? VK_IMAGE_LAYOUT_GENERAL
-                                      : VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-        .image = f->image,
-        .subresourceRange = {
-            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-            .baseMipLevel = 0,
-            .levelCount = 1,
-            .baseArrayLayer = 0,
-            .layerCount = 1,
-        },
-    };
-    khr_frame_barrier(f->cmd, &to_read, nullptr);
-
-    if (!f->use_host_copy) {
-        VkBufferImageCopy region = {
-            .bufferOffset = 0,
-            .bufferRowLength = 0, /* tightly packed */
-            .bufferImageHeight = 0,
-            .imageSubresource = {
-                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                .mipLevel = 0,
-                .baseArrayLayer = 0,
-                .layerCount = 1,
-            },
-            .imageOffset = { 0, 0, 0 },
-            .imageExtent = { f->w, f->h, 1 },
-        };
-        vkCmdCopyImageToBuffer(f->cmd, f->image,
-                               VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                               f->readback, 1, &region);
-        VkMemoryBarrier2 read_bar = {
-            .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
-            .srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
-            .srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
-            .dstStageMask = VK_PIPELINE_STAGE_2_HOST_BIT,
-            .dstAccessMask = VK_ACCESS_2_HOST_READ_BIT,
-        };
-        khr_frame_barrier(f->cmd, nullptr, &read_bar);
-    }
-    if (vkEndCommandBuffer(f->cmd) != VK_SUCCESS) {
-        goto done;
-    }
-
-    uint64_t point = f->next_point++;
-    VkCommandBufferSubmitInfo cb_info = {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
-        .commandBuffer = f->cmd,
-    };
-    VkSemaphoreSubmitInfo sig_info = {
-        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-        .semaphore = f->timeline,
-        .value = point,
-        .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-    };
-    VkSubmitInfo2 submit = {
-        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
-        .commandBufferInfoCount = 1,
-        .pCommandBufferInfos = &cb_info,
-        .signalSemaphoreInfoCount = 1,
-        .pSignalSemaphoreInfos = &sig_info,
-    };
-    /* Externally synchronized VkQueue: one alias across gfx/compute/xfer on
-     * UMA silicon, so every submit serializes here. */
-    khr_gfx_device_lock_queues(d);
-    VkResult sub_res = vkQueueSubmit2(d->gfx_queue, 1, &submit, VK_NULL_HANDLE);
-    khr_gfx_device_unlock_queues(d);
-    if (sub_res != VK_SUCCESS) {
-        goto done;
-    }
-
-    VkSemaphoreWaitInfo wait = {
-        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
-        .semaphoreCount = 1,
-        .pSemaphores = &f->timeline,
-        .pValues = &point,
-    };
-    if (vkWaitSemaphores(d->device, &wait, KHR_FRAME_WAIT_NS) != VK_SUCCESS) {
-        goto done;
-    }
-
-    if (f->use_host_copy) {
-        /* Queue-free readback: the layout transition already happened on the
-         * queue; the memcpy-class copy runs on the host, no transfer engine. */
-        VkImageToMemoryCopy region = {
-            .sType = VK_STRUCTURE_TYPE_IMAGE_TO_MEMORY_COPY,
-            .pHostPointer = f->readback_host,
-            .memoryRowLength = 0,
-            .memoryImageHeight = 0,
-            .imageSubresource = {
-                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-                .mipLevel = 0,
-                .baseArrayLayer = 0,
-                .layerCount = 1,
-            },
-            .imageOffset = { 0, 0, 0 },
-            .imageExtent = { f->w, f->h, 1 },
-        };
-        /* flags = 0: the driver performs the tiled-to-linear copy itself.
-         * MEMCPY_BIT would assert identical host/device layout, which needs
-         * the VkSubresourceHostMemcpySize query path and linear-tiling
-         * images; claiming it on this optimal-tiling image is illegal and,
-         * on the experimental Xe driver, fatal. */
-        VkCopyImageToMemoryInfo info = {
-            .sType = VK_STRUCTURE_TYPE_COPY_IMAGE_TO_MEMORY_INFO,
-            .flags = 0,
-            .srcImage = f->image,
-            .srcImageLayout = VK_IMAGE_LAYOUT_GENERAL,
-            .regionCount = 1,
-            .pRegions = &region,
-        };
-        if (f->pfn_host_copy(d->device, &info) != VK_SUCCESS) {
-            goto done;
-        }
-    }
-
-    /* Center pixel of a fullscreen opaque card must read back red in BGRA. */
-    uint8_t* px = (uint8_t*)f->readback_host +
-                  ((size_t)(f->h / 2) * f->w + (f->w / 2)) * 4;
-    out_bgra[0] = px[0];
-    out_bgra[1] = px[1];
-    out_bgra[2] = px[2];
-    out_bgra[3] = px[3];
-    ok = true;
+    ok = khr_frame_submit_and_readback(d, f, out_bgra);
 
 done:
     khr_card_pipeline_destroy(&pipe);
@@ -514,4 +511,261 @@ done:
         out_bgra[0] = out_bgra[1] = out_bgra[2] = out_bgra[3] = 0;
     }
     return ok;
+}
+
+[[nodiscard]]
+bool khr_gfx_frame_render_depth_test(khr_gfx_device_t* d, khr_gfx_frame_t* f,
+                                     khr_bda_arena_t* arena, bool reverse_order,
+                                     uint8_t out_bgra[4]) {
+    if (d == nullptr || d->device == VK_NULL_HANDLE || f == nullptr ||
+        f->cmd == VK_NULL_HANDLE || arena == nullptr || out_bgra == nullptr) {
+        return false;
+    }
+
+    VkFormat depth_format = khr_gfx_depth_format(d);
+    if (depth_format == VK_FORMAT_UNDEFINED) {
+        return false;
+    }
+
+    khr_depth_target_t depth_target = {};
+    if (!khr_depth_target_create(d, &depth_target, f->w, f->h,
+                                 VK_SAMPLE_COUNT_1_BIT, depth_format)) {
+        return false;
+    }
+
+    VkPipelineLayout layout = VK_NULL_HANDLE;
+    if (!khr_pipeline_layout_create(d->device, VK_NULL_HANDLE, sizeof(khr_mesh_push_t), &layout)) {
+        khr_depth_target_destroy(d, &depth_target);
+        return false;
+    }
+
+    auto vs = khr_shader_get_mesh_vert();
+    auto fs = khr_shader_get_mesh_frag();
+    VkShaderModule vs_mod = VK_NULL_HANDLE;
+    VkShaderModule fs_mod = VK_NULL_HANDLE;
+    if (!khr_shader_module_create(d->device, vs.code, vs.size_bytes, &vs_mod) ||
+        !khr_shader_module_create(d->device, fs.code, fs.size_bytes, &fs_mod)) {
+        khr_shader_module_destroy(d->device, fs_mod);
+        khr_shader_module_destroy(d->device, vs_mod);
+        khr_pipeline_layout_destroy(d->device, layout);
+        khr_depth_target_destroy(d, &depth_target);
+        return false;
+    }
+
+    khr_gfx_pipeline_config_t cfg = {
+        .vs_module = vs_mod,
+        .fs_module = fs_mod,
+        .layout = layout,
+        .color_format = KHR_FRAME_FORMAT,
+        .depth_format = depth_target.format,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .depth_test = true,
+        .blend_enable = false,
+        .cull_mode = VK_CULL_MODE_NONE,
+        .topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
+    };
+
+    VkPipeline pipeline = VK_NULL_HANDLE;
+    if (!khr_gfx_pipeline_create(d->device, &cfg, &pipeline)) {
+        khr_shader_module_destroy(d->device, fs_mod);
+        khr_shader_module_destroy(d->device, vs_mod);
+        khr_pipeline_layout_destroy(d->device, layout);
+        khr_depth_target_destroy(d, &depth_target);
+        return false;
+    }
+
+    /* Allocate geometry in BDA arena:
+     * Triangle 1: Red at Z=0.2 (Far in Reversed-Z)
+     * Triangle 2: Green at Z=0.8 (Near in Reversed-Z) */
+    float* verts = nullptr;
+    VkDeviceAddress verts_addr = 0;
+    if (!khr_bda_arena_alloc(arena, sizeof(float) * 18, 16,
+                             (void**)&verts, &verts_addr)) {
+        goto fail;
+    }
+    uint32_t* indices = nullptr;
+    VkDeviceAddress indices_addr = 0;
+    if (!khr_bda_arena_alloc(arena, sizeof(uint32_t) * 6, 16,
+                             (void**)&indices, &indices_addr)) {
+        goto fail;
+    }
+
+    /* Red triangle (Z = 0.2): CCW winding */
+    verts[0] = -1.0f; verts[1] = -1.0f; verts[2] = 0.2f;
+    verts[3] =  1.0f; verts[4] = -1.0f; verts[5] = 0.2f;
+    verts[6] =  0.0f; verts[7] =  1.0f; verts[8] = 0.2f;
+    indices[0] = 0; indices[1] = 1; indices[2] = 2;
+
+    /* Green triangle (Z = 0.8): CCW winding */
+    verts[9]  = -1.0f; verts[10] = -1.0f; verts[11] = 0.8f;
+    verts[12] =  1.0f; verts[13] = -1.0f; verts[14] = 0.8f;
+    verts[15] =  0.0f; verts[16] =  1.0f; verts[17] = 0.8f;
+    indices[3] = 0; indices[4] = 1; indices[5] = 2;
+
+    khr_mesh_push_t push_red = {
+        .mvp_c0 = { 1.0f, 0.0f, 0.0f, 0.0f },
+        .mvp_c1 = { 0.0f, 1.0f, 0.0f, 0.0f },
+        .mvp_c2 = { 0.0f, 0.0f, 1.0f, 0.0f },
+        .mvp_c3 = { 0.0f, 0.0f, 0.0f, 1.0f },
+        .light_dir = { 0.0f, 0.0f, 1.0f, 0.0f },
+        .verts_addr = verts_addr,
+        .indices_addr = indices_addr,
+        .index_count = 3,
+        .vert_count = 3,
+        .pad0 = 0x000000FFU, /* Red tint: R=255, G=0, B=0 */
+    };
+
+    khr_mesh_push_t push_green = {
+        .mvp_c0 = { 1.0f, 0.0f, 0.0f, 0.0f },
+        .mvp_c1 = { 0.0f, 1.0f, 0.0f, 0.0f },
+        .mvp_c2 = { 0.0f, 0.0f, 1.0f, 0.0f },
+        .mvp_c3 = { 0.0f, 0.0f, 0.0f, 1.0f },
+        .light_dir = { 0.0f, 0.0f, 1.0f, 0.0f },
+        .verts_addr = verts_addr + 9 * sizeof(float),
+        .indices_addr = indices_addr + 3 * sizeof(uint32_t),
+        .index_count = 3,
+        .vert_count = 3,
+        .pad0 = 0x0000FF00U, /* Green tint: R=0, G=255, B=0 */
+    };
+
+    if (vkResetCommandPool(d->device, f->pool, 0) != VK_SUCCESS) {
+        goto fail;
+    }
+    VkCommandBufferBeginInfo begin = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+    };
+    if (vkBeginCommandBuffer(f->cmd, &begin) != VK_SUCCESS) {
+        goto fail;
+    }
+
+    VkMemoryBarrier2 host_bar = {
+        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+        .srcStageMask = VK_PIPELINE_STAGE_2_HOST_BIT,
+        .srcAccessMask = VK_ACCESS_2_HOST_WRITE_BIT,
+        .dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
+        .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
+    };
+    khr_frame_barrier(f->cmd, nullptr, &host_bar);
+
+    VkImageMemoryBarrier2 img_bars[2] = {
+        {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+            .srcStageMask = VK_PIPELINE_STAGE_2_NONE,
+            .srcAccessMask = VK_ACCESS_2_NONE,
+            .dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+            .dstAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+            .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+            .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image = f->image,
+            .subresourceRange = {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .levelCount = 1,
+                .layerCount = 1,
+            },
+        },
+        {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+            .srcStageMask = VK_PIPELINE_STAGE_2_NONE,
+            .srcAccessMask = VK_ACCESS_2_NONE,
+            .dstStageMask = VK_PIPELINE_STAGE_2_EARLY_FRAGMENT_TESTS_BIT |
+                            VK_PIPELINE_STAGE_2_LATE_FRAGMENT_TESTS_BIT,
+            .dstAccessMask = VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT |
+                             VK_ACCESS_2_DEPTH_STENCIL_ATTACHMENT_READ_BIT,
+            .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+            .newLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+            .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+            .image = depth_target.image,
+            .subresourceRange = {
+                .aspectMask = (depth_target.format == VK_FORMAT_D24_UNORM_S8_UINT ||
+                               depth_target.format == VK_FORMAT_D32_SFLOAT_S8_UINT)
+                               ? (VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT)
+                               : VK_IMAGE_ASPECT_DEPTH_BIT,
+                .levelCount = 1,
+                .layerCount = 1,
+            },
+        },
+    };
+    VkDependencyInfo dep_init = {
+        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .imageMemoryBarrierCount = 2,
+        .pImageMemoryBarriers = img_bars,
+    };
+    vkCmdPipelineBarrier2(f->cmd, &dep_init);
+
+    VkClearValue clear_color = { .color = { .float32 = { 0.02f, 0.04f, 0.08f, 1.0f } } };
+    VkClearValue clear_depth = { .depthStencil = { .depth = KHR_REVERSED_Z_CLEAR, .stencil = 0 } };
+
+    VkRenderingAttachmentInfo color_att = {
+        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+        .imageView = f->view,
+        .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+        .clearValue = clear_color,
+    };
+    VkRenderingAttachmentInfo depth_att = {
+        .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+        .imageView = depth_target.view,
+        .imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .clearValue = clear_depth,
+    };
+    VkRenderingInfo ri = {
+        .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+        .renderArea = { .offset = { 0, 0 }, .extent = { f->w, f->h } },
+        .layerCount = 1,
+        .colorAttachmentCount = 1,
+        .pColorAttachments = &color_att,
+        .pDepthAttachment = &depth_att,
+    };
+    vkCmdBeginRendering(f->cmd, &ri);
+
+    VkViewport vp = {
+        .x = 0.0f, .y = 0.0f,
+        .width = (float)f->w, .height = (float)f->h,
+        .minDepth = 0.0f, .maxDepth = 1.0f,
+    };
+    vkCmdSetViewport(f->cmd, 0, 1, &vp);
+    VkRect2D sc = { .offset = { 0, 0 }, .extent = { f->w, f->h } };
+    vkCmdSetScissor(f->cmd, 0, 1, &sc);
+
+    vkCmdBindPipeline(f->cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+
+    const khr_mesh_push_t* first = reverse_order ? &push_green : &push_red;
+    const khr_mesh_push_t* second = reverse_order ? &push_red : &push_green;
+
+    vkCmdPushConstants(f->cmd, layout,
+                       VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                       0, sizeof(khr_mesh_push_t), first);
+    vkCmdDraw(f->cmd, 3, 1, 0, 0);
+
+    vkCmdPushConstants(f->cmd, layout,
+                       VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+                       0, sizeof(khr_mesh_push_t), second);
+    vkCmdDraw(f->cmd, 3, 1, 0, 0);
+
+    vkCmdEndRendering(f->cmd);
+
+    bool ok = khr_frame_submit_and_readback(d, f, out_bgra);
+
+    khr_gfx_pipeline_destroy(d->device, pipeline);
+    khr_shader_module_destroy(d->device, fs_mod);
+    khr_shader_module_destroy(d->device, vs_mod);
+    khr_pipeline_layout_destroy(d->device, layout);
+    khr_depth_target_destroy(d, &depth_target);
+    return ok;
+
+fail:
+    khr_gfx_pipeline_destroy(d->device, pipeline);
+    khr_shader_module_destroy(d->device, fs_mod);
+    khr_shader_module_destroy(d->device, vs_mod);
+    khr_pipeline_layout_destroy(d->device, layout);
+    khr_depth_target_destroy(d, &depth_target);
+    out_bgra[0] = out_bgra[1] = out_bgra[2] = out_bgra[3] = 0;
+    return false;
 }

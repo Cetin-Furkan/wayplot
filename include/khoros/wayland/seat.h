@@ -68,9 +68,11 @@ typedef struct {
     bool     f_pressed;
     bool     shift_down;
     int32_t  wheel; /* accumulated 120ths of a detent; window consumes and zeros */
+    struct khr_input_ring* input_ring; /* Optional attached lock-free input ring */
 } khr_seat_t;
 
 void khr_seat_init(khr_seat_t* seat);
+void khr_seat_attach_input_ring(khr_seat_t* seat, struct khr_input_ring* ring);
 
 [[nodiscard]]
 bool khr_seat_bind(khr_wl_client_t* client, khr_seat_t* seat);

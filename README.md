@@ -11,23 +11,33 @@ Right now, the project has 2 rings, ring A and ring B, each of them is pinned to
 
 ```bash
 make
-./build/engine                 # window, default box
-./build/engine mesh.khrb       # ingest a native mesh
+./build/engine                                # interactive window (PBR Damascus Suzanne + lights)
+./build/engine --deck=experiments/spheres_n8.deck # 8 colliding spheres in live 3D window
+./build/engine assets/shapes/sphere.kblob     # procedural PBR sphere skin
+make test                                     # 194 / 194 tests passing (100.0%) across 18 suites
+make bench                                    # N-sweep empirical benchmarks (Tiger Lake Xe)
 ```
 
 Build, test, export, design rules: [DEVELOPER.md](DEVELOPER.md).
 
 ---
 
-## Now
+## Now (Version 0.3.0)
 
-A real window. GPU mesh in the client. Orbit, pan, zoom, frame. Axis gimbal that does not steal the close button. Native `.khrb` — CPU checks once, GPU reads in place. Dirty present: no change, no frame.
+> **Caption**: *The banner is measured, the integrator is an IVP you can fail, the run is an experiment.*
 
-ISO C23. Vulkan 1.4. No `libwayland`. No `liburing`. No OpenGL. No Vulkan WSI.
+A bare-metal scientific instrument, not just a visual demo. Live Wayland window with zero-copy BDA GPU vertex pulling, Cook-Torrance GGX PBR, Two-Pass Hi-Z occlusion culling, 30-bit Morton LBVH broadphase on Core 3, and physical harmonic audio synthesis.
+
+* **Experiment Decks (`.deck`)**: Scriptable `# khoros-run v1` physics runs with SI units (restitution $e$, friction $\mu$, gravity $g$, masses, and initial velocities).
+* **Live 3D & Headless Modes**: Run `--deck=<path>` interactively in 3D or `--headless --csv=<path>` for high-frequency 18-column mechanical telemetry.
+* **Deterministic Verification**: Bit-exact state hashes (`--hash-only`) proving numerical reproducibility across runs.
+* **Xe N-Sweep Benchmarks**: Measured latency from $N=1$ to $N=1024$ bodies on Intel Iris Xe.
+
+ISO C23. Vulkan 1.4. Zero third-party middleware (no `libwayland`, `liburing`, `libcglm`, `SDL`, or `GLFW`). Native Linux 7.2+ `io_uring` + raw syscalls only.
 
 ## Next
 
-The same machine, aimed at a field. Time you can scrub. A working set: GPU has 2 GB, file is 8 GB, only the slice on screen (and the time you are about to open) is hot. Then other programs sit on this instead of standing up their own viewer.
+Multi-draw indirect batching per distinct mesh, volume rendering passes, and extended rigid-body constraint solvers. The same machine, aimed at a field. Time you can scrub. A working set: GPU has 2 GB, file is 8 GB, only the slice on screen (and the time you are about to open) is hot.
 
 ## Far
 

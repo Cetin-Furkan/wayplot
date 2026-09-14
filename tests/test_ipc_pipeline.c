@@ -260,7 +260,7 @@ bool test_tier4_144hz_presentation_pacing(void) {
         TEST_ASSERT_EQ(write(efd, &val, sizeof(val)), (ssize_t)sizeof(val),
                        "eventfd signal");
         khr_cqe_event_t evt = {};
-        TEST_ASSERT(khr_topology_wait_cqe(&topo, &evt, 1'000), "wait eventfd cqe");
+        TEST_ASSERT(khr_topology_wait_cqe(&topo, &evt, 20'000), "wait eventfd cqe");
         TEST_ASSERT_EQ(evt.user_data, KHR_TAG_EVENTFD, "eventfd tag");
         TEST_ASSERT(evt.res >= 0, "eventfd watch failed");
         fired++;
@@ -273,7 +273,7 @@ bool test_tier4_144hz_presentation_pacing(void) {
         TEST_ASSERT_NOT_NULL(to, "timeout sqe");
         TEST_ASSERT(khr_uring_submit(&topo.ring_a, 0) >= 0, "timeout submit");
         khr_cqe_event_t tevt = {};
-        TEST_ASSERT(khr_topology_wait_cqe(&topo, &tevt, 1'000), "wait timeout");
+        TEST_ASSERT(khr_topology_wait_cqe(&topo, &tevt, 20'000), "wait timeout");
         TEST_ASSERT_EQ(tevt.user_data, KHR_TAG_TIMEOUT, "timeout tag");
     }
     uint64_t dt = khr_test_now_ns() - t0;

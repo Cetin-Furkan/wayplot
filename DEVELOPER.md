@@ -1,79 +1,110 @@
-# Developer Guide: Khoros Engine
+# Developers and agents
 
-Welcome to the Khoros Engine developer documentation. This document details our development environment, build practices, architectural patterns, and strict coding conventions.
+This file is the how. The why is [README.md](README.md). Subsystem manuals live in [doc/](doc/README.md). Agent session log is [grok.ai](grok.ai) (append-only).
 
----
-
-## 1. System Requirements
-
-- **Operating System**: Linux kernel 7.2+ (Optimized for CachyOS / BORE scheduler)
-- **Compiler**: GCC 16+ or Clang 22+ with ISO C23 standard conformance (`-std=c23`)
-- **Graphics / Compute**: Vulkan SDK 1.4+ (Vulkan 1.4.357+) with DRM/KMS Direct-to-Display support
-- **Kernel Headers**: Modern `<linux/io_uring.h>` containing registered ring, cooperative taskrun, and futex operations
+The public name is **Wayplot**. The C tree is **Khoros**. Same program.
 
 ---
 
-## 2. Strict C23 Idioms & Banned Items
+## Machine
 
-All code contributed to Khoros must strictly adhere to ISO C23. We enforce this through both preprocessor guards and compiler flags:
+- Linux, **kernel 7.2+** (CachyOS is the development host). GitHub `ubuntu-latest` is not that kernel.
+- GCC with ISO C23 (`-std=c23`) or a Clang that actually implements it
+- Vulkan 1.4, `pkg-config` for `vulkan` and `libdrm`
+- `slangc` for `shaders/*.slang`
 
-### 2.1 Prohibited Headers & Replacements
-| Prohibited Item | Reason | C23 Replacement |
-|---|---|---|
-| `<stdbool.h>` | Obsolete in C23; `bool`, `true`, `false` are built-in keywords | Built-in keywords: `bool`, `true`, `false` |
-| `<stdalign.h>` | Obsolete in C23; `alignas`, `alignof` are built-in keywords | Built-in keywords: `alignas`, `alignof` |
-| `NULL`, `(void*)0` | Ambiguous legacy macros | Built-in keyword: `nullptr` |
-| `memset(&s, 0, sizeof(s))` | Legacy zeroing | Empty initializer: `s = {}` |
-| `#define CONSTANT 10` | Untyped macro constants | Strongly-typed `constexpr`: `constexpr uint32_t CONSTANT = 10;` |
-
-### 2.2 Standard C23 Attributes
-Use standard attributes natively:
-```c
-[[nodiscard]]
-khr_result_t khr_ring_submit(khr_ring_t* ring);
-
-[[maybe_unused]]
-static void debug_dump_sqe(const struct io_uring_sqe* sqe);
-```
-
----
-
-## 3. I/O Subsystem: Raw `io_uring`
-
-We do **not** link or use `liburing`. All operations are executed through direct syscalls to the kernel:
-
-1. **Ring Setup**: `syscall(__NR_io_uring_setup, depth, &params)`
-   - Modern setup flags used: `IORING_SETUP_COOP_TASKRUN`, `IORING_SETUP_DEFER_TASKRUN`, `IORING_SETUP_SINGLE_ISSUER`.
-   - Single MMAP validation: Check `params.features & IORING_FEAT_SINGLE_MMAP`.
-2. **Ring Entry**: `syscall(__NR_io_uring_enter, fd, to_submit, min_complete, flags, sig)`
-3. **Ring Registration**: `syscall(__NR_io_uring_register, fd, opcode, arg, nr_args)`
-   - Direct ring registration: `IORING_REGISTER_RING_FDS`.
-4. **Futex Synchronization**: Use `IORING_OP_FUTEX_WAIT` and `IORING_OP_FUTEX_WAKE` for low-latency job synchronization.
-
-> **RULE**: `epoll` and `poll` are strictly forbidden across the entire repository.
-
----
-
-## 4. Graphics & Compute Subsystem: Vulkan 1.4
-
-1. **Version Baseline**: `VK_API_VERSION_1_4` required at instance and device creation.
-2. **Windowing & Display**:
-   - `libwayland` is strictly forbidden.
-   - For hardware display: use Vulkan KMS/DRM Direct-to-Display (`VK_KHR_display` and `VK_EXT_direct_mode_display`).
-   - For validation and compute: use `VK_EXT_headless_surface` or offscreen framebuffer/compute pipelines.
-3. **Synchronization 2**: Exclusively use `vkQueueSubmit2` with `VkCommandBufferSubmitInfo` and `vkCmdPipelineBarrier2`.
-
----
-
-## 5. Build & Verification Commands
+## Commands (the only list)
 
 ```bash
-# Build engine binary
-make all
-
-# Run engine
-make run
-
-# Clean build artifacts
-make clean
+make              # ./build/engine
+make test         # ./build/test_runner  →  logs/test_logs/
+make lint         # banned headers / libwayland / liburing / epoll / poll
+make sanitize     # ASan + UBSan
+./build/engine
+./build/engine path/to/file.khrb
+./build/engine --write-box /tmp/box.khrb
 ```
+
+Export a mesh (engine does **not** read `.blend`):
+
+```bash
+blender --background --python tools/export_khrb.py -- /tmp/mesh.khrb
+blender --background --python tools/export_khrb.py -- --monkey /tmp/suzanne.khrb
+./build/engine /tmp/suzanne.khrb
+```
+
+Present is **dirty-only**. Do not “fix” idle by redrawing every frame.
+
+Publish: commit on `engine`, push when the human asks. Do not invent a second remote dance. Do not cargo-cult commit one-liners from old notes.
+
+---
+
+## What the tests actually cover
+
+They are not a scam and they are not the product.
+
+They cover wire, io_uring, topology, ingest into the payload, hit lists, KHRB parse, camera pitch clamp, shader modules, mock compositor. They do **not** cover “Suzanne faces the camera,” lighting that reads as a cube, or color. A green bar after a math change is not permission to skip looking at the window.
+
+If you change camera, Y-flip, winding, or cull, add a *contract* test (e.g. default frame puts object +Z toward the camera). Do not add a test that loads a monkey file and asserts nothing about facing.
+
+---
+
+## Design choices that are not optional
+
+| Do | Do not |
+|---|---|
+| ISO C23 keywords (`bool`, `nullptr`, `alignas`, `constexpr`) | `<stdbool.h>`, `<stdalign.h>` |
+| Raw `io_uring` syscalls | `liburing`, `epoll`, `poll` |
+| Wayland wire in this tree | `libwayland` |
+| DMA-BUF slots + DRM syncobj | Vulkan WSI, `VkSwapchainKHR`, `VK_KHR_display` as the window |
+| Hugepage payload `[0, 2MiB-64KiB)`, UI in the high 64 KiB | Ingest into the title-bar cards |
+| GPU reads verts through BDA | CPU rebuild of the mesh every frame |
+| Backface cull + depth on the GPU | CPU list of “visible” faces |
+| Native `.khrb` | Parsing `.blend` in the engine |
+| Split fat files as **siblings** | Deeper folders “for architecture” |
+
+Present thread does not wait on disk. Ring B ingests. Ring A presents. MSG_RING is the 8-byte pointer, not a copy of the file.
+
+---
+
+## Window, today
+
+Client-side decorations. Hit list is first-match (`config.h`), not an if-ladder. Close is a title-bar square; NE resize is 3×3 so it does not steal close. Gimbal is in the **client**, below the 32 px bar, inset so it misses the 8 px east strip.
+
+| Input | Action |
+|---|---|
+| LMB drag (client or gimbal) | Turntable orbit |
+| Shift+LMB or middle-drag | Pan |
+| Wheel | Zoom |
+| F or double-click client | Frame, keep yaw/pitch |
+| Click gimbal arm / hub | Snap look-from ±X ±Y ±Z |
+| Double-click gimbal | Reset orient + frame |
+| Double-click title bar | `xdg_toplevel.set_maximized` |
+| F11 | Exclusive fullscreen |
+| Title-bar close / Esc as documented | Leave |
+
+---
+
+## Layout
+
+```
+include/khoros/   public headers (core, gfx, uring, wayland)
+src/              matching .c
+shaders/          Slang; SPIR-V is generated under build/
+tools/            cold path only (export_khrb.py)
+tests/            plumbing tests
+doc/              manuals (not the landing page)
+```
+
+`window.c` still does too many jobs. Split by job at the **same** depth when you split. Do not nest.
+
+---
+
+## Improve it
+
+1. Read README (what this is) and this file (how).
+2. Read `doc/open-problems.md` and `doc/kernel-notes.md` before touching rings.
+3. Change one job. Look at the window if the job is pixels. `make test` and `make lint`.
+4. Do not claim a visual in a test that never rendered. Do not grow the hugepage “while we are here.” Do not start a font foundry or a CAS in a drive-by.
+
+The next product slice is a **field you can see and scrub**, not a deeper window and not a text engine. See the README.

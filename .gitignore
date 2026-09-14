@@ -31,6 +31,7 @@ logs/
 test_results.log
 tmp/
 *.tmp
+*.csv
 
 # Agent Scratch & Generated Artifacts (never committed)
 .agents/

@@ -5,6 +5,7 @@
 #include "khoros/core/topology.h"
 #include "khoros/core/cpu.h"
 #include "khoros/wayland/client.h"
+#include "khoros/gfx/gpu_math.h"
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -1173,3 +1174,67 @@ bool test_ingest_atomic_hardlink_failure_resilience(void) {
     khr_uring_destroy(&ring);
     return true;
 }
+
+[[nodiscard]]
+bool test_topology_fixed_tick_sim(void) {
+    khr_topology_t topo = {};
+    TEST_ASSERT(khr_topology_init(&topo), "khr_topology_init failed");
+
+    constexpr uint32_t INSTANCE_COUNT = 16;
+    khr_gpu_instance_t buf_a[INSTANCE_COUNT] = {};
+    khr_gpu_instance_t buf_b[INSTANCE_COUNT] = {};
+    for (uint32_t i = 0; i < INSTANCE_COUNT; i++) {
+        buf_a[i] = (khr_gpu_instance_t){
+            .position = { (float)i, 0.0f, 0.0f },
+            .scale = { 1.0f, 1.0f, 1.0f },
+            .rotation = { 0.0f, 0.0f, 0.0f, 1.0f },
+            .radius = 1.0f,
+        };
+        buf_b[i] = buf_a[i];
+    }
+
+    constexpr uint64_t BDA_A = 0x1000'0000ULL;
+    constexpr uint64_t BDA_B = 0x2000'0000ULL;
+    TEST_ASSERT(khr_topology_start_sim(&topo, 120, INSTANCE_COUNT, buf_a, buf_b, BDA_A, BDA_B),
+                "start_sim at 120 Hz");
+    TEST_ASSERT(topo.sim.active, "sim.active must be true");
+
+    /* Wait for simulation ticks delivered from Core 3 worker over Ring A MSG_RING */
+    uint64_t tick1 = 0;
+    TEST_ASSERT(khr_topology_wait_tick(&topo, &tick1, 500), "wait_tick 1");
+    TEST_ASSERT_GE(tick1, 1U, "tick1 >= 1");
+
+    uint64_t tick2 = 0;
+    TEST_ASSERT(khr_topology_wait_tick(&topo, &tick2, 500), "wait_tick 2");
+    TEST_ASSERT_GT(tick2, tick1, "tick2 > tick1");
+
+    /* Query render state with sub-tick interpolation */
+    struct timespec ts = {};
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    uint64_t now_ns = (uint64_t)ts.tv_sec * 1'000'000'000ULL + (uint64_t)ts.tv_nsec;
+
+    uint64_t read_bda = 0;
+    uint64_t prev_bda = 0;
+    float alpha = -1.0f;
+    uint32_t flags = 0;
+    khr_topology_sim_get_render_state(&topo, now_ns, &read_bda, &prev_bda, &alpha, &flags);
+
+    TEST_ASSERT(read_bda == BDA_A || read_bda == BDA_B, "read_bda must be BDA_A or BDA_B");
+    TEST_ASSERT(prev_bda == BDA_A || prev_bda == BDA_B, "prev_bda must be BDA_A or BDA_B");
+    TEST_ASSERT_NE(read_bda, prev_bda, "read_bda and prev_bda must be distinct double buffers");
+    TEST_ASSERT_GE(alpha, 0.0f, "alpha >= 0.0");
+    TEST_ASSERT_LE(alpha, 1.0f, "alpha <= 1.0");
+    TEST_ASSERT_EQ(flags & 1U, 1U, "flags bit 0 (interpolation enabled)");
+
+    /* Non-blocking pop tick test */
+    uint64_t popped_tick = 0;
+    (void)khr_topology_pop_tick(&topo, &popped_tick);
+
+    /* Stop simulation */
+    khr_topology_stop_sim(&topo);
+    TEST_ASSERT(!topo.sim.active, "sim.active must be false after stop");
+
+    khr_topology_destroy(&topo);
+    return true;
+}
+

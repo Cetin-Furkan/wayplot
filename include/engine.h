@@ -21,14 +21,14 @@
 #include <stddef.h>
 
 constexpr uint32_t ENGINE_VERSION_MAJOR = 0;
-constexpr uint32_t ENGINE_VERSION_MINOR = 1;
+constexpr uint32_t ENGINE_VERSION_MINOR = 3;
 constexpr uint32_t ENGINE_VERSION_PATCH = 0;
 
 constexpr size_t   ENGINE_CACHE_LINE_SIZE   = 64;
 constexpr size_t   ENGINE_PAGE_SIZE         = 4'096;
 
 [[nodiscard]]
-bool engine_init(const char* blob_path);
+bool engine_init(const char* blob_path, const char* deck_path);
 
 [[nodiscard]]
 const char* engine_get_banner(void);

@@ -59,6 +59,7 @@ constexpr uint32_t KHR_DEFAULT_SPARSE_FILES = 16;
 
 constexpr uint32_t KHR_MSG_RES_BDA    = 0x0000'BDA0U;
 constexpr uint32_t KHR_MSG_RES_INGEST = 0x0000'1E57U;
+constexpr uint32_t KHR_MSG_RES_TICK   = 0x0000'71C0U;
 /* Core 0 -> Core 1 worker wakeup. Posted with IORING_OP_MSG_RING from Ring A
  * into Ring B; carries no payload (user_data 0). The worker treats it as a
  * pure doorbell and drains the SPSC cmdq. */
@@ -247,6 +248,12 @@ struct io_uring_sqe* khr_uring_prep_read_fixed(khr_uring_t* ring, int fd,
                                                void* dst, uint32_t len,
                                                uint64_t offset, uint16_t buf_index,
                                                bool is_direct, uint64_t user_data);
+
+[[nodiscard]]
+struct io_uring_sqe* khr_uring_prep_write_fixed(khr_uring_t* ring, int fd,
+                                                const void* src, uint32_t len,
+                                                uint64_t offset, uint16_t buf_index,
+                                                bool is_direct, uint64_t user_data);
 
 [[nodiscard]]
 struct io_uring_sqe* khr_uring_prep_send(khr_uring_t* ring, int fd,

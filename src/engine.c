@@ -8,12 +8,13 @@
 
 [[nodiscard]]
 const char* engine_get_banner(void) {
-    static const char banner[] = "=== Khoros Engine (Linux 7.2 / C23 / io_uring / Vulkan 1.4) ===";
+    static const char banner[] = "=== Khoros Engine 0.3.0 (Linux 7.2 / C23 / io_uring / Vulkan 1.4) ===\n"
+                                 "  Caption: colliders are spheres; mesh is skin. Instrument active.";
     return banner;
 }
 
 [[nodiscard]]
-bool engine_init(const char* blob_path) {
+bool engine_init(const char* blob_path, const char* deck_path) {
     const char* banner = engine_get_banner();
     if (banner == nullptr) {
         return false;
@@ -88,7 +89,7 @@ bool engine_init(const char* blob_path) {
 
     bool present_ok = true;
     if (ipc_ok && have_gpu && arena.gpu_address != 0) {
-        present_ok = khr_window_run(&topo, &dev, &arena, blob_path);
+        present_ok = khr_window_run(&topo, &dev, &arena, blob_path, deck_path);
     } else if (ipc_ok) {
         printf("  Present:      skipped (need GPU for DMA-BUF loop)\n");
     }

@@ -74,4 +74,16 @@ void khr_gfx_frame_destroy(khr_gfx_device_t* d, khr_gfx_frame_t* f);
 bool khr_gfx_frame_render_red_card(khr_gfx_device_t* d, khr_gfx_frame_t* f,
                                    khr_bda_arena_t* arena, uint8_t out_bgra[4]);
 
+/*
+ * Render two overlapping triangles (one at Z=0.2, one at Z=0.8) with depth test.
+ * If reverse_order is false: render Far (Z=0.2) first, Near (Z=0.8) second.
+ * If reverse_order is true: render Near (Z=0.8) first, Far (Z=0.2) second.
+ * With Reversed-Z (depth test >=, clear 0.0), both orderings must resolve to the
+ * nearer triangle's color (Green).
+ */
+[[nodiscard]]
+bool khr_gfx_frame_render_depth_test(khr_gfx_device_t* d, khr_gfx_frame_t* f,
+                                     khr_bda_arena_t* arena, bool reverse_order,
+                                     uint8_t out_bgra[4]);
+
 #endif /* KHOROS_GFX_FRAME_H */

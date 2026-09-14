@@ -1,0 +1,9 @@
+# khoros-run v1
+dt_s 0.01666667
+gravity 0.00000 -9.80665 0.00000
+floor_y -2.50
+seed 1
+ticks 600
+integrator symplectic_euler
+# Single falling AABB box
+body id=0 shape=aabb hx=0.5 hy=0.5 hz=0.5 mass=2.5 e=0.4 mu=0.6 x=0.0 y=6.0 z=0.0 vx=0.0 vy=0.0 vz=0.0

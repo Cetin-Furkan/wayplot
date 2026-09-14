@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <math.h>
 
 [[nodiscard]]
 bool test_blob_self_relative_box(void) {
@@ -174,3 +175,50 @@ bool test_blob_gizmo_arm(void) {
     TEST_ASSERT(push.mvp_c3[3] == 1.0f, "gizmo w is 1");
     return true;
 }
+
+[[nodiscard]]
+bool test_cam_aspect_ratio_scaling(void) {
+    khr_cam_t cam = {};
+    khr_cam_frame(&cam, nullptr, 0, true);
+    khr_cam_snap_axis(&cam, 3); /* Look from +Z: r0=[-1,0,0], r1=[0,1,0], r2=[0,0,-1] */
+    khr_mesh_push_t push = {};
+
+    /* Default (aspect <= 0): defaults to 1.0 */
+    cam.aspect = 0.0f;
+    khr_mesh_cam_apply(&push, &cam);
+    float sx1 = fabsf(push.mvp_c0[0]);
+    float sy1 = fabsf(push.mvp_c1[1]);
+    TEST_ASSERT(fabsf(sx1 - sy1) < 1.0e-5f, "aspect 1.0 produces equal X and Y scales");
+
+    /* Landscape (e.g. aspect = 2.0f) */
+    cam.aspect = 2.0f;
+    khr_mesh_cam_apply(&push, &cam);
+    float sx2 = fabsf(push.mvp_c0[0]);
+    float sy2 = fabsf(push.mvp_c1[1]);
+    TEST_ASSERT(fabsf(sy2 - sy1) < 1.0e-5f, "landscape preserves vertical scale");
+    TEST_ASSERT(fabsf(sx2 - sy2 * 0.5f) < 1.0e-5f, "landscape sx = sy / aspect");
+
+    /* Portrait (e.g. aspect = 0.5f) */
+    cam.aspect = 0.5f;
+    khr_mesh_cam_apply(&push, &cam);
+    float sx3 = fabsf(push.mvp_c0[0]);
+    float sy3 = fabsf(push.mvp_c1[1]);
+    TEST_ASSERT(fabsf(sx3 - sx1) < 1.0e-5f, "portrait preserves horizontal scale");
+    TEST_ASSERT(fabsf(sy3 - sx3 * 0.5f) < 1.0e-5f, "portrait sy = sx * aspect");
+
+    /* Offset center stays at NDC (0, 0) regardless of aspect */
+    cam.target[0] = 5.0f;
+    cam.target[1] = -3.0f;
+    cam.target[2] = 2.0f;
+    cam.aspect = 1.777f;
+    khr_mesh_cam_apply(&push, &cam);
+    float ndc_x = push.mvp_c0[0] * cam.target[0] + push.mvp_c1[0] * cam.target[1] +
+                  push.mvp_c2[0] * cam.target[2] + push.mvp_c3[0];
+    float ndc_y = push.mvp_c0[1] * cam.target[0] + push.mvp_c1[1] * cam.target[1] +
+                  push.mvp_c2[1] * cam.target[2] + push.mvp_c3[1];
+    TEST_ASSERT(fabsf(ndc_x) < 1.0e-5f, "target center projects to NDC x=0");
+    TEST_ASSERT(fabsf(ndc_y) < 1.0e-5f, "target center projects to NDC y=0");
+
+    return true;
+}
+

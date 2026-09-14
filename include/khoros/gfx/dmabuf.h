@@ -18,6 +18,12 @@
 #include "khoros/gfx/device.h"
 #include "khoros/gfx/pipeline.h"
 #include "khoros/gfx/bda_arena.h"
+#include "khoros/gfx/depth.h"
+#include "khoros/gfx/cull_pipeline.h"
+#include "khoros/gfx/hiz.h"
+#include "khoros/gfx/grid.h"
+
+constexpr VkFormat KHR_DMABUF_VK_FORMAT = VK_FORMAT_B8G8R8A8_UNORM;
 
 /*
  * DMA-BUF-exportable Vulkan image (no WSI). The driver chooses the tiling;
@@ -43,6 +49,12 @@ bool khr_dmabuf_image_init(khr_gfx_device_t* d, khr_dmabuf_image_t* img,
                            uint32_t w, uint32_t h);
 
 [[nodiscard]]
+bool khr_dmabuf_image_init_with_modifiers(khr_gfx_device_t* d, khr_dmabuf_image_t* img,
+                                          uint32_t w, uint32_t h,
+                                          const uint64_t* wayland_modifiers,
+                                          uint32_t wayland_modifier_count);
+
+[[nodiscard]]
 bool khr_dmabuf_image_export(khr_gfx_device_t* d, khr_dmabuf_image_t* img);
 
 void khr_dmabuf_image_destroy(khr_gfx_device_t* d, khr_dmabuf_image_t* img);
@@ -62,6 +74,7 @@ typedef struct {
     VkCommandBuffer    cmd;
     khr_card_pipeline_t pipe;
     bool               pipe_live;
+    bool               owns_pipe;
     PFN_vkCmdPushConstants2KHR pfn_push2;
     VkImageLayout      layout;
     uint64_t           painted;
@@ -72,9 +85,7 @@ typedef struct {
     VkDeviceMemory     msaa_color_mem;
     VkImageView        msaa_color_view;
     VkImageLayout      msaa_color_layout;
-    VkImage            depth;
-    VkDeviceMemory     depth_mem;
-    VkImageView        depth_view;
+    khr_depth_target_t depth_target;
     VkImageLayout      depth_layout;
 } khr_dmabuf_slot_t;
 
@@ -82,6 +93,18 @@ typedef struct {
 [[nodiscard]]
 bool khr_dmabuf_slot_init(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
                           uint32_t w, uint32_t h);
+
+[[nodiscard]]
+bool khr_dmabuf_slot_init_shared(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
+                                 uint32_t w, uint32_t h,
+                                 const khr_card_pipeline_t* shared_pipe);
+
+[[nodiscard]]
+bool khr_dmabuf_slot_init_shared_with_modifiers(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
+                                                uint32_t w, uint32_t h,
+                                                const khr_card_pipeline_t* shared_pipe,
+                                                const uint64_t* modifiers,
+                                                uint32_t modifier_count);
 
 /*
  * Paint one frame (fullscreen card, frame-varying color for visible cadence)
@@ -114,8 +137,24 @@ typedef struct khr_gizmo_pass {
     float           r2[3];
 } khr_gizmo_pass_t;
 
-/* Cards plus mesh (preferred) or plot ribbon in the client rect.
- * top_px insets under the title bar. mesh/plot/gizmo may be null. */
+/* GPU-driven scene rendering pass with compute culling and multi-light PBR */
+typedef struct khr_gpu_scene_pass {
+    const khr_cull_pipeline_t*           cull_pipe;
+    const khr_cull_push_t*               cull_push;
+    const khr_mesh_instanced_pipeline_t* inst_pipe;
+    const khr_mesh_instanced_push_t*     inst_push;
+    VkBuffer                             indirect_cmd_buffer;
+    VkDeviceSize                         indirect_cmd_offset;
+    uint32_t                             draw_count;
+    const khr_hiz_t*                     hiz;
+    const khr_hiz_cull_push_t*           hiz_push;
+    const khr_descriptor_heap_t*         descriptor_heap;
+    const khr_grid_pipeline_t*           grid_pipe;
+    const khr_grid_push_t*               grid_push;
+} khr_gpu_scene_pass_t;
+
+/* Cards plus mesh (preferred), plot ribbon, or GPU-driven PBR scene in the client rect.
+ * top_px insets under the title bar. mesh/plot/gpu_scene/gizmo may be null. */
 [[nodiscard]]
 bool khr_dmabuf_slot_render_scene(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
                                   VkDeviceAddress cards_addr, uint32_t card_count,
@@ -123,6 +162,7 @@ bool khr_dmabuf_slot_render_scene(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
                                   const khr_plot_push_t* plot_push,
                                   const khr_mesh_pipeline_t* mesh,
                                   const khr_mesh_push_t* mesh_push,
+                                  const khr_gpu_scene_pass_t* gpu_scene,
                                   const khr_gizmo_pass_t* gizmo,
                                   uint32_t plot_top_px,
                                   VkSemaphore signal_sem, uint64_t signal_value);

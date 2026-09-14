@@ -1,6 +1,8 @@
 #include "khoros/core/topology.h"
 #include "khoros/core/cpu.h"
+#include "khoros/core/deck.h"
 #include "khoros/uring/ingest.h"
+#include "khoros/gfx/gpu_math.h"
 #include <sys/mman.h>
 #include <unistd.h>
 #include <string.h>
@@ -8,6 +10,7 @@
 #include <time.h>
 #include <stdio.h>
 #include <errno.h>
+#include <math.h>
 
 #ifndef MAP_HUGE_2MB
 #define MAP_HUGE_2MB (21 << MAP_HUGE_SHIFT)
@@ -167,6 +170,16 @@ static bool khr_evt_q_pop(khr_cqe_event_t* q, uint32_t cap, uint32_t* head,
     return true;
 }
 
+static bool khr_tick_q_push_latest(khr_cqe_event_t* q, uint32_t cap, uint32_t* head,
+                                   uint32_t* tail, const khr_cqe_event_t* evt) {
+    if ((*head - *tail) >= cap) {
+        (*tail)++; /* Drop oldest tick to make room for latest */
+    }
+    q[*head & (cap - 1U)] = *evt;
+    (*head)++;
+    return true;
+}
+
 static void khr_pump_classify(khr_topology_t* topo, const khr_cqe_event_t* evt) {
     /* MSG_RING results carry their dispatch key in res (payload in user_data:
      * the kernel writes sqe->off into CQE user_data and sqe->len into res).
@@ -184,6 +197,11 @@ static void khr_pump_classify(khr_topology_t* topo, const khr_cqe_event_t* evt) 
     if (evt->res == (int32_t)KHR_MSG_RES_INGEST && topo->ingest_outstanding > 0) {
         (void)khr_evt_q_push(topo->ingest_q, KHR_INGEST_Q_CAP,
                              &topo->ingest_head, &topo->ingest_tail, evt);
+        return;
+    }
+    if (evt->res == (int32_t)KHR_MSG_RES_TICK) {
+        (void)khr_tick_q_push_latest(topo->tick_q, KHR_TICK_Q_CAP,
+                                     &topo->tick_head, &topo->tick_tail, evt);
         return;
     }
     if (!khr_evt_q_push(topo->evt_q, KHR_EVT_Q_CAP,
@@ -466,10 +484,38 @@ static void* khr_worker_main(void* arg) {
              * joined only after stop is set, so no new work can arrive. */
             break;
         }
-        /* Park in the kernel. Doorbell MSG_RING, ingest CQEs, or the 50 ms
-         * backstop ends the wait; PAUSE-spinning is gone. */
+        /* Fixed-tick simulation compute (Core 3) */
+        uint32_t park_ms = KHR_WORKER_PARK_MS;
+        if (atomic_load_explicit(&t->sim.active, memory_order_acquire)) {
+            struct timespec ts_now = {};
+            clock_gettime(CLOCK_MONOTONIC, &ts_now);
+            uint64_t now_ns = (uint64_t)ts_now.tv_sec * 1'000'000'000ULL + (uint64_t)ts_now.tv_nsec;
+            uint64_t last_tick = atomic_load_explicit(&t->sim.last_tick_time_ns, memory_order_relaxed);
+            uint64_t period = t->sim.tick_period_ns;
+            uint64_t current_count = atomic_load_explicit(&t->sim.tick_count, memory_order_relaxed);
+
+            if (period > 0 && now_ns >= last_tick + period) {
+                uint64_t new_tick = current_count + 1;
+                khr_topology_sim_step(t, new_tick);
+                (void)khr_worker_msg_ring(t, new_tick, KHR_MSG_RES_TICK);
+                last_tick = atomic_load_explicit(&t->sim.last_tick_time_ns, memory_order_relaxed);
+            }
+
+            /* Calculate time to next tick */
+            uint64_t next_tick_ns = last_tick + period;
+            if (next_tick_ns > now_ns) {
+                uint64_t rem_ns = next_tick_ns - now_ns;
+                park_ms = (uint32_t)(rem_ns / 1'000'000ULL);
+                if (park_ms == 0) park_ms = 1;
+                if (park_ms > KHR_WORKER_PARK_MS) park_ms = KHR_WORKER_PARK_MS;
+            } else {
+                park_ms = 0;
+            }
+        }
+
+        /* Park in the kernel. Doorbell MSG_RING, ingest CQEs, tick timer, or the backstop ends the wait */
         struct io_uring_cqe* parked = nullptr;
-        (void)khr_uring_wait_cqe_timeout(&t->ring_b, &parked, KHR_WORKER_PARK_MS);
+        (void)khr_uring_wait_cqe_timeout(&t->ring_b, &parked, park_ms);
     }
 
     (void)khr_uring_unregister_buffers(&t->ring_b);
@@ -581,6 +627,7 @@ void khr_topology_destroy(khr_topology_t* topo) {
         return;
     }
     if (topo->worker_started) {
+        atomic_store_explicit(&topo->sim.active, false, memory_order_release);
         atomic_store_explicit(&topo->stop, true, memory_order_release);
         /* The worker parks in the kernel: doorbell it so join() returns
          * promptly instead of waiting out the 50 ms backstop. Best-effort;
@@ -756,4 +803,292 @@ size_t khr_topology_staged_count(const khr_topology_t* topo) {
         return 0;
     }
     return (size_t)(topo->evt_head - topo->evt_tail);
+}
+
+[[nodiscard]]
+bool khr_topology_start_sim(khr_topology_t* topo, uint32_t rate_hz, uint32_t instance_count,
+                            void* buf_a, void* buf_b, uint64_t bda_a, uint64_t bda_b) {
+    if (topo == nullptr || rate_hz == 0 || instance_count == 0 ||
+        buf_a == nullptr || buf_b == nullptr) {
+        return false;
+    }
+    uint64_t period_ns = 1'000'000'000ULL / (uint64_t)rate_hz;
+    struct timespec ts = {};
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    uint64_t now_ns = (uint64_t)ts.tv_sec * 1'000'000'000ULL + (uint64_t)ts.tv_nsec;
+
+    topo->sim.tick_rate_hz = rate_hz;
+    topo->sim.tick_period_ns = period_ns;
+    topo->sim.instance_count = instance_count;
+    topo->sim.buffer_a = buf_a;
+    topo->sim.buffer_b = buf_b;
+    topo->sim.buffer_a_bda = bda_a;
+    topo->sim.buffer_b_bda = bda_b;
+    atomic_store_explicit(&topo->sim.tick_count, 0, memory_order_release);
+    atomic_store_explicit(&topo->sim.last_tick_time_ns, now_ns, memory_order_release);
+    atomic_store_explicit(&topo->sim.write_slot, 1, memory_order_release);
+    atomic_store_explicit(&topo->sim.read_slot, 0, memory_order_release);
+    atomic_store_explicit(&topo->sim.active, true, memory_order_release);
+    atomic_store_explicit(&topo->sim.has_motion, false, memory_order_release);
+    atomic_store_explicit(&topo->sim.collision_head, 0, memory_order_release);
+    atomic_store_explicit(&topo->sim.collision_tail, 0, memory_order_release);
+
+    /* Initialize Core 3 Rigid-Body Dynamics & Spatial LBVH World */
+    khr_physics_world_init(&topo->sim.physics);
+    const khr_gpu_instance_t* insts = (const khr_gpu_instance_t*)buf_a;
+    for (uint32_t i = 0; i < instance_count && i < KHR_PHYSICS_MAX_BODIES; i++) {
+        khr_rigid_body_t body;
+        float r = (insts[i].radius > 0.1f) ? insts[i].radius : 1.0f;
+        /* Dynamic bodies: SI mass in kg, restitution e, friction mu */
+        float mass_kg = 2.0f;
+        float restitution = 0.70f;
+        float friction = 0.40f;
+        khr_rigid_body_init_sphere(&body, insts[i].position, r, mass_kg, restitution, friction);
+        body.user_id = i;
+        (void)khr_physics_world_add_body(&topo->sim.physics, &body);
+    }
+    /* Ground plane collider at KHR_PHYSICS_FLOOR_Y (single source of truth) */
+    khr_rigid_body_t floor_body;
+    float floor_normal[3] = { 0.0f, 1.0f, 0.0f };
+    khr_rigid_body_init_plane(&floor_body, floor_normal, KHR_PHYSICS_FLOOR_Y, 0.75f, 0.50f);
+    floor_body.user_id = UINT32_MAX;
+    (void)khr_physics_world_add_body(&topo->sim.physics, &floor_body);
+
+    /* Wake worker so it immediately starts ticking */
+    (void)khr_topology_wake_worker(topo);
+    return true;
+}
+
+bool khr_topology_start_sim_deck(khr_topology_t* topo, uint32_t rate_hz,
+                                 const struct khr_deck* deck,
+                                 void* buf_a, void* buf_b,
+                                 uint64_t bda_a, uint64_t bda_b) {
+    if (topo == nullptr || deck == nullptr || rate_hz == 0 ||
+        buf_a == nullptr || buf_b == nullptr) {
+        return false;
+    }
+    uint64_t period_ns = 1'000'000'000ULL / (uint64_t)rate_hz;
+    struct timespec ts = {};
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    uint64_t now_ns = (uint64_t)ts.tv_sec * 1'000'000'000ULL + (uint64_t)ts.tv_nsec;
+
+    topo->sim.tick_rate_hz = rate_hz;
+    topo->sim.tick_period_ns = (deck->dt_s > 0.0f) ? (uint64_t)(deck->dt_s * 1.0e9f) : period_ns;
+    topo->sim.instance_count = deck->body_count;
+    topo->sim.buffer_a = buf_a;
+    topo->sim.buffer_b = buf_b;
+    topo->sim.buffer_a_bda = bda_a;
+    topo->sim.buffer_b_bda = bda_b;
+    atomic_store_explicit(&topo->sim.tick_count, 0, memory_order_release);
+    atomic_store_explicit(&topo->sim.last_tick_time_ns, now_ns, memory_order_release);
+    atomic_store_explicit(&topo->sim.write_slot, 1, memory_order_release);
+    atomic_store_explicit(&topo->sim.read_slot, 0, memory_order_release);
+    atomic_store_explicit(&topo->sim.active, true, memory_order_release);
+    atomic_store_explicit(&topo->sim.has_motion, true, memory_order_release);
+    atomic_store_explicit(&topo->sim.collision_head, 0, memory_order_release);
+    atomic_store_explicit(&topo->sim.collision_tail, 0, memory_order_release);
+
+    /* Initialize Core 3 Rigid-Body Dynamics & Spatial LBVH World from Deck */
+    (void)khr_deck_apply_to_world(deck, &topo->sim.physics);
+
+    /* Wake worker so it immediately starts ticking */
+    (void)khr_topology_wake_worker(topo);
+    return true;
+}
+
+void khr_topology_stop_sim(khr_topology_t* topo) {
+    if (topo == nullptr) {
+        return;
+    }
+    atomic_store_explicit(&topo->sim.active, false, memory_order_release);
+    atomic_store_explicit(&topo->sim.has_motion, false, memory_order_release);
+    (void)khr_topology_wake_worker(topo);
+}
+
+void khr_topology_sim_set_motion(khr_topology_t* topo, bool has_motion) {
+    if (topo != nullptr) {
+        atomic_store_explicit(&topo->sim.has_motion, has_motion, memory_order_release);
+    }
+}
+
+void khr_topology_sim_apply_impulse(khr_topology_t* topo, uint32_t instance_index,
+                                    const float impulse[3], const float rel_pos[3]) {
+    if (topo == nullptr || impulse == nullptr) {
+        return;
+    }
+    for (uint32_t b = 0; b < topo->sim.physics.body_count; b++) {
+        if (topo->sim.physics.bodies[b].user_id == instance_index) {
+            khr_physics_world_apply_impulse(&topo->sim.physics, b, impulse, rel_pos);
+            break;
+        }
+    }
+}
+
+bool khr_topology_sim_has_motion(const khr_topology_t* topo) {
+    if (topo == nullptr) {
+        return false;
+    }
+    return atomic_load_explicit(&topo->sim.has_motion, memory_order_acquire);
+}
+
+void khr_topology_sim_step(khr_topology_t* topo, uint64_t tick_index) {
+    if (topo == nullptr) {
+        return;
+    }
+    uint32_t w_slot = atomic_load_explicit(&topo->sim.write_slot, memory_order_relaxed);
+    uint32_t r_slot = atomic_load_explicit(&topo->sim.read_slot, memory_order_relaxed);
+    khr_gpu_instance_t* dst = (w_slot == 0) ? (khr_gpu_instance_t*)topo->sim.buffer_a
+                                            : (khr_gpu_instance_t*)topo->sim.buffer_b;
+    const khr_gpu_instance_t* src = (r_slot == 0) ? (const khr_gpu_instance_t*)topo->sim.buffer_a
+                                                  : (const khr_gpu_instance_t*)topo->sim.buffer_b;
+
+    if (dst != nullptr && src != nullptr && topo->sim.instance_count > 0) {
+        if (dst != src) {
+            memcpy(dst, src, (size_t)topo->sim.instance_count * sizeof(khr_gpu_instance_t));
+        }
+        /* Step physics world and stream transforms if dynamic motion is active */
+        if (atomic_load_explicit(&topo->sim.has_motion, memory_order_acquire)) {
+            float dt = (topo->sim.tick_period_ns > 0) ? ((float)topo->sim.tick_period_ns * 1.0e-9f) : (1.0f / 120.0f);
+            khr_physics_world_step(&topo->sim.physics, dt);
+
+            /* Stream simulated rigid-body transforms directly into active BDA write slot */
+            for (uint32_t b = 0; b < topo->sim.physics.body_count; b++) {
+                const khr_rigid_body_t* body = &topo->sim.physics.bodies[b];
+                if (body->user_id < topo->sim.instance_count) {
+                    dst[body->user_id].position[0] = body->position[0];
+                    dst[body->user_id].position[1] = body->position[1];
+                    dst[body->user_id].position[2] = body->position[2];
+                    dst[body->user_id].rotation[0] = body->rotation[0];
+                    dst[body->user_id].rotation[1] = body->rotation[1];
+                    dst[body->user_id].rotation[2] = body->rotation[2];
+                    dst[body->user_id].rotation[3] = body->rotation[3];
+                }
+            }
+
+            /* Harvest contact impulses to generate physical collision audio events */
+            for (uint32_t c = 0; c < topo->sim.physics.contact_count; c++) {
+                const khr_contact_t* contact = &topo->sim.physics.contacts[c];
+                if (contact->normal_impulse > 0.05f) {
+                    khr_collision_sound_type_t stype = KHR_COLLISION_SOUND_IMPACT;
+                    const khr_rigid_body_t* bA = &topo->sim.physics.bodies[contact->body_a];
+                    const khr_rigid_body_t* bB = &topo->sim.physics.bodies[contact->body_b];
+                    if (bA->shape.type == KHR_SHAPE_PLANE || bB->shape.type == KHR_SHAPE_PLANE) {
+                        stype = KHR_COLLISION_SOUND_THUD;
+                    } else if (contact->normal_impulse < 0.25f) {
+                        stype = KHR_COLLISION_SOUND_CLICK;
+                    }
+                    khr_collision_event_t evt = {
+                        .point = { contact->point[0], contact->point[1], contact->point[2] },
+                        .normal = { contact->normal[0], contact->normal[1], contact->normal[2] },
+                        .impulse = contact->normal_impulse,
+                        .body_a = contact->body_a,
+                        .body_b = contact->body_b,
+                        .sound_type = (uint32_t)stype,
+                    };
+                    uint32_t h = atomic_load_explicit(&topo->sim.collision_head, memory_order_relaxed);
+                    uint32_t t = atomic_load_explicit(&topo->sim.collision_tail, memory_order_acquire);
+                    if (((h + 1) % KHR_COLLISION_EVENT_CAP) != t) {
+                        topo->sim.collision_events[h] = evt;
+                        atomic_store_explicit(&topo->sim.collision_head, (h + 1) % KHR_COLLISION_EVENT_CAP, memory_order_release);
+                    }
+                }
+            }
+        }
+    }
+
+    struct timespec ts = {};
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    uint64_t now_ns = (uint64_t)ts.tv_sec * 1'000'000'000ULL + (uint64_t)ts.tv_nsec;
+
+    atomic_store_explicit(&topo->sim.last_tick_time_ns, now_ns, memory_order_release);
+    atomic_store_explicit(&topo->sim.tick_count, tick_index, memory_order_release);
+    atomic_store_explicit(&topo->sim.read_slot, w_slot, memory_order_release);
+    atomic_store_explicit(&topo->sim.write_slot, 1U - w_slot, memory_order_release);
+}
+
+void khr_topology_sim_get_render_state(const khr_topology_t* topo, uint64_t now_ns,
+                                       uint64_t* out_read_bda, uint64_t* out_prev_bda,
+                                       float* out_alpha, uint32_t* out_flags) {
+    if (topo == nullptr) {
+        if (out_read_bda) *out_read_bda = 0;
+        if (out_prev_bda) *out_prev_bda = 0;
+        if (out_alpha) *out_alpha = 0.0f;
+        if (out_flags) *out_flags = 0;
+        return;
+    }
+    uint32_t r_slot = atomic_load_explicit(&topo->sim.read_slot, memory_order_acquire);
+    uint64_t last_tick_ns = atomic_load_explicit(&topo->sim.last_tick_time_ns, memory_order_acquire);
+    uint64_t period_ns = topo->sim.tick_period_ns;
+
+    float alpha = 0.0f;
+    if (period_ns > 0 && now_ns >= last_tick_ns) {
+        alpha = (float)(now_ns - last_tick_ns) / (float)period_ns;
+        if (alpha > 1.0f) alpha = 1.0f;
+        if (alpha < 0.0f) alpha = 0.0f;
+    }
+
+    if (out_read_bda) {
+        *out_read_bda = (r_slot == 0) ? topo->sim.buffer_a_bda : topo->sim.buffer_b_bda;
+    }
+    if (out_prev_bda) {
+        *out_prev_bda = (r_slot == 0) ? topo->sim.buffer_b_bda : topo->sim.buffer_a_bda;
+    }
+    if (out_alpha) {
+        *out_alpha = alpha;
+    }
+    if (out_flags) {
+        /* bit 0: enable interpolation. bit 1: prev_slot (0 if previous is at +instance_count, 1 if -instance_count) */
+        uint32_t f = 1U;
+        if (r_slot == 1) {
+            f |= 2U;
+        }
+        *out_flags = f;
+    }
+}
+
+[[nodiscard]]
+bool khr_topology_pop_tick(khr_topology_t* topo, uint64_t* out_tick) {
+    if (topo == nullptr) {
+        return false;
+    }
+    khr_cqe_event_t evt = {};
+    if (!khr_evt_q_pop(topo->tick_q, KHR_TICK_Q_CAP,
+                       &topo->tick_head, &topo->tick_tail, &evt)) {
+        if (khr_topology_pump(topo, 0) == 0) {
+            return false;
+        }
+        if (!khr_evt_q_pop(topo->tick_q, KHR_TICK_Q_CAP,
+                           &topo->tick_head, &topo->tick_tail, &evt)) {
+            return false;
+        }
+    }
+    if (out_tick != nullptr) {
+        *out_tick = evt.user_data;
+    }
+    return true;
+}
+
+[[nodiscard]]
+bool khr_topology_wait_tick(khr_topology_t* topo, uint64_t* out_tick, uint32_t timeout_ms) {
+    if (topo == nullptr || out_tick == nullptr) {
+        return false;
+    }
+    return khr_queue_wait(topo, topo->tick_q, KHR_TICK_Q_CAP,
+                          &topo->tick_head, &topo->tick_tail,
+                          nullptr, out_tick, timeout_ms);
+}
+
+[[nodiscard]]
+bool khr_topology_sim_pop_collision_event(khr_topology_t* topo, khr_collision_event_t* out_evt) {
+    if (topo == nullptr || out_evt == nullptr) {
+        return false;
+    }
+    uint32_t t = atomic_load_explicit(&topo->sim.collision_tail, memory_order_relaxed);
+    uint32_t h = atomic_load_explicit(&topo->sim.collision_head, memory_order_acquire);
+    if (t == h) {
+        return false;
+    }
+    *out_evt = topo->sim.collision_events[t];
+    atomic_store_explicit(&topo->sim.collision_tail, (t + 1) % KHR_COLLISION_EVENT_CAP, memory_order_release);
+    return true;
 }

@@ -221,6 +221,57 @@ static inline bool mock_compositor_send_globals(mock_compositor_t* comp) {
 }
 
 [[nodiscard]]
+static inline bool mock_compositor_send_global(mock_compositor_t* comp, uint32_t name, const char* interface, uint32_t version) {
+    khr_wl_msg_buf_t buf = {};
+    khr_wl_buf_init(&buf);
+    uint32_t s_len = (uint32_t)strlen(interface) + 1;
+    uint32_t s_pad = khr_wl_pad4(s_len);
+    uint16_t msg_size = (uint16_t)(8 + 4 + 4 + s_pad + 4);
+    if (!khr_wl_encode_header(&buf, KHR_WL_REGISTRY_ID, KHR_WL_REGISTRY_EVENT_GLOBAL, msg_size)) return false;
+    if (!khr_wl_encode_u32(&buf, name)) return false;
+    if (!khr_wl_encode_string(&buf, interface)) return false;
+    if (!khr_wl_encode_u32(&buf, version)) return false;
+    return mock_compositor_send_raw(comp, buf.data, buf.size);
+}
+
+[[nodiscard]]
+static inline bool mock_compositor_send_presentation_clock_id(mock_compositor_t* comp, uint32_t pres_id, uint32_t clk_id) {
+    khr_wl_msg_buf_t buf = {};
+    khr_wl_buf_init(&buf);
+    if (!khr_wl_encode_header(&buf, pres_id, 0, 12)) return false;
+    if (!khr_wl_encode_u32(&buf, clk_id)) return false;
+    return mock_compositor_send_raw(comp, buf.data, buf.size);
+}
+
+[[nodiscard]]
+static inline bool mock_compositor_send_presentation_presented(mock_compositor_t* comp,
+                                                               uint32_t feedback_id,
+                                                               uint32_t sec_hi, uint32_t sec_lo,
+                                                               uint32_t nsec, uint32_t refresh,
+                                                               uint32_t seq_hi, uint32_t seq_lo,
+                                                               uint32_t flags) {
+    khr_wl_msg_buf_t buf = {};
+    khr_wl_buf_init(&buf);
+    if (!khr_wl_encode_header(&buf, feedback_id, 1, 36)) return false;
+    if (!khr_wl_encode_u32(&buf, sec_hi)) return false;
+    if (!khr_wl_encode_u32(&buf, sec_lo)) return false;
+    if (!khr_wl_encode_u32(&buf, nsec)) return false;
+    if (!khr_wl_encode_u32(&buf, refresh)) return false;
+    if (!khr_wl_encode_u32(&buf, seq_hi)) return false;
+    if (!khr_wl_encode_u32(&buf, seq_lo)) return false;
+    if (!khr_wl_encode_u32(&buf, flags)) return false;
+    return mock_compositor_send_raw(comp, buf.data, buf.size);
+}
+
+[[nodiscard]]
+static inline bool mock_compositor_send_presentation_discarded(mock_compositor_t* comp, uint32_t feedback_id) {
+    khr_wl_msg_buf_t buf = {};
+    khr_wl_buf_init(&buf);
+    if (!khr_wl_encode_header(&buf, feedback_id, 2, 8)) return false;
+    return mock_compositor_send_raw(comp, buf.data, buf.size);
+}
+
+[[nodiscard]]
 static inline bool mock_compositor_send_sync_done(mock_compositor_t* comp, uint32_t callback_id, uint32_t serial) {
     khr_wl_msg_buf_t buf = {};
     khr_wl_buf_init(&buf);

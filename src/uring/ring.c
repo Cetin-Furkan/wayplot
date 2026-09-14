@@ -649,6 +649,28 @@ struct io_uring_sqe* khr_uring_prep_read_fixed(khr_uring_t* ring, int fd,
 }
 
 [[nodiscard]]
+struct io_uring_sqe* khr_uring_prep_write_fixed(khr_uring_t* ring, int fd,
+                                                const void* src, uint32_t len,
+                                                uint64_t offset, uint16_t buf_index,
+                                                bool is_direct, uint64_t user_data) {
+    struct io_uring_sqe* sqe = khr_uring_get_sqe(ring);
+    if (sqe == nullptr) {
+        return nullptr;
+    }
+    sqe->opcode = IORING_OP_WRITE_FIXED;
+    sqe->fd = fd;
+    sqe->addr = (uint64_t)src;
+    sqe->len = len;
+    sqe->off = offset;
+    sqe->buf_index = buf_index;
+    sqe->user_data = user_data;
+    if (is_direct) {
+        sqe->flags |= IOSQE_FIXED_FILE;
+    }
+    return sqe;
+}
+
+[[nodiscard]]
 struct io_uring_sqe* khr_uring_prep_send(khr_uring_t* ring, int fd,
                                          const void* buf, size_t len,
                                          int flags, bool is_direct,

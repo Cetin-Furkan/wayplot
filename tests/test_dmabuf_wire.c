@@ -12,6 +12,7 @@
 #include <sys/stat.h>
 #include <sys/sysmacros.h>
 #include <sys/mman.h>
+#include <drm/drm_fourcc.h>
 
 /* Same open file description on both ends of SCM_RIGHTS? dev+ino must match:
  * this is the zero-copy proof, not just "an fd arrived". */
@@ -161,4 +162,35 @@ bool test_dmabuf_vulkan_export_and_import(void) {
     bool ok = test_dmabuf_vulkan_export_and_import_body(&topo);
     khr_topology_destroy(&topo);
     return ok;
+}
+
+[[nodiscard]]
+bool test_dmabuf_modifier_intersection(void) {
+    khr_gfx_device_t dev = {};
+    if (!khr_gfx_device_init(&dev, (dev_t)0)) {
+        TEST_SKIP("no Vulkan device in this environment");
+        return true;
+    }
+
+    /* Test image creation with candidate compositor modifier list */
+    uint64_t wayland_mods[3] = {
+        DRM_FORMAT_MOD_INVALID,
+        DRM_FORMAT_MOD_LINEAR,
+        0x0100000000000002ULL, /* INTEL_Y_TILED */
+    };
+    khr_dmabuf_image_t img = {};
+    bool ok = khr_dmabuf_image_init_with_modifiers(&dev, &img, 128, 128, wayland_mods, 3);
+    TEST_ASSERT(ok, "image init with candidate modifiers must succeed");
+    TEST_ASSERT(img.image != VK_NULL_HANDLE, "image handle valid");
+    TEST_ASSERT(img.mem != VK_NULL_HANDLE, "image memory valid");
+    TEST_ASSERT(img.modifier != DRM_FORMAT_MOD_INVALID, "modifier must resolve to valid DRM modifier");
+    TEST_ASSERT(img.stride >= 128U * 4U, "stride meets pitch requirements");
+
+    /* Export DMA-BUF fd to verify kernel driver validity */
+    TEST_ASSERT(khr_dmabuf_image_export(&dev, &img), "DMA-BUF export of intersected image must succeed");
+    TEST_ASSERT(img.dma_fd >= 0, "exported dma_fd must be valid");
+
+    khr_dmabuf_image_destroy(&dev, &img);
+    khr_gfx_device_destroy(&dev);
+    return true;
 }

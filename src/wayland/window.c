@@ -7,15 +7,31 @@
 #include "khoros/wayland/dmabuf_present.h"
 #include "khoros/wayland/shm.h"
 #include "khoros/wayland/wire.h"
+#include "khoros/wayland/presentation_time.h"
 #include "khoros/gfx/pipeline.h"
 #include "khoros/gfx/blob.h"
+#include "khoros/gfx/cull_pipeline.h"
+#include "khoros/gfx/hiz.h"
+#include "khoros/gfx/scene.h"
+#include "khoros/gfx/camera.h"
+#include "khoros/core/input.h"
+#include "khoros/audio/audio.h"
 #include "khoros/uring/pbuf.h"
+#include "khoros/gfx/descriptor_buffer.h"
+#include "khoros/gfx/texture.h"
+#include "khoros/gfx/texture_synth.h"
+#include "khoros/gfx/grid.h"
+#include "khoros/audio/synth.h"
+#include "khoros/core/physics.h"
+#include "khoros/core/deck.h"
+#include "khoros/gfx/suzanne_data.h"
 #include <vulkan/vulkan.h>
 
 #include <stdio.h>
 #include <string.h>
 #include <signal.h>
 #include <time.h>
+#include <math.h>
 #include <sys/socket.h>
 
 static volatile sig_atomic_t khr_window_stop = 0;
@@ -25,6 +41,15 @@ static void khr_window_on_sig(int sig) {
     khr_window_stop = 1;
 }
 
+constexpr uint32_t KHR_HUM_FRAMES    = 48000;
+constexpr uint32_t KHR_CLICK_FRAMES  = 2400;
+constexpr uint32_t KHR_IMPACT_FRAMES = 21600;
+constexpr uint32_t KHR_THUD_FRAMES   = 14400;
+alignas(64) static float s_hum_samples[KHR_HUM_FRAMES];
+alignas(64) static float s_click_samples[KHR_CLICK_FRAMES];
+alignas(64) static float s_impact_samples[KHR_IMPACT_FRAMES];
+alignas(64) static float s_thud_samples[KHR_THUD_FRAMES];
+
 [[nodiscard]]
 static uint32_t khr_rgba8(uint32_t r, uint32_t g, uint32_t b, uint32_t a) {
     return r | (g << 8) | (b << 16) | (a << 24);
@@ -33,6 +58,7 @@ static uint32_t khr_rgba8(uint32_t r, uint32_t g, uint32_t b, uint32_t a) {
 static void khr_window_feed(khr_topology_t* topo, khr_wl_client_t* client,
                             khr_xdg_shell_t* shell, khr_seat_t* seat,
                             khr_dmabuf_present_t* dp, bool have_dp,
+                            khr_presentation_time_t* pt, bool have_pt,
                             uint32_t wait_ms) {
     (void)khr_topology_pump(topo, wait_ms);
     bool rearm = false;
@@ -54,6 +80,9 @@ static void khr_window_feed(khr_topology_t* topo, khr_wl_client_t* client,
             (void)khr_seat_consume(client, seat, data, len);
             if (have_dp) {
                 (void)khr_dmabuf_present_consume(dp, data, len);
+            }
+            if (have_pt) {
+                (void)khr_presentation_time_consume(pt, data, len);
             }
         }
         khr_topology_recycle_cqe_buffer(topo, &evt);
@@ -162,50 +191,62 @@ static int32_t khr_window_iabs(int32_t v) {
     return v < 0 ? -v : v;
 }
 
-[[nodiscard]]
-static bool khr_window_mesh_from_payload(void* payload, size_t cap,
-                                         VkDeviceAddress bda,
-                                         khr_mesh_push_t* push, khr_cam_t* cam,
-                                         bool reset_orient) {
-    khr_blob_view_t v = {};
-    if (!khr_mesh_bind_blob(payload, cap, bda, push) ||
-        !khr_blob_parse(payload, cap, &v)) {
-        return false;
-    }
-    khr_cam_frame(cam, v.verts, v.vert_count, reset_orient);
-    khr_mesh_cam_apply(push, cam);
-    return true;
-}
-
 static void khr_window_frame_payload(void* payload, size_t cap,
-                                     khr_mesh_push_t* push, khr_cam_t* cam,
+                                     khr_camera_t* camera,
                                      bool reset_orient) {
     khr_blob_view_t v = {};
     if (!khr_blob_parse(payload, cap, &v)) {
         return;
     }
-    khr_cam_frame(cam, v.verts, v.vert_count, reset_orient);
-    khr_mesh_cam_apply(push, cam);
-}
-
-static void khr_window_wait_acquire(khr_gfx_device_t* dev) {
-    if (dev == nullptr || dev->device == VK_NULL_HANDLE ||
-        dev->acquire_sem == VK_NULL_HANDLE || dev->acquire_point == 0) {
-        return;
-    }
-    uint64_t want = dev->acquire_point;
-    VkSemaphoreWaitInfo wi = {
-        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
-        .semaphoreCount = 1,
-        .pSemaphores = &dev->acquire_sem,
-        .pValues = &want,
-    };
-    (void)vkWaitSemaphores(dev->device, &wi, 50'000'000ULL);
+    khr_camera_frame_verts(camera, v.verts, v.vert_count, reset_orient);
 }
 
 [[nodiscard]]
+static bool khr_window_register_mesh_from_payload(void* payload, size_t cap,
+                                                  VkDeviceAddress payload_bda,
+                                                  khr_bda_arena_t* arena,
+                                                  khr_scene_t* scene,
+                                                  khr_camera_t* camera,
+                                                  bool reset_orient,
+                                                  uint32_t* out_vert_count,
+                                                  uint32_t* out_index_count) {
+    khr_blob_view_t v = {};
+    if (!khr_blob_parse(payload, cap, &v)) {
+        return false;
+    }
+    if (camera != nullptr) {
+        khr_camera_frame_verts(camera, v.verts, v.vert_count, reset_orient);
+    }
+    void* n_host = nullptr;
+    VkDeviceAddress n_gpu = 0;
+    if (v.vert_count > 0 && arena != nullptr) {
+        if (khr_bda_arena_alloc(arena, (size_t)v.vert_count * 3U * sizeof(float), 16, &n_host, &n_gpu)) {
+            khr_blob_generate_smooth_normals(v.verts, v.vert_count, v.indices, v.index_count, (float*)n_host);
+        }
+    }
+    if (scene != nullptr) {
+        (void)khr_scene_register_mesh_normals(scene, 0,
+                                              payload_bda + v.verts_byte_off,
+                                              payload_bda + v.indices_byte_off,
+                                              n_gpu,
+                                              v.vert_count, v.index_count, 2.5f);
+        if (scene->instance_count > 0) {
+            scene->instances[0].radius = 2.5f;
+            if (scene->instances_b != nullptr) {
+                scene->instances_b[0].radius = 2.5f;
+            }
+        }
+    }
+    if (out_vert_count != nullptr) *out_vert_count = v.vert_count;
+    if (out_index_count != nullptr) *out_index_count = v.index_count;
+    return true;
+}
+
+
+[[nodiscard]]
 bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
-                    khr_bda_arena_t* arena, const char* blob_path) {
+                    khr_bda_arena_t* arena, const char* blob_path,
+                    const char* deck_path) {
     if (topo == nullptr || dev == nullptr || arena == nullptr) {
         return false;
     }
@@ -287,7 +328,8 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
         if (ms - t0 > 5'000ULL) {
             break;
         }
-        khr_window_feed(topo, &client, &shell, &seat, nullptr, false, 50);
+        khr_window_feed(topo, &client, &shell, &seat, nullptr, false, nullptr,
+                        false, 50);
         (void)khr_seat_offer_devices(&client, &seat);
     }
     if (client.display_error) {
@@ -305,7 +347,8 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
     }
     (void)khr_seat_offer_devices(&client, &seat);
     (void)khr_cursor_setup(&client, shell.compositor_id, seat.pointer_id, &cursor);
-    khr_window_feed(topo, &client, &shell, &seat, nullptr, false, 0);
+    khr_window_feed(topo, &client, &shell, &seat, nullptr, false, nullptr,
+                    false, 0);
     if (client.display_error) {
         printf("  Present:      DISPLAY ERROR object=%u code=%u '%s'\n",
                client.error_object, client.error_code, client.error_msg);
@@ -338,13 +381,19 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
     void* payload = arena->host_ptr;
     VkDeviceAddress payload_bda = arena->gpu_address;
 
-    khr_mesh_push_t mesh_push = {};
-    khr_cam_t cam = {};
-    size_t box_n = khr_blob_write_box(payload, pay_cap);
-    if (box_n == 0 ||
-        !khr_window_mesh_from_payload(payload, pay_cap, payload_bda, &mesh_push,
-                                      &cam, true)) {
-        printf("  Present:      FAILED default box blob\n");
+    khr_camera_t camera = {};
+    khr_camera_init(&camera, 1.04719755f, 1.0f, 0.1f);
+    khr_camera_look_at(&camera, (float[]){ 0.0f, 0.0f, 3.2f }, (float[]){ 0.0f, 0.0f, 0.0f }, (float[]){ 0.0f, 1.0f, 0.0f });
+
+    size_t box_n = 0;
+    if (khr_suzanne_khrb_size > 0 && khr_suzanne_khrb_size <= pay_cap) {
+        memcpy(payload, khr_suzanne_khrb_data, khr_suzanne_khrb_size);
+        box_n = khr_suzanne_khrb_size;
+    } else {
+        box_n = khr_blob_write_box(payload, pay_cap);
+    }
+    if (box_n == 0) {
+        printf("  Present:      FAILED default mesh blob\n");
         khr_cursor_destroy(&client, &cursor);
         khr_wl_client_disconnect(&client);
         return false;
@@ -365,13 +414,12 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
     bool ingest_pending = false;
     bool imported = arena->is_imported && topo->hugepage == arena->host_ptr;
     if (blob_path != nullptr && blob_path[0] != '\0') {
-        if (imported && khr_topology_ingest_submit(topo, blob_path)) {
+        if (khr_topology_ingest_submit(topo, blob_path)) {
             ingest_pending = true;
-            printf("  Ingest:       submitted '%s' -> payload %zu B (async)\n",
-                   blob_path, pay_cap);
+            printf("  Ingest:       submitted '%s' -> payload %zu B (%s)\n",
+                   blob_path, pay_cap, imported ? "zero-copy BDA" : "fallback bridge");
         } else {
-            printf("  Ingest:       skipped (%s) default box stays\n",
-                   imported ? "submit failed" : "arena is not the hugepage");
+            printf("  Ingest:       submit failed, default box stays\n");
         }
     }
 
@@ -382,21 +430,418 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
         khr_wl_client_disconnect(&client);
         return false;
     }
+
+    khr_cull_pipeline_t cull_pipe = {};
+    if (!khr_cull_pipeline_init(&cull_pipe, dev)) {
+        printf("  Present:      FAILED cull pipeline\n");
+        khr_mesh_pipeline_destroy(&mesh);
+        khr_cursor_destroy(&client, &cursor);
+        khr_wl_client_disconnect(&client);
+        return false;
+    }
+
+    /* Pillar 1 & 4: Unified Descriptor Heap & GPU-Driven Texture Synthesizer */
+    khr_descriptor_heap_t heap = {};
+    if (!khr_descriptor_heap_init(&heap, dev, 1024, 64)) {
+        printf("  Present:      FAILED descriptor heap init\n");
+        khr_cull_pipeline_destroy(&cull_pipe);
+        khr_mesh_pipeline_destroy(&mesh);
+        khr_cursor_destroy(&client, &cursor);
+        khr_wl_client_disconnect(&client);
+        return false;
+    }
+
+    /* Register default trilinear sampler on Set 1 */
+    VkSamplerCreateInfo samp_ci = {
+        .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+        .magFilter = VK_FILTER_LINEAR,
+        .minFilter = VK_FILTER_LINEAR,
+        .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+        .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+        .maxLod = 16.0f,
+    };
+    VkSampler default_sampler = VK_NULL_HANDLE;
+    vkCreateSampler(dev->device, &samp_ci, nullptr, &default_sampler);
+    khr_descriptor_heap_register_sampler(&heap, default_sampler);
+
+    /* Synthesize GPU Procedural Textures (0% CPU, 100% GPU Compute) */
+    khr_texture_synth_pipeline_t tex_synth = {};
+    khr_texture_t tex_damascus = {};
+    khr_texture_t tex_normal = {};
+    khr_texture_t tex_brushed = {};
+    khr_texture_t tex_checker = {};
+    khr_texture_t tex_marble = {};
+
+    if (khr_texture_synth_pipeline_init(&tex_synth, dev)) {
+        /* Texture 0: Damascus Steel / Woven Flow */
+        float steel_tint[4] = { 0.92f, 0.94f, 0.98f, 1.0f };
+        (void)khr_texture_synth_generate_2d(&tex_synth, &tex_damascus, 512, 512,
+                                            KHR_TEX_SYNTH_DAMASCUS_STEEL, 12.0f, steel_tint);
+        (void)khr_texture_register_heap(&tex_damascus, &heap);
+
+        /* Texture 1: Tangent Normal Map */
+        (void)khr_texture_synth_generate_2d(&tex_synth, &tex_normal, 512, 512,
+                                            KHR_TEX_SYNTH_NORMAL_MAP, 14.0f, nullptr);
+        (void)khr_texture_register_heap(&tex_normal, &heap);
+
+        /* Texture 2: Brushed Bronze / Copper */
+        float bronze_tint[4] = { 0.95f, 0.70f, 0.50f, 1.0f };
+        (void)khr_texture_synth_generate_2d(&tex_synth, &tex_brushed, 512, 512,
+                                            KHR_TEX_SYNTH_BRUSHED_METAL, 10.0f, bronze_tint);
+        (void)khr_texture_register_heap(&tex_brushed, &heap);
+
+        /* Texture 3: PBR Checkerboard */
+        float checker_tint[4] = { 0.85f, 0.35f, 0.25f, 1.0f };
+        (void)khr_texture_synth_generate_2d(&tex_synth, &tex_checker, 512, 512,
+                                            KHR_TEX_SYNTH_PBR_CHECKER, 6.0f, checker_tint);
+        (void)khr_texture_register_heap(&tex_checker, &heap);
+
+        /* Texture 4: Veined Italian Carrara Marble */
+        float marble_tint[4] = { 1.0f, 1.0f, 1.0f, 1.0f };
+        (void)khr_texture_synth_generate_2d(&tex_synth, &tex_marble, 512, 512,
+                                            KHR_TEX_SYNTH_MARBLE, 4.0f, marble_tint);
+        (void)khr_texture_register_heap(&tex_marble, &heap);
+
+        khr_texture_synth_pipeline_destroy(&tex_synth);
+    }
+
+    khr_mesh_instanced_pipeline_t inst_pipe = {};
+    if (!khr_mesh_instanced_pipeline_init(&inst_pipe, dev, VK_FORMAT_B8G8R8A8_UNORM, &heap)) {
+        printf("  Present:      FAILED mesh instanced pipeline\n");
+        if (default_sampler != VK_NULL_HANDLE) vkDestroySampler(dev->device, default_sampler, nullptr);
+        khr_descriptor_heap_destroy(&heap);
+        khr_cull_pipeline_destroy(&cull_pipe);
+        khr_mesh_pipeline_destroy(&mesh);
+        khr_cursor_destroy(&client, &cursor);
+        khr_wl_client_disconnect(&client);
+        return false;
+    }
+
+    khr_bda_arena_t scene_arena = {};
+    if (!khr_bda_arena_init(dev, &scene_arena, KHR_BDA_DEFAULT_ARENA_SZ)) {
+        printf("  Present:      FAILED scene arena init\n");
+        khr_mesh_instanced_pipeline_destroy(&inst_pipe);
+        if (default_sampler != VK_NULL_HANDLE) vkDestroySampler(dev->device, default_sampler, nullptr);
+        khr_descriptor_heap_destroy(&heap);
+        khr_cull_pipeline_destroy(&cull_pipe);
+        khr_mesh_pipeline_destroy(&mesh);
+        khr_cursor_destroy(&client, &cursor);
+        khr_wl_client_disconnect(&client);
+        return false;
+    }
+
+    khr_scene_t scene = {};
+    if (!khr_scene_init(&scene, dev, &scene_arena, 1024, 8)) {
+        printf("  Present:      FAILED scene init\n");
+        khr_bda_arena_destroy(dev, &scene_arena);
+        khr_mesh_instanced_pipeline_destroy(&inst_pipe);
+        if (default_sampler != VK_NULL_HANDLE) vkDestroySampler(dev->device, default_sampler, nullptr);
+        khr_descriptor_heap_destroy(&heap);
+        khr_cull_pipeline_destroy(&cull_pipe);
+        khr_mesh_pipeline_destroy(&mesh);
+        khr_cursor_destroy(&client, &cursor);
+        khr_wl_client_disconnect(&client);
+        return false;
+    }
+
+    khr_grid_pipeline_t grid_pipe = {};
+    bool have_grid = khr_grid_pipeline_init(&grid_pipe, dev, VK_FORMAT_B8G8R8A8_UNORM, khr_gfx_depth_format(dev));
+
+    /* Register Mesh 0 in Scene Graph with smooth normals */
+    uint32_t mesh_vert_count = 0, mesh_index_count = 0;
+    (void)khr_window_register_mesh_from_payload(payload, pay_cap, payload_bda,
+                                               &scene_arena, &scene, &camera,
+                                               true, &mesh_vert_count, &mesh_index_count);
+
+    /* Register Procedural Meshes directly into BDA Scene Graph (Pillar 3) */
+    VkDeviceAddress sph_v = 0, sph_n = 0, sph_i = 0;
+    uint32_t sph_vc = 0, sph_ic = 0;
+    (void)khr_scene_generate_sphere(&scene_arena, 1.0f, 24, 48, &sph_v, &sph_n, &sph_i, &sph_vc, &sph_ic);
+    uint32_t sph_mesh_id = khr_scene_register_mesh(&scene, sph_v, sph_i, sph_n, sph_vc, sph_ic, 1.0f);
+
+    VkDeviceAddress cyl_v = 0, cyl_n = 0, cyl_i = 0;
+    uint32_t cyl_vc = 0, cyl_ic = 0;
+    (void)khr_scene_generate_cylinder(&scene_arena, 1.2f, 1.5f, 36, &cyl_v, &cyl_n, &cyl_i, &cyl_vc, &cyl_ic);
+    uint32_t cyl_mesh_id = khr_scene_register_mesh(&scene, cyl_v, cyl_i, cyl_n, cyl_vc, cyl_ic, 1.5f);
+
+    VkDeviceAddress cube_v = 0, cube_n = 0, cube_i = 0;
+    uint32_t cube_vc = 0, cube_ic = 0;
+    (void)khr_scene_generate_chamfer_box(&scene_arena, 1.0f, 0.15f, &cube_v, &cube_n, &cube_i, &cube_vc, &cube_ic);
+    uint32_t cube_mesh_id = khr_scene_register_mesh_normals(&scene, 3, cube_v, cube_i, cube_n, cube_vc, cube_ic, 1.73f);
+
+    /* Check for experiment deck */
+    khr_deck_t deck = {};
+    bool have_deck = false;
+    if (deck_path != nullptr && deck_path[0] != '\0') {
+        have_deck = khr_deck_load_file(&deck, deck_path);
+        if (have_deck) {
+            printf("  Deck:         Loaded '%s' (%u bodies, dt=%.5f s, gravity=[%.2f, %.2f, %.2f])\n",
+                   deck_path, deck.body_count, (double)deck.dt_s,
+                   (double)deck.gravity[0], (double)deck.gravity[1], (double)deck.gravity[2]);
+        }
+    }
+
+    uint32_t active_mesh_id = 0;
+
+    if (have_deck && deck.body_count > 0) {
+        bool any_sphere = false;
+        bool any_box = false;
+        for (uint32_t i = 0; i < deck.body_count; i++) {
+            if (deck.bodies[i].shape.type == KHR_SHAPE_AABB) any_box = true;
+            if (deck.bodies[i].shape.type == KHR_SHAPE_SPHERE) any_sphere = true;
+        }
+        if (any_sphere && !any_box) {
+            active_mesh_id = sph_mesh_id;
+        } else if (any_box && !any_sphere) {
+            active_mesh_id = cube_mesh_id;
+        } else if (any_sphere) {
+            active_mesh_id = sph_mesh_id;
+        } else {
+            active_mesh_id = 0;
+        }
+
+        const float palette[][3] = {
+            { 1.00f, 0.85f, 0.40f }, /* Damascus Gold */
+            { 0.95f, 0.95f, 0.98f }, /* Chrome Silver */
+            { 0.95f, 0.50f, 0.35f }, /* Brushed Copper */
+            { 0.30f, 0.85f, 0.95f }, /* Cyan Crystal */
+            { 0.95f, 0.30f, 0.45f }, /* Ruby Red */
+            { 0.40f, 0.95f, 0.55f }, /* Emerald Green */
+            { 0.70f, 0.50f, 0.95f }, /* Amethyst Purple */
+            { 0.95f, 0.70f, 0.30f }, /* Amber Bronze */
+        };
+        const size_t pal_count = sizeof(palette) / sizeof(palette[0]);
+
+        for (uint32_t i = 0; i < deck.body_count && i < 1024; i++) {
+            const khr_rigid_body_t* b = &deck.bodies[i];
+            if (b->shape.type == KHR_SHAPE_PLANE) continue;
+
+            float r = 0.5f;
+            float sx = 1.0f, sy = 1.0f, sz = 1.0f;
+            uint32_t mid = active_mesh_id;
+            if (b->shape.type == KHR_SHAPE_SPHERE) {
+                r = b->shape.sphere.radius;
+                sx = sy = sz = r;
+                mid = sph_mesh_id;
+            } else if (b->shape.type == KHR_SHAPE_AABB) {
+                r = fmaxf(b->shape.aabb.half_extents[0], fmaxf(b->shape.aabb.half_extents[1], b->shape.aabb.half_extents[2]));
+                sx = b->shape.aabb.half_extents[0];
+                sy = b->shape.aabb.half_extents[1];
+                sz = b->shape.aabb.half_extents[2];
+                mid = cube_mesh_id;
+            }
+
+            const float* col = palette[i % pal_count];
+            khr_gpu_instance_t inst = {
+                .position = { b->position[0], b->position[1], b->position[2] },
+                .radius = r,
+                .rotation = { b->rotation[0], b->rotation[1], b->rotation[2], b->rotation[3] },
+                .scale = { sx, sy, sz },
+                .mesh_id = mid,
+                .albedo = { col[0], col[1], col[2] },
+                .roughness = 0.15f + ((float)(i % 5) * 0.08f),
+                .metallic = 0.80f + ((float)(i % 3) * 0.08f),
+                .ao = 1.0f,
+                .albedo_tex_id = UINT32_MAX,
+                .normal_tex_id = UINT32_MAX,
+            };
+            (void)khr_scene_add_instance(&scene, &inst);
+        }
+
+        if (deck.body_count > 4) {
+            khr_camera_look_at(&camera, (float[]){ 0.0f, 6.0f, 18.0f },
+                                        (float[]){ 0.0f, 1.0f, 0.0f },
+                                        (float[]){ 0.0f, 1.0f, 0.0f });
+        }
+    } else {
+        /* Instance 0: Cook-Torrance GGX PBR Metallic Damascus Suzanne (Hero Mesh) */
+        khr_gpu_instance_t main_inst = {
+            .position = { 0.0f, 0.4f, 0.0f },
+            .radius = 2.5f,
+            .rotation = { 0.0f, 0.0f, 0.0f, 1.0f },
+            .scale = { 1.0f, 1.0f, 1.0f },
+            .mesh_id = 0,
+            .albedo = { 1.0f, 0.88f, 0.65f }, /* Damascened Gold/Steel */
+            .roughness = 0.20f,
+            .metallic = 0.95f,
+            .ao = 1.0f,
+            .albedo_tex_id = tex_damascus.descriptor_index,
+            .normal_tex_id = tex_normal.descriptor_index,
+        };
+        (void)khr_scene_add_instance(&scene, &main_inst);
+
+        /* Instance 1: Companion Left - Chrome Silver UV Sphere */
+        khr_gpu_instance_t chrome_inst = {
+            .position = { -3.5f, 0.0f, 0.0f },
+            .radius = 1.5f,
+            .rotation = { 0.0f, 0.0f, 0.0f, 1.0f },
+            .scale = { 1.2f, 1.2f, 1.2f },
+            .mesh_id = (sph_mesh_id != UINT32_MAX) ? sph_mesh_id : 0,
+            .albedo = { 0.95f, 0.95f, 0.95f },
+            .roughness = 0.08f,
+            .metallic = 0.98f,
+            .ao = 1.0f,
+            .albedo_tex_id = UINT32_MAX,
+            .normal_tex_id = UINT32_MAX,
+        };
+        (void)khr_scene_add_instance(&scene, &chrome_inst);
+
+        /* Instance 2: Pedestal Column - Veined Italian Carrara Marble Column beneath Suzanne */
+        khr_gpu_instance_t ped_inst = {
+            .position = { 0.0f, -1.8f, 0.0f },
+            .radius = 2.0f,
+            .rotation = { 0.0f, 0.0f, 0.0f, 1.0f },
+            .scale = { 1.6f, 0.8f, 1.6f },
+            .mesh_id = (cyl_mesh_id != UINT32_MAX) ? cyl_mesh_id : 0,
+            .albedo = { 0.95f, 0.95f, 0.98f },
+            .roughness = 0.18f,
+            .metallic = 0.05f,
+            .ao = 1.0f,
+            .albedo_tex_id = tex_marble.descriptor_index,
+            .normal_tex_id = UINT32_MAX,
+        };
+        (void)khr_scene_add_instance(&scene, &ped_inst);
+
+        /* Instance 3: Companion Right - Brushed Copper Cube */
+        khr_gpu_instance_t copper_inst = {
+            .position = { 3.5f, 0.0f, 0.0f },
+            .radius = 1.5f,
+            .rotation = { 0.0f, 0.0f, 0.0f, 1.0f },
+            .scale = { 1.1f, 1.1f, 1.1f },
+            .mesh_id = (cube_mesh_id != UINT32_MAX) ? cube_mesh_id : 0,
+            .albedo = { 0.95f, 0.64f, 0.54f },
+            .roughness = 0.30f,
+            .metallic = 0.88f,
+            .ao = 1.0f,
+            .albedo_tex_id = tex_brushed.descriptor_index,
+            .normal_tex_id = tex_normal.descriptor_index,
+        };
+        (void)khr_scene_add_instance(&scene, &copper_inst);
+    }
+
+    /* Real Physical Lights (Pillar D) */
+    khr_gpu_light_t sun = {
+        .type = KHR_LIGHT_DIRECTIONAL,
+        .direction = { -0.577f, -0.577f, -0.577f },
+        .color = { 1.0f, 0.98f, 0.95f },
+        .intensity = 3.0f,
+    };
+    (void)khr_scene_add_light(&scene, &sun);
+
+    khr_gpu_light_t point = {
+        .type = KHR_LIGHT_POINT,
+        .position = { 2.0f, 3.0f, 2.0f },
+        .range = 12.0f,
+        .color = { 1.0f, 0.6f, 0.2f },
+        .intensity = 20.0f,
+    };
+    (void)khr_scene_add_light(&scene, &point);
+
+    khr_gpu_light_t spot = {
+        .type = KHR_LIGHT_SPOT,
+        .position = { -2.5f, 3.5f, 3.0f },
+        .direction = { 0.577f, -0.577f, -0.577f },
+        .range = 15.0f,
+        .color = { 0.3f, 0.7f, 1.0f },
+        .intensity = 30.0f,
+        .spot_inner = cosf(18.0f * (float)M_PI / 180.0f),
+        .spot_outer = cosf(32.0f * (float)M_PI / 180.0f),
+    };
+    (void)khr_scene_add_light(&scene, &spot);
+
+    if (have_deck) {
+        (void)khr_topology_start_sim_deck(topo, 60, &deck,
+                                          scene.instances, scene.instances_b,
+                                          scene.instances_gpu, scene.instances_b_gpu);
+        khr_topology_sim_set_motion(topo, true);
+        printf("  Sim:          60 Hz fixed-tick LBVH physics for deck on Core 3 (%u bodies)\n", deck.body_count);
+    } else if (scene.instance_count > 0) {
+        (void)khr_topology_start_sim(topo, 60, scene.instance_count,
+                                     scene.instances, scene.instances_b,
+                                     scene.instances_gpu, scene.instances_b_gpu);
+        khr_topology_sim_set_motion(topo, true);
+        printf("  Sim:          60 Hz fixed-tick LBVH physics on Core 3 (double-buffered BDA Slot A/B)\n");
+    }
+
+    /* Streaming 3D Audio Engine over Direct Buffers (Pillar 6) */
+    khr_audio_config_t acfg = {
+        .sample_rate = 48000,
+        .period_frames = 512,
+        .alsa_card = 0,
+        .alsa_device = 0,
+        .custom_sink_fd = -1,
+        .use_io_uring = false,
+    };
+    khr_audio_engine_t audio_engine = {};
+    bool audio_live = khr_audio_engine_init(&audio_engine, &acfg);
+
+    khr_audio_clip_t impact_clip = {};
+    khr_audio_clip_t thud_clip = {};
+    khr_audio_clip_t click_clip = {};
+    khr_audio_clip_t hum_clip = {};
+
+    (void)khr_audio_synth_impact(&impact_clip, s_impact_samples, KHR_IMPACT_FRAMES, 48000, 520.0f, 0.45f);
+    (void)khr_audio_synth_thud(&thud_clip, s_thud_samples, KHR_THUD_FRAMES, 48000, 85.0f, 0.30f);
+    (void)khr_audio_synth_click(&click_clip, s_click_samples, KHR_CLICK_FRAMES, 48000, 1800.0f, 0.05f);
+    (void)khr_audio_synth_hum(&hum_clip, s_hum_samples, KHR_HUM_FRAMES, 48000, 100.0f, 1.0f);
+
+    if (audio_live) {
+        if (khr_audio_engine_start_worker(&audio_engine)) {
+            printf("  Audio:        Procedural modal harmonic synthesis + 3D spatial mixer live (48 kHz direct PCM)\n");
+        } else {
+            audio_live = false;
+        }
+    }
+
     printf("  GPU:          %ux MSAA  depth=%s (cull back, GPU z-test)\n",
            (unsigned)khr_gfx_sample_count(dev),
            khr_gfx_depth_format(dev) == VK_FORMAT_D32_SFLOAT ? "D32"
            : (khr_gfx_depth_format(dev) != VK_FORMAT_UNDEFINED ? "D24" : "none"));
+    printf("  Scene:        GPU-driven Hi-Z occlusion culling + Cook-Torrance GGX PBR + 3 physical lights\n");
     printf("  Payload:      %zu KiB @0  UI %zu KiB @%zu  import=%s\n",
            pay_cap / 1024, KHR_HP_UI_RESERVE / 1024, ui_off,
            imported ? "yes" : "no");
     printf("  Mesh:         %u verts %u idx BDA=0x%llx (%s)\n",
-           mesh_push.vert_count, mesh_push.index_count,
-           (unsigned long long)mesh_push.verts_addr,
+           mesh_vert_count, mesh_index_count,
+           (unsigned long long)payload_bda,
            ingest_pending ? "box until ingest" : "box");
     printf("  View:         LMB orbit  Shift/MMB pan  wheel zoom  F frame  gimbal snap\n");
 
     khr_dmabuf_present_t dp = {};
     bool have_dp = false;
+    khr_hiz_t hiz = {};
+    bool have_hiz = false;
+    khr_presentation_time_t pres_time = {};
+    bool have_pt = khr_presentation_time_bind(&pres_time, &client);
+    if (have_pt) {
+        printf("  Pacing:       wp_presentation_time bound (hardware V-sync feedback enabled)\n");
+    }
+
+    /* Decoupled Action-Mapping Input System (Pillar 7) */
+    khr_input_ring_t input_ring = {};
+    khr_input_ring_init(&input_ring);
+    khr_seat_attach_input_ring(&seat, &input_ring);
+
+    khr_action_map_t action_map = {};
+    khr_action_map_init(&action_map);
+    constexpr uint32_t AXIS_LOOK_X = 0;
+    constexpr uint32_t AXIS_LOOK_Y = 1;
+    constexpr uint32_t AXIS_PAN_X  = 2;
+    constexpr uint32_t AXIS_PAN_Y  = 3;
+    constexpr uint32_t AXIS_ZOOM   = 4;
+    constexpr uint32_t ACTION_FRAME   = 0;
+    constexpr uint32_t ACTION_IMPULSE = 1;
+
+    khr_action_map_bind_axis_mouse(&action_map, AXIS_LOOK_X, KHR_AXIS_SRC_MOUSE_DX, -0.008f);
+    khr_action_map_bind_axis_mouse(&action_map, AXIS_LOOK_Y, KHR_AXIS_SRC_MOUSE_DY, 0.008f);
+    khr_action_map_bind_axis_mouse(&action_map, AXIS_PAN_X,  KHR_AXIS_SRC_MOUSE_DX, 1.0f);
+    khr_action_map_bind_axis_mouse(&action_map, AXIS_PAN_Y,  KHR_AXIS_SRC_MOUSE_DY, 1.0f);
+    khr_action_map_bind_axis_mouse(&action_map, AXIS_ZOOM,   KHR_AXIS_SRC_MOUSE_WHEEL, -1.0f / 120.0f);
+    khr_action_map_bind_digital(&action_map, ACTION_FRAME,   KHR_INPUT_KEY, 33); /* Key 'F' */
+    khr_action_map_bind_digital(&action_map, ACTION_IMPULSE, KHR_INPUT_KEY, 57); /* Key Space */
+
     bool ok = true;
     bool dirty = true;
     bool was_fullscreen = shell.fullscreen;
@@ -406,41 +851,125 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
     uint32_t popup_parent_w = 0;
     uint32_t popup_parent_h = 0;
     uint32_t cam_drag = 0; /* 1 = orbit, 2 = pan */
-    int32_t drag_x = 0;
-    int32_t drag_y = 0;
     int32_t drag_sx = 0;
     int32_t drag_sy = 0;
     khr_hit_t drag_hit = KHR_HIT_CLIENT;
+    uint64_t last_commit_ns = 0;
+    uint64_t min_interval_ns = 16'666'667ULL; /* 60 Hz default */
 
     while (!shell.closed && !client.display_error && !khr_window_stop) {
+        struct timespec ts_now = {};
+        clock_gettime(CLOCK_MONOTONIC, &ts_now);
+        uint64_t now_ns = (uint64_t)ts_now.tv_sec * 1'000'000'000ULL + (uint64_t)ts_now.tv_nsec;
+
+        if (have_pt && pres_time.refresh_ns >= 4'000'000U && pres_time.refresh_ns <= 50'000'000U) {
+            if (pres_time.refresh_ns <= 10'000'000U) {
+                min_interval_ns = (uint64_t)pres_time.refresh_ns * 2ULL; /* Pace 120/144 Hz display at 60 Hz */
+            } else {
+                min_interval_ns = (uint64_t)pres_time.refresh_ns;
+            }
+            if (min_interval_ns < 16'666'667ULL) {
+                min_interval_ns = 16'666'667ULL;
+            }
+        }
+
         bool resizing =
             (shell.states & (1U << KHR_XDG_STATE_RESIZING)) != 0;
-        /* A mapped grab popup must notice popup_done / parent clicks promptly.
-         * Outside-app clicks only arrive as popup_done, and only if grab stuck.
-         * Pointer-down view drags must not sit in a 500 ms wait. */
         bool view_drag = seat.left_down || seat.middle_down || cam_drag != 0;
-        uint32_t wait_ms = dirty ? (resizing ? 16U : 0U)
-                                 : (shell.popup_live || ingest_pending || view_drag
-                                        ? 16U : 500U);
+        bool sim_moving = topo->sim.active && khr_topology_sim_has_motion(topo);
+        bool slots_full = have_dp && (khr_dmabuf_present_next_free(&dp) == UINT32_MAX);
+
+        bool time_ok = (last_commit_ns == 0) || (now_ns >= last_commit_ns + min_interval_ns) || (now_ns < last_commit_ns);
+        uint64_t next_deadline_ns = last_commit_ns + min_interval_ns;
+        uint32_t frame_remain_ms = (next_deadline_ns > now_ns)
+            ? (uint32_t)((next_deadline_ns - now_ns + 999'999ULL) / 1'000'000ULL)
+            : 0U;
+        uint32_t interval_ms = (uint32_t)(min_interval_ns / 1'000'000ULL);
+        if (interval_ms == 0) interval_ms = 8U;
+
+        uint32_t wait_ms = 500U;
+        if (dirty) {
+            if (!time_ok) {
+                wait_ms = (frame_remain_ms > 0) ? frame_remain_ms : 1U;
+            } else if (slots_full) {
+                wait_ms = interval_ms;
+            } else {
+                wait_ms = 0U;
+            }
+        } else if (resizing || view_drag || shell.popup_live || ingest_pending || sim_moving) {
+            wait_ms = interval_ms;
+        } else {
+            wait_ms = 500U;
+        }
+
         khr_window_feed(topo, &client, &shell, &seat, have_dp ? &dp : nullptr,
-                        have_dp, wait_ms);
+                        have_dp, have_pt ? &pres_time : nullptr, have_pt, wait_ms);
+        if (!seat.pointer_in) {
+            cam_drag = 0;
+        }
+        khr_action_map_tick(&action_map, &input_ring, 1.0f / 60.0f);
+        if (audio_live) {
+            float fwd[3] = {
+                camera.target[0] - camera.eye[0],
+                camera.target[1] - camera.eye[1],
+                camera.target[2] - camera.eye[2],
+            };
+            float f_len = sqrtf(fwd[0] * fwd[0] + fwd[1] * fwd[1] + fwd[2] * fwd[2]);
+            if (f_len > 1.0e-5f) {
+                fwd[0] /= f_len; fwd[1] /= f_len; fwd[2] /= f_len;
+            } else {
+                fwd[0] = 0.0f; fwd[1] = 0.0f; fwd[2] = -1.0f;
+            }
+            float rx = fwd[1] * camera.up[2] - fwd[2] * camera.up[1];
+            float ry = fwd[2] * camera.up[0] - fwd[0] * camera.up[2];
+            float rz = fwd[0] * camera.up[1] - fwd[1] * camera.up[0];
+            float r_len = sqrtf(rx * rx + ry * ry + rz * rz);
+            if (r_len > 1.0e-5f) {
+                rx /= r_len; ry /= r_len; rz /= r_len;
+            } else {
+                rx = 1.0f; ry = 0.0f; rz = 0.0f;
+            }
+            khr_audio_listener_t listener = {
+                .px = camera.eye[0],
+                .py = camera.eye[1],
+                .pz = camera.eye[2],
+                .vx = 0.0f, .vy = 0.0f, .vz = 0.0f,
+                .fx = fwd[0], .fy = fwd[1], .fz = fwd[2],
+                .ux = camera.up[0], .uy = camera.up[1], .uz = camera.up[2],
+                .rx = rx, .ry = ry, .rz = rz,
+            };
+            khr_audio_engine_set_listener(&audio_engine, &listener);
+        }
+        if (topo->sim.active) {
+            uint64_t sim_t = 0;
+            if (khr_topology_pop_tick(topo, &sim_t)) {
+                if (khr_topology_sim_has_motion(topo)) {
+                    dirty = true;
+                }
+            }
+        }
         if (ingest_pending) {
             uint32_t was = topo->ingest_outstanding;
             size_t n = 0;
             bool got = khr_topology_pop_ingest(topo, &n);
             if (got || topo->ingest_outstanding != was) {
                 ingest_pending = false;
-                if (n == 0 ||
-                    !khr_window_mesh_from_payload(payload, pay_cap, payload_bda,
-                                                  &mesh_push, &cam, true)) {
+                bool valid = (n > 0 && n <= pay_cap && (n % sizeof(uint32_t) == 0));
+                if (valid && !imported) {
+                    memcpy(payload, topo->hugepage, n);
+                }
+                if (!valid ||
+                    !khr_window_register_mesh_from_payload(payload, pay_cap, payload_bda,
+                                                           &scene_arena, &scene, &camera,
+                                                           true, &mesh_vert_count, &mesh_index_count)) {
                     (void)khr_blob_write_box(payload, pay_cap);
-                    (void)khr_window_mesh_from_payload(payload, pay_cap,
-                                                       payload_bda, &mesh_push,
-                                                       &cam, true);
+                    (void)khr_window_register_mesh_from_payload(payload, pay_cap, payload_bda,
+                                                               &scene_arena, &scene, &camera,
+                                                               true, &mesh_vert_count, &mesh_index_count);
                     printf("  Ingest:       invalid blob, default box\n");
                 } else {
-                    printf("  Ingest:       %zu B  %u verts %u idx\n",
-                           n, mesh_push.vert_count, mesh_push.index_count);
+                    printf("  Ingest:       %zu B  %u verts %u idx (smooth normals generated)\n",
+                           n, mesh_vert_count, mesh_index_count);
                 }
                 dirty = true;
             }
@@ -471,32 +1000,26 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
             if (!khr_dmabuf_present_init(dev, &client, shell.surface_id,
                                          want_w, want_h, &dp)) {
                 printf("  Present:      FAILED dmabuf init %ux%u\n",
-                       want_w, want_h);
+                        want_w, want_h);
                 continue;
             }
             have_dp = true;
             buf_w = want_w;
             buf_h = want_h;
             dirty = true;
+            uint32_t init_top = shell.fullscreen ? 0U : KHR_WINDOW_CHROME_TOP;
+            uint32_t init_ph = (buf_h > init_top) ? (buf_h - init_top) : 1U;
+            khr_camera_set_aspect(&camera, (float)buf_w / (float)init_ph);
             (void)khr_xdg_set_window_geometry(&client, &shell, 0, 0,
                                               (int32_t)want_w, (int32_t)want_h);
+            have_hiz = khr_hiz_init(&hiz, dev, buf_w, buf_h);
+            if (have_hiz) {
+                printf("  Hi-Z:         %ux%u pyramid (%u mips, 2-pass occlusion culling enabled)\n",
+                       buf_w, buf_h, hiz.mip_levels);
+            }
             printf("  Present:      slots %ux%u\n", buf_w, buf_h);
         } else if (want_w != dp.width || want_h != dp.height) {
-            /* Do not call present_init again: get_surface on a mapped
-             * surface is already_constructed and the compositor kills us.
-             * Recreate slots only; commit the new size; then drop the old
-             * dma-bufs. */
-            if (!khr_dmabuf_present_resize(dev, &dp, want_w, want_h)) {
-                printf("  Present:      FAILED resize %ux%u\n",
-                       want_w, want_h);
-                continue;
-            }
-            buf_w = want_w;
-            buf_h = want_h;
             dirty = true;
-            (void)khr_xdg_set_window_geometry(&client, &shell, 0, 0,
-                                              (int32_t)want_w, (int32_t)want_h);
-            printf("  Present:      slots %ux%u\n", buf_w, buf_h);
         }
 
         khr_hit_list_t hits = {};
@@ -577,58 +1100,74 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
                 seat.left_down = false;
             }
         }
-        bool in_view = !on_popup &&
-                       (hit == KHR_HIT_CLIENT || hit == KHR_HIT_GIMBAL);
+        bool in_view = !on_popup && (hit == KHR_HIT_CLIENT || hit == KHR_HIT_GIMBAL);
+        bool frame_req = (seat.f_pressed || khr_action_map_just_pressed(&action_map, ACTION_FRAME)) && !on_popup;
         if (seat.double_click && in_view) {
-            khr_window_frame_payload(payload, pay_cap, &mesh_push, &cam,
-                                     hit == KHR_HIT_GIMBAL);
+            khr_window_frame_payload(payload, pay_cap, &camera, hit == KHR_HIT_GIMBAL);
             dirty = true;
             seat.double_click = false;
             seat.left_down = false;
             cam_drag = 0;
-        }
-        if (seat.f_pressed && !on_popup) {
-            khr_window_frame_payload(payload, pay_cap, &mesh_push, &cam, false);
+            if (audio_live) {
+                (void)khr_audio_engine_play(&audio_engine, &click_clip, camera.eye[0], camera.eye[1], camera.eye[2], 0.7f, false);
+            }
+        } else if (frame_req) {
+            khr_window_frame_payload(payload, pay_cap, &camera, false);
             dirty = true;
             seat.f_pressed = false;
+            if (audio_live) {
+                (void)khr_audio_engine_play(&audio_engine, &click_clip, camera.eye[0], camera.eye[1], camera.eye[2], 0.7f, false);
+            }
+        }
+        /*
+         * ARCHITECTURE NOTE (Version 0.2 Pose Ownership):
+         * Camera strictly writes view transforms (eye, target, up).
+         * Physical simulation on Core 3 owns dynamic body poses in double-buffered BDA Slot A/B.
+         * Interactive impulses are delivered via khr_topology_sim_apply_impulse with SI units (N*s, m).
+         */
+        bool impulse_req = khr_action_map_just_pressed(&action_map, ACTION_IMPULSE) && !on_popup;
+        if (impulse_req) {
+            khr_topology_sim_set_motion(topo, true);
+            dirty = true;
+            for (uint32_t i = 0; i < scene.instance_count; i++) {
+                float kick[3] = {
+                    ((float)(i % 3) - 1.0f) * 3.0f,
+                    10.0f + (float)i * 1.5f,
+                    ((float)((i + 1) % 3) - 1.0f) * 3.0f
+                };
+                float r_pos[3] = { 0.2f * (float)(i + 1), 0.1f, 0.1f };
+                khr_topology_sim_apply_impulse(topo, i, kick, r_pos);
+            }
+            if (audio_live) {
+                (void)khr_audio_engine_play(&audio_engine, &click_clip, camera.eye[0], camera.eye[1], camera.eye[2], 1.0f, false);
+            }
         }
         if (cam_drag == 0 && in_view) {
             if (seat.middle_down || (seat.left_down && seat.shift_down)) {
                 cam_drag = 2;
                 drag_sx = seat.x;
                 drag_sy = seat.y;
-                drag_x = seat.x;
-                drag_y = seat.y;
                 drag_hit = hit;
             } else if (seat.left_down) {
                 cam_drag = 1;
                 drag_sx = seat.x;
                 drag_sy = seat.y;
-                drag_x = seat.x;
-                drag_y = seat.y;
                 drag_hit = hit;
             }
         }
         if (cam_drag == 1 && seat.left_down) {
-            int32_t dx = seat.x - drag_x;
-            int32_t dy = seat.y - drag_y;
-            if (dx != 0 || dy != 0) {
-                khr_cam_orbit(&cam, (float)dx * 0.008f, (float)dy * 0.008f);
-                khr_mesh_cam_apply(&mesh_push, &cam);
+            float look_dx = khr_action_map_sample_axis(&action_map, AXIS_LOOK_X, 1.0f);
+            float look_dy = khr_action_map_sample_axis(&action_map, AXIS_LOOK_Y, 1.0f);
+            if (look_dx != 0.0f || look_dy != 0.0f) {
+                khr_camera_orbit(&camera, look_dx, look_dy);
                 dirty = true;
-                drag_x = seat.x;
-                drag_y = seat.y;
             }
-        } else if (cam_drag == 2 &&
-                   (seat.middle_down || (seat.left_down && seat.shift_down))) {
-            int32_t dx = seat.x - drag_x;
-            int32_t dy = seat.y - drag_y;
-            if (dx != 0 || dy != 0) {
-                khr_cam_pan(&cam, (float)dx, (float)dy);
-                khr_mesh_cam_apply(&mesh_push, &cam);
+        } else if (cam_drag == 2 && (seat.middle_down || (seat.left_down && seat.shift_down))) {
+            float pan_dx = khr_action_map_sample_axis(&action_map, AXIS_PAN_X, 1.0f);
+            float pan_dy = khr_action_map_sample_axis(&action_map, AXIS_PAN_Y, 1.0f);
+            if (pan_dx != 0.0f || pan_dy != 0.0f) {
+                khr_camera_pan(&camera, pan_dx, pan_dy);
                 dirty = true;
-                drag_x = seat.x;
-                drag_y = seat.y;
             }
         }
         if (cam_drag == 1 && !seat.left_down) {
@@ -638,35 +1177,35 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
                 tdx <= (int32_t)KHR_WINDOW_DBLCLICK_PX &&
                 tdy <= (int32_t)KHR_WINDOW_DBLCLICK_PX) {
                 uint32_t gx = 0, gy = 0, gs = 0;
-                khr_window_gimbal_rect(buf_w, buf_h, shell.fullscreen,
-                                       &gx, &gy, &gs);
+                khr_window_gimbal_rect(buf_w, buf_h, shell.fullscreen, &gx, &gy, &gs);
                 if (gs > 0) {
                     float cx = (float)gx + (float)gs * 0.5f;
                     float cy = (float)gy + (float)gs * 0.5f;
                     float nx = ((float)drag_sx - cx) / ((float)gs * 0.5f);
                     float ny = ((float)drag_sy - cy) / ((float)gs * 0.5f);
-                    int axis = khr_cam_pick_axis(&cam, nx, ny);
+                    int axis = khr_camera_pick_axis(&camera, nx, ny);
                     if (axis != 0) {
-                        khr_cam_snap_axis(&cam, axis);
-                        khr_mesh_cam_apply(&mesh_push, &cam);
+                        khr_camera_snap_axis(&camera, axis);
                         dirty = true;
+                        if (audio_live) {
+                            (void)khr_audio_engine_play(&audio_engine, &click_clip, camera.eye[0], camera.eye[1], camera.eye[2], 0.7f, false);
+                        }
                     }
                 }
             }
             cam_drag = 0;
         }
-        if (cam_drag == 2 &&
-            !seat.middle_down && !(seat.left_down && seat.shift_down)) {
+        if (cam_drag == 2 && !seat.middle_down && !(seat.left_down && seat.shift_down)) {
             cam_drag = 0;
         }
-        if (seat.wheel != 0) {
+        float zoom = khr_action_map_sample_axis(&action_map, AXIS_ZOOM, 1.0f);
+        if (zoom != 0.0f) {
             if ((in_view || cam_drag != 0) && !on_popup) {
-                khr_cam_zoom(&cam, -(float)seat.wheel / 120.0f);
-                khr_mesh_cam_apply(&mesh_push, &cam);
+                khr_camera_zoom(&camera, zoom);
                 dirty = true;
             }
-            seat.wheel = 0;
         }
+        seat.wheel = 0;
         if (seat.f11_pressed) {
             if (shell.popup_live) {
                 khr_window_popup_teardown(&client, &shell, &popup_pool,
@@ -720,11 +1259,44 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
 
         if (have_dp) {
             (void)khr_dmabuf_present_sync(dev, &dp);
+            if (dp.has_retiring && khr_dmabuf_present_can_drop_retired(dev, &dp)) {
+                khr_dmabuf_present_drop_retired(dev, &dp);
+            }
         }
-        bool size_ok = have_dp && dp.width == want_w && dp.height == want_h;
-        if (size_ok && dirty && khr_dmabuf_present_next_free(&dp) != UINT32_MAX) {
-            khr_window_paint_cards(cards, buf_w, buf_h, shell.fullscreen);
+
+        clock_gettime(CLOCK_MONOTONIC, &ts_now);
+        now_ns = (uint64_t)ts_now.tv_sec * 1'000'000'000ULL + (uint64_t)ts_now.tv_nsec;
+        time_ok = (last_commit_ns == 0) || (now_ns >= last_commit_ns + min_interval_ns) || (now_ns < last_commit_ns);
+
+        bool need_resize = have_dp && (dp.width != want_w || dp.height != want_h);
+        bool can_render = have_dp && dirty && time_ok &&
+                          (need_resize || khr_dmabuf_present_next_free(&dp) != UINT32_MAX);
+        if (can_render) {
+            if (need_resize) {
+                if (!khr_dmabuf_present_resize(dev, &dp, want_w, want_h)) {
+                    printf("  Present:      FAILED resize %ux%u\n", want_w, want_h);
+                    continue;
+                }
+                buf_w = want_w;
+                buf_h = want_h;
+                uint32_t resize_top = shell.fullscreen ? 0U : KHR_WINDOW_CHROME_TOP;
+                uint32_t resize_ph = (buf_h > resize_top) ? (buf_h - resize_top) : 1U;
+                khr_camera_set_aspect(&camera, (float)buf_w / (float)resize_ph);
+                (void)khr_xdg_set_window_geometry(&client, &shell, 0, 0,
+                                                  (int32_t)want_w, (int32_t)want_h);
+                if (have_hiz) {
+                    khr_hiz_destroy(&hiz);
+                    have_hiz = khr_hiz_init(&hiz, dev, buf_w, buf_h);
+                }
+            }
+
             uint32_t top = shell.fullscreen ? 0U : KHR_WINDOW_CHROME_TOP;
+            uint32_t ph = (buf_h > top) ? (buf_h - top) : 1U;
+            float want_aspect = (float)buf_w / (float)ph;
+            if (fabsf(camera.aspect - want_aspect) > 1.0e-4f) {
+                khr_camera_set_aspect(&camera, want_aspect);
+            }
+            khr_window_paint_cards(cards, buf_w, buf_h, shell.fullscreen);
             uint32_t gx = 0, gy = 0, gs = 0;
             khr_window_gimbal_rect(buf_w, buf_h, shell.fullscreen, &gx, &gy, &gs);
             khr_gizmo_pass_t giz = {};
@@ -737,25 +1309,122 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
                 giz.x = gx;
                 giz.y = gy;
                 giz.s = gs;
-                for (int i = 0; i < 3; i++) {
-                    giz.r0[i] = cam.r0[i];
-                    giz.r1[i] = cam.r1[i];
-                    giz.r2[i] = cam.r2[i];
-                }
+                khr_camera_get_rotation_matrix(&camera, giz.r0, giz.r1, giz.r2);
                 giz_arg = &giz;
             }
             (void)khr_xdg_ack_pending(&client, &shell);
+
+            khr_cull_push_t cull_push = {};
+            khr_scene_prepare_cull_push(&scene, &camera, &cull_push);
+
+            khr_hiz_cull_push_t hiz_push = {};
+            if (have_hiz) {
+                khr_scene_prepare_hiz_cull_push(&scene, &camera, &hiz, &hiz_push);
+            }
+
+            if (topo->sim.active && khr_topology_sim_has_motion(topo)) {
+                uint64_t read_bda = 0;
+                uint64_t prev_bda = 0;
+                float alpha = 0.0f;
+                uint32_t flags = 0;
+                khr_topology_sim_get_render_state(topo, now_ns, &read_bda, &prev_bda, &alpha, &flags);
+                if (read_bda != 0) {
+                    cull_push.instances_addr = read_bda;
+                    cull_push.alpha = alpha;
+                    cull_push.flags = flags;
+                    if (have_hiz) {
+                        hiz_push.instances_addr = read_bda;
+                        hiz_push.alpha = alpha;
+                        hiz_push.flags |= flags;
+                    }
+                }
+            } else {
+                cull_push.instances_addr = scene.instances_gpu;
+                cull_push.alpha = 0.0f;
+                cull_push.flags = 0;
+            }
+
+            khr_mesh_instanced_push_t inst_push = {};
+            khr_scene_prepare_mesh_push(&scene, active_mesh_id, &camera, &inst_push);
+
+            float sim_floor = have_deck ? deck.floor_y : KHR_PHYSICS_FLOOR_Y;
+            khr_grid_push_t grid_push = {
+                .eye_plane_y = { camera.eye[0], camera.eye[1], camera.eye[2], sim_floor },
+                .target_minor_sz = { camera.target[0], camera.target[1], camera.target[2], 1.0f },
+                .up_major_sz = { camera.up[0], camera.up[1], camera.up[2], 5.0f },
+                .params = { camera.fov_y, camera.aspect, camera.z_near, 120.0f },
+            };
+
+            khr_gpu_scene_pass_t gpu_pass = {
+                .cull_pipe = &cull_pipe,
+                .cull_push = &cull_push,
+                .inst_pipe = &inst_pipe,
+                .inst_push = &inst_push,
+                .indirect_cmd_buffer = scene_arena.buffer,
+                .indirect_cmd_offset = (VkDeviceSize)(scene.draw_cmd_gpu - scene_arena.gpu_address),
+                .draw_count = 1,
+                .hiz = have_hiz ? &hiz : nullptr,
+                .hiz_push = have_hiz ? &hiz_push : nullptr,
+                .descriptor_heap = &heap,
+                .grid_pipe = have_grid ? &grid_pipe : nullptr,
+                .grid_push = have_grid ? &grid_push : nullptr,
+            };
+
             if (khr_dmabuf_present_commit_scene(dev, &dp, cards_addr,
                                                 KHR_WINDOW_CARD_COUNT,
                                                 nullptr, nullptr,
-                                                &mesh, &mesh_push, giz_arg, top)) {
+                                                &mesh, nullptr,
+                                                &gpu_pass,
+                                                giz_arg, top)) {
                 dirty = false;
-                khr_window_wait_acquire(dev);
+                last_commit_ns = now_ns;
                 (void)khr_dmabuf_present_sync(dev, &dp);
-                if (dp.has_retiring) {
-                    khr_gfx_device_wait_idle(dev);
+                if (have_pt) {
+                    uint32_t fid = 0;
+                    (void)khr_presentation_request_feedback(&pres_time, shell.surface_id, dp.frames, &fid);
+                }
+                if (dp.has_retiring && khr_dmabuf_present_can_drop_retired(dev, &dp)) {
                     khr_dmabuf_present_drop_retired(dev, &dp);
                 }
+            }
+
+            /* Harvest physical collision audio events from Core 3 simulation */
+            khr_collision_event_t col_evt = {};
+            while (khr_topology_sim_pop_collision_event(topo, &col_evt)) {
+                if (audio_live) {
+                    const khr_audio_clip_t* clip = &impact_clip;
+                    if (col_evt.sound_type == KHR_COLLISION_SOUND_THUD) {
+                        clip = &thud_clip;
+                    } else if (col_evt.sound_type == KHR_COLLISION_SOUND_CLICK) {
+                        clip = &click_clip;
+                    }
+                    float gain = fminf(0.8f, fmaxf(0.15f, col_evt.impulse * 0.25f));
+                    (void)khr_audio_engine_play(&audio_engine, clip,
+                                                col_evt.point[0], col_evt.point[1], col_evt.point[2],
+                                                gain, false);
+                }
+            }
+
+            if (audio_live) {
+                float fwd[3] = {
+                    camera.target[0] - camera.eye[0],
+                    camera.target[1] - camera.eye[1],
+                    camera.target[2] - camera.eye[2],
+                };
+                float flen = sqrtf(fwd[0]*fwd[0] + fwd[1]*fwd[1] + fwd[2]*fwd[2]);
+                if (flen > 1e-4f) {
+                    fwd[0] /= flen; fwd[1] /= flen; fwd[2] /= flen;
+                }
+                float rgt[3];
+                khr_vec3_cross(rgt, fwd, camera.up);
+                khr_audio_listener_t listener = {
+                    .px = camera.eye[0], .py = camera.eye[1], .pz = camera.eye[2],
+                    .vx = 0.0f, .vy = 0.0f, .vz = 0.0f,
+                    .fx = fwd[0], .fy = fwd[1], .fz = fwd[2],
+                    .ux = camera.up[0], .uy = camera.up[1], .uz = camera.up[2],
+                    .rx = rgt[0], .ry = rgt[1], .rz = rgt[2],
+                };
+                khr_audio_engine_set_listener(&audio_engine, &listener);
             }
         }
     }
@@ -775,6 +1444,35 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
         khr_dmabuf_present_destroy(dev, &dp);
     }
     khr_window_popup_teardown(&client, &shell, &popup_pool, &popup_buffer_id);
+    if (have_pt) {
+        khr_presentation_time_destroy(&pres_time);
+    }
+    if (have_hiz) {
+        khr_hiz_destroy(&hiz);
+    }
+    if (audio_live) {
+        khr_audio_engine_stop_worker(&audio_engine);
+        khr_audio_engine_destroy(&audio_engine);
+    }
+    if (topo->sim.active) {
+        khr_topology_stop_sim(topo);
+    }
+    khr_scene_destroy(&scene);
+    khr_bda_arena_destroy(dev, &scene_arena);
+    khr_mesh_instanced_pipeline_destroy(&inst_pipe);
+    if (have_grid) {
+        khr_grid_pipeline_destroy(&grid_pipe);
+    }
+    khr_texture_destroy(&tex_marble);
+    khr_texture_destroy(&tex_checker);
+    khr_texture_destroy(&tex_brushed);
+    khr_texture_destroy(&tex_normal);
+    khr_texture_destroy(&tex_damascus);
+    if (default_sampler != VK_NULL_HANDLE) {
+        vkDestroySampler(dev->device, default_sampler, nullptr);
+    }
+    khr_descriptor_heap_destroy(&heap);
+    khr_cull_pipeline_destroy(&cull_pipe);
     khr_mesh_pipeline_destroy(&mesh);
     khr_cursor_destroy(&client, &cursor);
     khr_wl_client_disconnect(&client);

@@ -1,0 +1,16 @@
+# khoros-run v1
+dt_s 0.01666667
+gravity 0.00000 -9.80665 0.00000
+floor_y -2.50
+seed 1
+ticks 600
+integrator symplectic_euler
+# 8 Spheres dropping in a line with colliding lateral trajectories
+body id=0 shape=sphere r=0.4 mass=1.5 e=0.8 mu=0.3 x=-3.50 y=4.00 z=0.00 vx=-1.50 vy=0.00 vz=0.00
+body id=1 shape=sphere r=0.4 mass=1.5 e=0.8 mu=0.3 x=-2.50 y=5.20 z=0.00 vx=1.50 vy=0.00 vz=0.00
+body id=2 shape=sphere r=0.4 mass=1.5 e=0.8 mu=0.3 x=-1.50 y=6.40 z=0.00 vx=-1.50 vy=0.00 vz=0.00
+body id=3 shape=sphere r=0.4 mass=1.5 e=0.8 mu=0.3 x=-0.50 y=4.00 z=0.00 vx=1.50 vy=0.00 vz=0.00
+body id=4 shape=sphere r=0.4 mass=1.5 e=0.8 mu=0.3 x=0.50 y=5.20 z=0.00 vx=-1.50 vy=0.00 vz=0.00
+body id=5 shape=sphere r=0.4 mass=1.5 e=0.8 mu=0.3 x=1.50 y=6.40 z=0.00 vx=1.50 vy=0.00 vz=0.00
+body id=6 shape=sphere r=0.4 mass=1.5 e=0.8 mu=0.3 x=2.50 y=4.00 z=0.00 vx=-1.50 vy=0.00 vz=0.00
+body id=7 shape=sphere r=0.4 mass=1.5 e=0.8 mu=0.3 x=3.50 y=5.20 z=0.00 vx=1.50 vy=0.00 vz=0.00

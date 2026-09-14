@@ -5,8 +5,6 @@
 #include <unistd.h>
 #include <drm/drm_fourcc.h>
 
-constexpr VkFormat KHR_DMABUF_VK_FORMAT = VK_FORMAT_B8G8R8A8_UNORM;
-
 [[nodiscard]]
 static uint32_t khr_dmabuf_mem_type(VkPhysicalDevice phy, uint32_t filter,
                                     VkMemoryPropertyFlags req) {
@@ -120,8 +118,10 @@ static void khr_slot_local_image_destroy(khr_gfx_device_t* d, VkImage* image,
 }
 
 [[nodiscard]]
-bool khr_dmabuf_image_init(khr_gfx_device_t* d, khr_dmabuf_image_t* img,
-                           uint32_t w, uint32_t h) {
+bool khr_dmabuf_image_init_with_modifiers(khr_gfx_device_t* d, khr_dmabuf_image_t* img,
+                                          uint32_t w, uint32_t h,
+                                          const uint64_t* wayland_modifiers,
+                                          uint32_t wayland_modifier_count) {
     if (d == nullptr || d->device == VK_NULL_HANDLE || img == nullptr) {
         return false;
     }
@@ -130,10 +130,149 @@ bool khr_dmabuf_image_init(khr_gfx_device_t* d, khr_dmabuf_image_t* img,
     }
     *img = (khr_dmabuf_image_t){ .w = w, .h = h, .dma_fd = -1 };
 
-    /* Exportability probe with tiling fallback: mature drivers export
-     * optimal-tiled images; the experimental Xe stack only exports LINEAR
-     * (ERROR_FORMAT_NOT_SUPPORTED otherwise, probed live). LINEAR is
-     * universally importable and stays renderable (COLOR_ATTACHMENT). */
+    PFN_vkGetImageDrmFormatModifierPropertiesEXT pfn_mod =
+        d->vkGetImageDrmFormatModifierPropertiesEXT
+            ? d->vkGetImageDrmFormatModifierPropertiesEXT
+            : (PFN_vkGetImageDrmFormatModifierPropertiesEXT)
+                  vkGetDeviceProcAddr(d->device, "vkGetImageDrmFormatModifierPropertiesEXT");
+
+    /* Attempt 1: Intersect compositor modifiers against driver-supported DRM format modifiers */
+    if (pfn_mod != nullptr) {
+        VkDrmFormatModifierPropertiesListEXT mod_props_list = {
+            .sType = VK_STRUCTURE_TYPE_DRM_FORMAT_MODIFIER_PROPERTIES_LIST_EXT,
+        };
+        VkFormatProperties2 fmt_props2 = {
+            .sType = VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_2,
+            .pNext = &mod_props_list,
+        };
+        vkGetPhysicalDeviceFormatProperties2(d->phy, KHR_DMABUF_VK_FORMAT, &fmt_props2);
+
+        constexpr uint32_t MAX_VK_MODS = 128;
+        uint32_t vk_count = mod_props_list.drmFormatModifierCount;
+        if (vk_count > 0) {
+            if (vk_count > MAX_VK_MODS) {
+                vk_count = MAX_VK_MODS;
+            }
+            VkDrmFormatModifierPropertiesEXT vk_mods[MAX_VK_MODS] = {};
+            mod_props_list.drmFormatModifierCount = vk_count;
+            mod_props_list.pDrmFormatModifierProperties = vk_mods;
+            vkGetPhysicalDeviceFormatProperties2(d->phy, KHR_DMABUF_VK_FORMAT, &fmt_props2);
+
+            /* Intersect candidate list against compositor advertised modifiers */
+            uint64_t candidate_mods[MAX_VK_MODS] = {};
+            uint32_t candidate_count = 0;
+
+            if (wayland_modifiers != nullptr && wayland_modifier_count > 0) {
+                for (uint32_t wm = 0; wm < wayland_modifier_count; wm++) {
+                    uint64_t wmod = wayland_modifiers[wm];
+                    if (wmod == DRM_FORMAT_MOD_INVALID) {
+                        continue;
+                    }
+                    for (uint32_t vm = 0; vm < vk_count; vm++) {
+                        if (vk_mods[vm].drmFormatModifier == wmod &&
+                            vk_mods[vm].drmFormatModifierPlaneCount == 1 &&
+                            (vk_mods[vm].drmFormatModifierTilingFeatures &
+                             VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT) != 0) {
+                            bool exists = false;
+                            for (uint32_t c = 0; c < candidate_count; c++) {
+                                if (candidate_mods[c] == wmod) {
+                                    exists = true;
+                                    break;
+                                }
+                            }
+                            if (!exists && candidate_count < MAX_VK_MODS) {
+                                candidate_mods[candidate_count++] = wmod;
+                            }
+                            break;
+                        }
+                    }
+                }
+            } else {
+                /* No compositor modifier list specified: consider all driver single-plane color attachment modifiers */
+                for (uint32_t vm = 0; vm < vk_count; vm++) {
+                    if (vk_mods[vm].drmFormatModifierPlaneCount == 1 &&
+                        (vk_mods[vm].drmFormatModifierTilingFeatures &
+                         VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT) != 0) {
+                        uint64_t mod = vk_mods[vm].drmFormatModifier;
+                        if (mod != DRM_FORMAT_MOD_INVALID && candidate_count < MAX_VK_MODS) {
+                            candidate_mods[candidate_count++] = mod;
+                        }
+                    }
+                }
+            }
+
+            if (candidate_count > 0) {
+                VkExternalMemoryImageCreateInfo ext_ci = {
+                    .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
+                    .handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
+                };
+                VkImageDrmFormatModifierListCreateInfoEXT mod_list_ci = {
+                    .sType = VK_STRUCTURE_TYPE_IMAGE_DRM_FORMAT_MODIFIER_LIST_CREATE_INFO_EXT,
+                    .pNext = &ext_ci,
+                    .drmFormatModifierCount = candidate_count,
+                    .pDrmFormatModifiers = candidate_mods,
+                };
+                VkImageCreateInfo ici = {
+                    .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+                    .pNext = &mod_list_ci,
+                    .imageType = VK_IMAGE_TYPE_2D,
+                    .format = KHR_DMABUF_VK_FORMAT,
+                    .extent = { .width = w, .height = h, .depth = 1 },
+                    .mipLevels = 1,
+                    .arrayLayers = 1,
+                    .samples = VK_SAMPLE_COUNT_1_BIT,
+                    .tiling = VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT,
+                    .usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+                    .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+                    .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+                };
+                if (vkCreateImage(d->device, &ici, nullptr, &img->image) == VK_SUCCESS) {
+                    VkMemoryRequirements req = {};
+                    vkGetImageMemoryRequirements(d->device, img->image, &req);
+                    uint32_t mem_idx = khr_dmabuf_mem_type(d->phy, req.memoryTypeBits,
+                                                           VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+                    if (mem_idx == UINT32_MAX) {
+                        mem_idx = khr_dmabuf_mem_type(d->phy, req.memoryTypeBits, 0);
+                    }
+                    if (mem_idx != UINT32_MAX) {
+                        VkExportMemoryAllocateInfo export_ai = {
+                            .sType = VK_STRUCTURE_TYPE_EXPORT_MEMORY_ALLOCATE_INFO,
+                            .handleTypes = VK_EXTERNAL_MEMORY_HANDLE_TYPE_DMA_BUF_BIT_EXT,
+                        };
+                        VkMemoryAllocateInfo ai = {
+                            .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
+                            .pNext = &export_ai,
+                            .allocationSize = req.size,
+                            .memoryTypeIndex = mem_idx,
+                        };
+                        if (vkAllocateMemory(d->device, &ai, nullptr, &img->mem) == VK_SUCCESS &&
+                            vkBindImageMemory(d->device, img->image, img->mem, 0) == VK_SUCCESS) {
+                            VkImageDrmFormatModifierPropertiesEXT mod_props = {
+                                .sType = VK_STRUCTURE_TYPE_IMAGE_DRM_FORMAT_MODIFIER_PROPERTIES_EXT,
+                            };
+                            if (pfn_mod(d->device, img->image, &mod_props) == VK_SUCCESS) {
+                                img->modifier = mod_props.drmFormatModifier;
+                                img->tiling = VK_IMAGE_TILING_DRM_FORMAT_MODIFIER_EXT;
+                                VkImageSubresource sub = {
+                                    .aspectMask = VK_IMAGE_ASPECT_MEMORY_PLANE_0_BIT_EXT,
+                                };
+                                VkSubresourceLayout layout = {};
+                                vkGetImageSubresourceLayout(d->device, img->image, &sub, &layout);
+                                img->stride = (uint32_t)layout.rowPitch;
+                                img->offset = (uint32_t)layout.offset;
+                                img->drm_format = DRM_FORMAT_ARGB8888;
+                                return true;
+                            }
+                        }
+                    }
+                    khr_dmabuf_image_destroy(d, img);
+                    *img = (khr_dmabuf_image_t){ .w = w, .h = h, .dma_fd = -1 };
+                }
+            }
+        }
+    }
+
+    /* Attempt 2: Fallback to optimal/linear exportability probe */
     static const VkImageTiling try_tilings[2] = {
         VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_TILING_LINEAR,
     };
@@ -224,28 +363,14 @@ bool khr_dmabuf_image_init(khr_gfx_device_t* d, khr_dmabuf_image_t* img,
         return false;
     }
 
-    /* Actual modifier: whatever tiling the driver chose, queried back and
-     * handed to the import verbatim. Never hardcoded per vendor. */
-    PFN_vkGetImageDrmFormatModifierPropertiesEXT pfn_mod =
-        (PFN_vkGetImageDrmFormatModifierPropertiesEXT)
-        vkGetDeviceProcAddr(d->device, "vkGetImageDrmFormatModifierPropertiesEXT");
-    if (pfn_mod == nullptr) {
-        khr_dmabuf_image_destroy(d, img);
-        return false;
+    if (pfn_mod != nullptr) {
+        VkImageDrmFormatModifierPropertiesEXT mod_props = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_DRM_FORMAT_MODIFIER_PROPERTIES_EXT,
+        };
+        if (pfn_mod(d->device, img->image, &mod_props) == VK_SUCCESS) {
+            img->modifier = mod_props.drmFormatModifier;
+        }
     }
-    VkImageDrmFormatModifierPropertiesEXT mod_props = {
-        .sType = VK_STRUCTURE_TYPE_IMAGE_DRM_FORMAT_MODIFIER_PROPERTIES_EXT,
-    };
-    if (pfn_mod(d->device, img->image, &mod_props) != VK_SUCCESS) {
-        khr_dmabuf_image_destroy(d, img);
-        return false;
-    }
-    img->modifier = mod_props.drmFormatModifier;
-    /* INVALID on a LINEAR image unambiguously means "no tiling": advertise
-     * LINEAR rather than forwarding INVALID. Observed live: Mutter answers a
-     * LINEAR add (created/failed) but goes silent on INVALID — no reply at
-     * all, connection alive. Only LINEAR images qualify; anything else keeps
-     * the queried value for future modifier negotiation. */
     if (img->modifier == DRM_FORMAT_MOD_INVALID && img->tiling == VK_IMAGE_TILING_LINEAR) {
         img->modifier = DRM_FORMAT_MOD_LINEAR;
     }
@@ -259,6 +384,12 @@ bool khr_dmabuf_image_init(khr_gfx_device_t* d, khr_dmabuf_image_t* img,
     img->offset = (uint32_t)layout.offset;
     img->drm_format = DRM_FORMAT_ARGB8888;
     return true;
+}
+
+[[nodiscard]]
+bool khr_dmabuf_image_init(khr_gfx_device_t* d, khr_dmabuf_image_t* img,
+                           uint32_t w, uint32_t h) {
+    return khr_dmabuf_image_init_with_modifiers(d, img, w, h, nullptr, 0);
 }
 
 [[nodiscard]]
@@ -304,13 +435,22 @@ void khr_dmabuf_image_destroy(khr_gfx_device_t* d, khr_dmabuf_image_t* img) {
 }
 
 [[nodiscard]]
-bool khr_dmabuf_slot_init(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
-                          uint32_t w, uint32_t h) {
-    if (d == nullptr || d->device == VK_NULL_HANDLE || slot == nullptr) {
+bool khr_dmabuf_slot_init_shared_with_modifiers(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
+                                                uint32_t w, uint32_t h,
+                                                const khr_card_pipeline_t* shared_pipe,
+                                                const uint64_t* modifiers,
+                                                uint32_t modifier_count) {
+    if (d == nullptr || d->device == VK_NULL_HANDLE || slot == nullptr ||
+        w == 0 || h == 0 || w > 4'096 || h > 4'096) {
         return false;
     }
+    VkCommandPool existing_pool = slot->pool;
+    VkCommandBuffer existing_cmd = slot->cmd;
     *slot = (khr_dmabuf_slot_t){ .layout = VK_IMAGE_LAYOUT_UNDEFINED };
-    if (!khr_dmabuf_image_init(d, &slot->img, w, h) ||
+    slot->pool = existing_pool;
+    slot->cmd = existing_cmd;
+
+    if (!khr_dmabuf_image_init_with_modifiers(d, &slot->img, w, h, modifiers, modifier_count) ||
         !khr_dmabuf_image_export(d, &slot->img)) {
         khr_dmabuf_slot_destroy(d, slot);
         return false;
@@ -332,30 +472,41 @@ bool khr_dmabuf_slot_init(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
         khr_dmabuf_slot_destroy(d, slot);
         return false;
     }
-    VkCommandPoolCreateInfo pci = {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-        .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-        .queueFamilyIndex = d->gfx_family,
-    };
-    if (vkCreateCommandPool(d->device, &pci, nullptr, &slot->pool) != VK_SUCCESS) {
-        khr_dmabuf_slot_destroy(d, slot);
-        return false;
+    if (slot->pool == VK_NULL_HANDLE) {
+        VkCommandPoolCreateInfo pci = {
+            .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+            .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+            .queueFamilyIndex = d->gfx_family,
+        };
+        if (vkCreateCommandPool(d->device, &pci, nullptr, &slot->pool) != VK_SUCCESS) {
+            khr_dmabuf_slot_destroy(d, slot);
+            return false;
+        }
+        VkCommandBufferAllocateInfo aci = {
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+            .commandPool = slot->pool,
+            .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+            .commandBufferCount = 1,
+        };
+        if (vkAllocateCommandBuffers(d->device, &aci, &slot->cmd) != VK_SUCCESS) {
+            khr_dmabuf_slot_destroy(d, slot);
+            return false;
+        }
+    } else {
+        (void)vkResetCommandPool(d->device, slot->pool, 0);
     }
-    VkCommandBufferAllocateInfo aci = {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-        .commandPool = slot->pool,
-        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-        .commandBufferCount = 1,
-    };
-    if (vkAllocateCommandBuffers(d->device, &aci, &slot->cmd) != VK_SUCCESS) {
-        khr_dmabuf_slot_destroy(d, slot);
-        return false;
+    if (shared_pipe != nullptr && shared_pipe->pipeline != VK_NULL_HANDLE) {
+        slot->pipe = *shared_pipe;
+        slot->pipe_live = true;
+        slot->owns_pipe = false;
+    } else {
+        if (!khr_card_pipeline_init(&slot->pipe, d, KHR_DMABUF_VK_FORMAT)) {
+            khr_dmabuf_slot_destroy(d, slot);
+            return false;
+        }
+        slot->pipe_live = true;
+        slot->owns_pipe = true;
     }
-    if (!khr_card_pipeline_init(&slot->pipe, d, KHR_DMABUF_VK_FORMAT)) {
-        khr_dmabuf_slot_destroy(d, slot);
-        return false;
-    }
-    slot->pipe_live = true;
     slot->samples = khr_gfx_sample_count(d);
     slot->depth_format = khr_gfx_depth_format(d);
     slot->msaa_color_layout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -371,14 +522,8 @@ bool khr_dmabuf_slot_init(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
         }
     }
     if (slot->depth_format != VK_FORMAT_UNDEFINED) {
-        VkImageAspectFlags daspect = VK_IMAGE_ASPECT_DEPTH_BIT;
-        if (slot->depth_format == VK_FORMAT_D24_UNORM_S8_UINT) {
-            daspect |= VK_IMAGE_ASPECT_STENCIL_BIT;
-        }
-        if (!khr_slot_local_image(d, w, h, slot->depth_format, slot->samples,
-                                  VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-                                  daspect, &slot->depth, &slot->depth_mem,
-                                  &slot->depth_view)) {
+        if (!khr_depth_target_create(d, &slot->depth_target, w, h, slot->samples,
+                                     slot->depth_format)) {
             khr_dmabuf_slot_destroy(d, slot);
             return false;
         }
@@ -388,12 +533,25 @@ bool khr_dmabuf_slot_init(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
     return true;
 }
 
+[[nodiscard]]
+bool khr_dmabuf_slot_init_shared(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
+                                 uint32_t w, uint32_t h,
+                                 const khr_card_pipeline_t* shared_pipe) {
+    return khr_dmabuf_slot_init_shared_with_modifiers(d, slot, w, h, shared_pipe, nullptr, 0);
+}
+
+[[nodiscard]]
+bool khr_dmabuf_slot_init(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
+                          uint32_t w, uint32_t h) {
+    return khr_dmabuf_slot_init_shared(d, slot, w, h, nullptr);
+}
+
 void khr_dmabuf_slot_destroy(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot) {
     if (d == nullptr || slot == nullptr) {
         return;
     }
     if (d->device != VK_NULL_HANDLE) {
-        if (slot->pipe_live) {
+        if (slot->pipe_live && slot->owns_pipe) {
             khr_card_pipeline_destroy(&slot->pipe);
             slot->pipe_live = false;
         }
@@ -407,8 +565,7 @@ void khr_dmabuf_slot_destroy(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot) {
         }
         khr_slot_local_image_destroy(d, &slot->msaa_color, &slot->msaa_color_mem,
                                      &slot->msaa_color_view);
-        khr_slot_local_image_destroy(d, &slot->depth, &slot->depth_mem,
-                                     &slot->depth_view);
+        khr_depth_target_destroy(d, &slot->depth_target);
     }
     khr_dmabuf_image_destroy(d, &slot->img);
     slot->cmd = VK_NULL_HANDLE;
@@ -422,7 +579,7 @@ bool khr_dmabuf_slot_render_cards(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
                                   VkSemaphore signal_sem, uint64_t signal_value) {
     return khr_dmabuf_slot_render_scene(d, slot, cards_addr, card_count,
                                         nullptr, nullptr, nullptr, nullptr,
-                                        nullptr, 0, signal_sem, signal_value);
+                                        nullptr, nullptr, 0, signal_sem, signal_value);
 }
 
 [[nodiscard]]
@@ -432,6 +589,7 @@ bool khr_dmabuf_slot_render_scene(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
                                   const khr_plot_push_t* plot_push,
                                   const khr_mesh_pipeline_t* mesh,
                                   const khr_mesh_push_t* mesh_push,
+                                  const khr_gpu_scene_pass_t* gpu_scene,
                                   const khr_gizmo_pass_t* gizmo,
                                   uint32_t plot_top_px,
                                   VkSemaphore signal_sem, uint64_t signal_value) {
@@ -465,8 +623,12 @@ bool khr_dmabuf_slot_render_scene(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
         .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
         .srcStageMask = VK_PIPELINE_STAGE_2_HOST_BIT,
         .srcAccessMask = VK_ACCESS_2_HOST_WRITE_BIT,
-        .dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT,
-        .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
+        .dstStageMask = VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT |
+                        VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT |
+                        VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
+        .dstAccessMask = VK_ACCESS_2_SHADER_STORAGE_READ_BIT |
+                         VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT |
+                         VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT,
     };
     VkDependencyInfo dep0 = {
         .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
@@ -474,6 +636,57 @@ bool khr_dmabuf_slot_render_scene(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
         .pMemoryBarriers = &host_bar,
     };
     vkCmdPipelineBarrier2(slot->cmd, &dep0);
+
+    /* 0b. GPU Compute Frustum Culling Dispatch (Pillar A) or Hi-Z Occlusion Culling (Pillar 5) */
+    if (gpu_scene != nullptr) {
+        if (gpu_scene->hiz != nullptr && gpu_scene->hiz_push != nullptr &&
+            gpu_scene->hiz_push->instance_count > 0) {
+            if (slot->depth_target.view != VK_NULL_HANDLE &&
+                slot->depth_layout == VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL) {
+                khr_hiz_build(gpu_scene->hiz, slot->cmd, slot->depth_target.image,
+                              VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+            }
+            khr_hiz_cull_dispatch(gpu_scene->hiz, slot->cmd, gpu_scene->hiz_push);
+
+            VkMemoryBarrier2 cull_bar = {
+                .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+                .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                .dstStageMask = VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT |
+                                VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT |
+                                VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                .dstAccessMask = VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT |
+                                 VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
+            };
+            VkDependencyInfo cull_dep = {
+                .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+                .memoryBarrierCount = 1,
+                .pMemoryBarriers = &cull_bar,
+            };
+            vkCmdPipelineBarrier2(slot->cmd, &cull_dep);
+        } else if (gpu_scene->cull_pipe != nullptr &&
+                   gpu_scene->cull_pipe->pipeline != VK_NULL_HANDLE &&
+                   gpu_scene->cull_push != nullptr && gpu_scene->cull_push->instance_count > 0) {
+            khr_cull_pipeline_dispatch(gpu_scene->cull_pipe, slot->cmd, gpu_scene->cull_push);
+
+            VkMemoryBarrier2 cull_bar = {
+                .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+                .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+                .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+                .dstStageMask = VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT |
+                                VK_PIPELINE_STAGE_2_VERTEX_SHADER_BIT |
+                                VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+                .dstAccessMask = VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT |
+                                 VK_ACCESS_2_SHADER_STORAGE_READ_BIT,
+            };
+            VkDependencyInfo cull_dep = {
+                .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+                .memoryBarrierCount = 1,
+                .pMemoryBarriers = &cull_bar,
+            };
+            vkCmdPipelineBarrier2(slot->cmd, &cull_dep);
+        }
+    }
 
     bool msaa = slot->samples != VK_SAMPLE_COUNT_1_BIT &&
                 slot->msaa_color_view != VK_NULL_HANDLE;
@@ -513,9 +726,9 @@ bool khr_dmabuf_slot_render_scene(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
             },
         };
     }
-    if (slot->depth_view != VK_NULL_HANDLE) {
+    if (slot->depth_target.view != VK_NULL_HANDLE) {
         VkImageAspectFlags daspect = VK_IMAGE_ASPECT_DEPTH_BIT;
-        if (slot->depth_format == VK_FORMAT_D24_UNORM_S8_UINT) {
+        if (slot->depth_target.format == VK_FORMAT_D24_UNORM_S8_UINT) {
             daspect |= VK_IMAGE_ASPECT_STENCIL_BIT;
         }
         bars[nbar++] = (VkImageMemoryBarrier2){
@@ -528,7 +741,7 @@ bool khr_dmabuf_slot_render_scene(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
             .newLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
             .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
             .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-            .image = slot->depth,
+            .image = slot->depth_target.image,
             .subresourceRange = {
                 .aspectMask = daspect,
                 .levelCount = 1,
@@ -544,7 +757,8 @@ bool khr_dmabuf_slot_render_scene(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
     vkCmdPipelineBarrier2(slot->cmd, &dep1);
 
     VkClearValue clear = { .color = { .float32 = { 0.02f, 0.04f, 0.08f, 1.0f } } };
-    VkClearValue depth_clear = { .depthStencil = { .depth = 1.0f, .stencil = 0 } };
+    /* Modern Reversed-Z: 0.0f is the farthest possible depth; nearer objects have higher Z */
+    VkClearValue depth_clear = { .depthStencil = { .depth = KHR_REVERSED_Z_CLEAR, .stencil = 0 } };
     VkRenderingAttachmentInfo color_att = {
         .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
         .imageView = msaa ? slot->msaa_color_view : slot->view,
@@ -560,7 +774,7 @@ bool khr_dmabuf_slot_render_scene(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
     };
     VkRenderingAttachmentInfo depth_att = {
         .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
-        .imageView = slot->depth_view,
+        .imageView = slot->depth_target.view,
         .imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
         .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
         .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
@@ -572,7 +786,7 @@ bool khr_dmabuf_slot_render_scene(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
         .layerCount = 1,
         .colorAttachmentCount = 1,
         .pColorAttachments = &color_att,
-        .pDepthAttachment = slot->depth_view != VK_NULL_HANDLE ? &depth_att : nullptr,
+        .pDepthAttachment = slot->depth_target.view != VK_NULL_HANDLE ? &depth_att : nullptr,
     };
     vkCmdBeginRendering(slot->cmd, &ri);
     VkViewport vp = {
@@ -600,14 +814,18 @@ bool khr_dmabuf_slot_render_scene(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
                            0, sizeof(khr_card_push_t), &push);
     }
     vkCmdDraw(slot->cmd, 6, card_count, 0, 0);
-    bool draw_mesh = mesh != nullptr && mesh->pipeline != VK_NULL_HANDLE &&
+    bool draw_gpu_scene = gpu_scene != nullptr && gpu_scene->inst_pipe != nullptr &&
+                          gpu_scene->inst_pipe->pipeline != VK_NULL_HANDLE &&
+                          gpu_scene->indirect_cmd_buffer != VK_NULL_HANDLE &&
+                          gpu_scene->inst_push != nullptr;
+    bool draw_mesh = !draw_gpu_scene && mesh != nullptr && mesh->pipeline != VK_NULL_HANDLE &&
                      mesh_push != nullptr && mesh_push->index_count >= 3U &&
                      mesh_push->verts_addr != 0 && mesh_push->indices_addr != 0;
-    bool draw_plot = !draw_mesh && plot != nullptr &&
+    bool draw_plot = !draw_gpu_scene && !draw_mesh && plot != nullptr &&
                      plot->pipeline != VK_NULL_HANDLE &&
                      plot_push != nullptr && plot_push->count >= 2U &&
                      plot_push->samples_addr != 0;
-    if (draw_mesh || draw_plot) {
+    if (draw_gpu_scene || draw_mesh || draw_plot) {
         uint32_t top = plot_top_px;
         if (top >= h) {
             top = 0;
@@ -630,7 +848,22 @@ bool khr_dmabuf_slot_render_scene(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
             .extent = { w, ph },
         };
         vkCmdSetScissor(slot->cmd, 0, 1, &psc);
-        if (draw_mesh) {
+        if (draw_gpu_scene) {
+            if (gpu_scene->grid_pipe != nullptr && gpu_scene->grid_push != nullptr) {
+                khr_grid_pipeline_draw(gpu_scene->grid_pipe, slot->cmd, gpu_scene->grid_push);
+            }
+            if (gpu_scene->descriptor_heap != nullptr) {
+                khr_descriptor_heap_bind(gpu_scene->descriptor_heap, slot->cmd,
+                                         VK_PIPELINE_BIND_POINT_GRAPHICS,
+                                         gpu_scene->inst_pipe->layout);
+            }
+            khr_mesh_instanced_draw_indirect(gpu_scene->inst_pipe, slot->cmd,
+                                             gpu_scene->inst_push,
+                                             gpu_scene->indirect_cmd_buffer,
+                                             gpu_scene->indirect_cmd_offset,
+                                             gpu_scene->draw_count,
+                                             sizeof(khr_draw_indirect_cmd_t));
+        } else if (draw_mesh) {
             khr_mesh_draw(mesh, slot->cmd, mesh_push);
         } else {
             khr_plot_draw(plot, slot->cmd, plot_push, plot_push->count - 1U);
@@ -645,9 +878,9 @@ bool khr_dmabuf_slot_render_scene(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
         uint32_t gy = gizmo->y;
         uint32_t gs = gizmo->s;
         if (gx < w && gy < h && gx + gs <= w && gy + gs <= h) {
-            if (slot->depth_view != VK_NULL_HANDLE) {
+            if (slot->depth_target.view != VK_NULL_HANDLE) {
                 VkImageAspectFlags daspect = VK_IMAGE_ASPECT_DEPTH_BIT;
-                if (slot->depth_format == VK_FORMAT_D24_UNORM_S8_UINT) {
+                if (slot->depth_target.format == VK_FORMAT_D24_UNORM_S8_UINT) {
                     daspect |= VK_IMAGE_ASPECT_STENCIL_BIT;
                 }
                 VkClearAttachment ca = {
@@ -700,7 +933,7 @@ bool khr_dmabuf_slot_render_scene(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
     if (msaa) {
         slot->msaa_color_layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     }
-    if (slot->depth_view != VK_NULL_HANDLE) {
+    if (slot->depth_target.view != VK_NULL_HANDLE) {
         slot->depth_layout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
     }
 

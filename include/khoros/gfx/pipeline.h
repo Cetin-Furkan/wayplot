@@ -93,6 +93,7 @@ typedef struct {
     bool                depth_test;    /* GPU z-test; ignored if no depth format */
     bool                blend_enable;
     VkCullModeFlags     cull_mode;     /* e.g. VK_CULL_MODE_NONE */
+    VkFrontFace         front_face;    /* 0 = default (VK_FRONT_FACE_COUNTER_CLOCKWISE) */
     VkPrimitiveTopology topology;      /* e.g. VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST */
 } khr_gfx_pipeline_config_t;
 

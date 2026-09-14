@@ -18,6 +18,7 @@
 #include <stdatomic.h>
 #include <pthread.h>
 #include "khoros/core/attributes.h"
+#include "khoros/core/physics.h"
 #include "khoros/uring/ring.h"
 #include "khoros/uring/pbuf.h"
 
@@ -58,6 +59,46 @@ typedef struct {
     uint64_t u64;
     char     path[KHR_PATH_MAX];
 } khr_wcmd_item_t;
+
+constexpr uint32_t KHR_TICK_Q_CAP = 16;
+
+typedef enum {
+    KHR_COLLISION_SOUND_IMPACT = 0, /* Metallic or solid mesh impact */
+    KHR_COLLISION_SOUND_THUD   = 1, /* Ground or pedestal collision */
+    KHR_COLLISION_SOUND_CLICK  = 2, /* Minor tap or light collision */
+} khr_collision_sound_type_t;
+
+typedef struct {
+    float    point[3];          /* 3D world contact point */
+    float    normal[3];         /* Contact normal */
+    float    impulse;           /* Normal impulse magnitude */
+    uint32_t body_a;            /* Body A index */
+    uint32_t body_b;            /* Body B index */
+    uint32_t sound_type;        /* khr_collision_sound_type_t */
+} khr_collision_event_t;
+
+constexpr uint32_t KHR_COLLISION_EVENT_CAP = 64;
+
+/* Decoupled Fixed-Tick Simulation (Core 3 Compute) */
+typedef struct {
+    _Atomic uint64_t      tick_count;
+    uint32_t              tick_rate_hz;     /* e.g. 120 */
+    uint64_t              tick_period_ns;   /* e.g. 8'333'333 ns for 120 Hz */
+    _Atomic uint64_t      last_tick_time_ns;
+    uint32_t              instance_count;
+    void*                 buffer_a;         /* Slot 0 host ptr (khr_gpu_instance_t*) */
+    void*                 buffer_b;         /* Slot 1 host ptr (khr_gpu_instance_t*) */
+    uint64_t              buffer_a_bda;     /* Slot 0 BDA */
+    uint64_t              buffer_b_bda;     /* Slot 1 BDA */
+    _Atomic uint32_t      write_slot;       /* N % 2 */
+    _Atomic uint32_t      read_slot;        /* (N - 1) % 2 */
+    _Atomic bool          active;
+    _Atomic bool          has_motion;       /* True if dynamic motion is active and needs continuous rendering */
+    khr_physics_world_t   physics;          /* Rigid-body dynamics and spatial LBVH world */
+    khr_collision_event_t collision_events[KHR_COLLISION_EVENT_CAP];
+    _Atomic uint32_t      collision_head;
+    _Atomic uint32_t      collision_tail;
+} khr_sim_state_t;
 
 /* Named tag (struct khr_topology) so upper layers can forward-declare
  * khr_topology_t for back-pointers without including this header. */
@@ -124,6 +165,13 @@ typedef struct khr_topology {
      * and corrupt pairing. Tier-0 packets can never collide (256 B cap). */
     uint32_t         bda_outstanding;
     uint32_t         ingest_outstanding;
+    uint32_t         tick_outstanding;
+
+    /* Decoupled Fixed-Tick Simulation (Core 3 Compute) */
+    khr_sim_state_t  sim;
+    khr_cqe_event_t  tick_q[KHR_TICK_Q_CAP];
+    uint32_t         tick_head;
+    uint32_t         tick_tail;
 
     /* Worker-owned async ingest operation (Core 1 only). The 3-SQE chain is
      * submitted and the worker returns to its parked wait; chain CQEs harvested
@@ -243,5 +291,53 @@ bool khr_topology_wait_cqe(khr_topology_t* topo, khr_cqe_event_t* out_evt, uint3
 size_t khr_topology_staged_count(const khr_topology_t* topo);
 
 void khr_topology_recycle_cqe_buffer(khr_topology_t* topo, const khr_cqe_event_t* evt);
+
+struct khr_deck;
+
+/*
+ * Decoupled fixed-tick simulation API (Core 3 Compute Worker).
+ */
+[[nodiscard]]
+bool khr_topology_start_sim(khr_topology_t* topo, uint32_t rate_hz, uint32_t instance_count,
+                            void* buf_a, void* buf_b, uint64_t bda_a, uint64_t bda_b);
+
+[[nodiscard]]
+bool khr_topology_start_sim_deck(khr_topology_t* topo, uint32_t rate_hz, const struct khr_deck* deck,
+                                 void* buf_a, void* buf_b, uint64_t bda_a, uint64_t bda_b);
+
+void khr_topology_stop_sim(khr_topology_t* topo);
+
+void khr_topology_sim_step(khr_topology_t* topo, uint64_t tick_index);
+
+void khr_topology_sim_set_motion(khr_topology_t* topo, bool has_motion);
+
+void khr_topology_sim_apply_impulse(khr_topology_t* topo, uint32_t instance_index,
+                                    const float impulse[3], const float rel_pos[3]);
+
+[[nodiscard]]
+bool khr_topology_sim_has_motion(const khr_topology_t* topo);
+
+void khr_topology_sim_get_render_state(const khr_topology_t* topo, uint64_t now_ns,
+                                       uint64_t* out_read_bda, uint64_t* out_prev_bda,
+                                       float* out_alpha, uint32_t* out_flags);
+
+/*
+ * Harvest completed simulation tick from Ring A tick queue.
+ */
+[[nodiscard]]
+bool khr_topology_pop_tick(khr_topology_t* topo, uint64_t* out_tick);
+
+/*
+ * Wait for a simulation tick with bounded timeout.
+ */
+[[nodiscard]]
+bool khr_topology_wait_tick(khr_topology_t* topo, uint64_t* out_tick, uint32_t timeout_ms);
+
+/*
+ * Pop next collision event produced by Core 3 physics simulation.
+ * Returns true if an event was available.
+ */
+[[nodiscard]]
+bool khr_topology_sim_pop_collision_event(khr_topology_t* topo, khr_collision_event_t* out_evt);
 
 #endif /* KHOROS_CORE_TOPOLOGY_H */

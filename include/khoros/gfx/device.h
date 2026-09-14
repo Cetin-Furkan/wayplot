@@ -31,6 +31,7 @@ typedef struct {
     VkPhysicalDeviceMaintenance5Features      f5;
     VkPhysicalDeviceMaintenance6Features      f6;
     VkPhysicalDeviceHostImageCopyFeatures     fhost;
+    VkPhysicalDeviceDescriptorBufferFeaturesEXT fdesc_buf;
     VkPhysicalDeviceMemoryProperties mem_props;
     uint32_t                         gfx_family;
     uint32_t                         compute_family;
@@ -41,6 +42,7 @@ typedef struct {
     bool                             is_vulkan_1_4;
     bool                             exportable_timeline;
     bool                             has_host_copy_ext;
+    bool                             has_desc_buffer_ext;
     bool                             has_ext_mem_fd;
     bool                             has_ext_sem_fd;
     bool                             has_drm_modifier;
@@ -118,13 +120,42 @@ typedef struct khr_gfx_device {
         PFN_vkGetMemoryHostPointerPropertiesEXT pfn_vkGetMemoryHostPointerPropertiesEXT;
     };
 
+    /* VK_EXT_descriptor_buffer Function Pointers */
+    union {
+        PFN_vkGetDescriptorSetLayoutSizeEXT vkGetDescriptorSetLayoutSizeEXT;
+        PFN_vkGetDescriptorSetLayoutSizeEXT pfn_vkGetDescriptorSetLayoutSizeEXT;
+    };
+    union {
+        PFN_vkGetDescriptorSetLayoutBindingOffsetEXT vkGetDescriptorSetLayoutBindingOffsetEXT;
+        PFN_vkGetDescriptorSetLayoutBindingOffsetEXT pfn_vkGetDescriptorSetLayoutBindingOffsetEXT;
+    };
+    union {
+        PFN_vkGetDescriptorEXT vkGetDescriptorEXT;
+        PFN_vkGetDescriptorEXT pfn_vkGetDescriptorEXT;
+    };
+    union {
+        PFN_vkCmdBindDescriptorBuffersEXT vkCmdBindDescriptorBuffersEXT;
+        PFN_vkCmdBindDescriptorBuffersEXT pfn_vkCmdBindDescriptorBuffersEXT;
+    };
+    union {
+        PFN_vkCmdSetDescriptorBufferOffsetsEXT vkCmdSetDescriptorBufferOffsetsEXT;
+        PFN_vkCmdSetDescriptorBufferOffsetsEXT pfn_vkCmdSetDescriptorBufferOffsetsEXT;
+    };
+    union {
+        PFN_vkCmdBindDescriptorBufferEmbeddedSamplersEXT vkCmdBindDescriptorBufferEmbeddedSamplersEXT;
+        PFN_vkCmdBindDescriptorBufferEmbeddedSamplersEXT pfn_vkCmdBindDescriptorBufferEmbeddedSamplersEXT;
+    };
+
     /* Capabilities */
     bool             has_external_memory_host;
     bool             has_host_image_copy;
     bool             has_push_descriptor;
+    bool             has_descriptor_buffer;
     bool             has_maintenance5;
     bool             has_maintenance6;
+    bool             is_uma;
     uint32_t         max_push_descriptors;
+    VkPhysicalDeviceDescriptorBufferPropertiesEXT descriptor_buffer_props;
 
     /* Queue submission is externally synchronized by the Vulkan spec: on
      * integrated GPUs gfx/compute/xfer resolve to one VkQueue handle, so

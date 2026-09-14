@@ -1,12 +1,19 @@
 #include "khoros/wayland/seat.h"
 #include "khoros/wayland/wire.h"
 #include "khoros/core/config.h"
+#include "khoros/core/input.h"
 
 #include <string.h>
 
 void khr_seat_init(khr_seat_t* seat) {
     if (seat != nullptr) {
         *seat = (khr_seat_t){};
+    }
+}
+
+void khr_seat_attach_input_ring(khr_seat_t* seat, struct khr_input_ring* ring) {
+    if (seat != nullptr) {
+        seat->input_ring = ring;
     }
 }
 
@@ -120,6 +127,35 @@ uint32_t khr_seat_consume(khr_wl_client_t* client, khr_seat_t* seat,
             } else if (hdr.opcode == KHR_WL_POINTER_EVENT_LEAVE) {
                 seat->pointer_in = false;
                 seat->pointer_surface = 0;
+                seat->left_down = false;
+                seat->right_down = false;
+                seat->middle_down = false;
+                if (seat->input_ring != nullptr) {
+                    khr_input_event_t iev_l = {
+                        .type  = KHR_INPUT_BUTTON,
+                        .code  = KHR_BTN_LEFT,
+                        .state = KHR_WL_POINTER_RELEASED,
+                        .x     = seat->x,
+                        .y     = seat->y,
+                    };
+                    (void)khr_input_ring_push(seat->input_ring, &iev_l);
+                    khr_input_event_t iev_m = {
+                        .type  = KHR_INPUT_BUTTON,
+                        .code  = KHR_BTN_MIDDLE,
+                        .state = KHR_WL_POINTER_RELEASED,
+                        .x     = seat->x,
+                        .y     = seat->y,
+                    };
+                    (void)khr_input_ring_push(seat->input_ring, &iev_m);
+                    khr_input_event_t iev_r = {
+                        .type  = KHR_INPUT_BUTTON,
+                        .code  = KHR_BTN_RIGHT,
+                        .state = KHR_WL_POINTER_RELEASED,
+                        .x     = seat->x,
+                        .y     = seat->y,
+                    };
+                    (void)khr_input_ring_push(seat->input_ring, &iev_r);
+                }
                 count++;
             } else if (hdr.opcode == KHR_WL_POINTER_EVENT_MOTION &&
                        payload_len >= 12) {
@@ -129,8 +165,20 @@ uint32_t khr_seat_consume(khr_wl_client_t* client, khr_seat_t* seat,
                     khr_wl_decode_i32(payload, payload_len, &off, &fx) &&
                     khr_wl_decode_i32(payload, payload_len, &off, &fy)) {
                     (void)time;
+                    int32_t prev_x = seat->x;
+                    int32_t prev_y = seat->y;
                     seat->x = khr_fixed_to_px(fx);
                     seat->y = khr_fixed_to_px(fy);
+                    if (seat->input_ring != nullptr) {
+                        khr_input_event_t iev = {
+                            .type = KHR_INPUT_MOTION,
+                            .x    = seat->x,
+                            .y    = seat->y,
+                            .dx   = seat->x - prev_x,
+                            .dy   = seat->y - prev_y,
+                        };
+                        (void)khr_input_ring_push(seat->input_ring, &iev);
+                    }
                     count++;
                 }
             } else if (hdr.opcode == KHR_WL_POINTER_EVENT_BUTTON &&
@@ -168,6 +216,16 @@ uint32_t khr_seat_consume(khr_wl_client_t* client, khr_seat_t* seat,
                     } else if (button == KHR_BTN_MIDDLE) {
                         seat->button_serial = serial;
                         seat->middle_down = (state == KHR_WL_POINTER_PRESSED);
+                    }
+                    if (seat->input_ring != nullptr) {
+                        khr_input_event_t iev = {
+                            .type  = KHR_INPUT_BUTTON,
+                            .code  = button,
+                            .state = state,
+                            .x     = seat->x,
+                            .y     = seat->y,
+                        };
+                        (void)khr_input_ring_push(seat->input_ring, &iev);
                     }
                     count++;
                 }
@@ -220,16 +278,36 @@ uint32_t khr_seat_consume(khr_wl_client_t* client, khr_seat_t* seat,
                             seat->f_pressed = true;
                         }
                     }
+                    if (seat->input_ring != nullptr) {
+                        khr_input_event_t iev = {
+                            .type  = KHR_INPUT_KEY,
+                            .code  = key,
+                            .state = state,
+                        };
+                        (void)khr_input_ring_push(seat->input_ring, &iev);
+                    }
                     count++;
                 }
             }
         }
         offset += hdr.size;
     }
+    int32_t wheel_delta = 0;
     if (saw_120) {
         seat->wheel += v120;
+        wheel_delta = v120;
     } else if (axis_fixed != 0) {
-        seat->wheel += (axis_fixed * 120) / 2560;
+        int32_t converted = (axis_fixed * 120) / 2560;
+        seat->wheel += converted;
+        wheel_delta = converted;
+    }
+    if (wheel_delta != 0 && seat->input_ring != nullptr) {
+        khr_input_event_t iev = {
+            .type    = KHR_INPUT_AXIS,
+            .code    = KHR_WL_POINTER_AXIS_VERTICAL,
+            .val_i32 = wheel_delta,
+        };
+        (void)khr_input_ring_push(seat->input_ring, &iev);
     }
     return count;
 }

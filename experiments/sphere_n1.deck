@@ -1,0 +1,9 @@
+# khoros-run v1
+dt_s 0.01666667
+gravity 0.00000 -9.80665 0.00000
+floor_y -2.50
+seed 1
+ticks 600
+integrator symplectic_euler
+# Single falling sphere (high altitude drop)
+body id=0 shape=sphere r=0.5 mass=2.0 e=0.85 mu=0.3 x=0.0 y=8.0 z=0.0 vx=0.0 vy=0.0 vz=0.0

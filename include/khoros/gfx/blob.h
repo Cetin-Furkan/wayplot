@@ -141,6 +141,16 @@ size_t khr_blob_write(void* dst, size_t cap, const float* xyz, uint32_t nv,
 [[nodiscard]]
 size_t khr_blob_write_box(void* dst, size_t cap);
 
+/* Procedural shapes into packed blob format */
+[[nodiscard]]
+size_t khr_blob_write_sphere(void* dst, size_t cap, float radius);
+
+[[nodiscard]]
+size_t khr_blob_write_cylinder(void* dst, size_t cap, float radius, float height);
+
+[[nodiscard]]
+size_t khr_blob_write_torus(void* dst, size_t cap, float major_r, float minor_r);
+
 typedef struct khr_cam {
     float yaw;
     float pitch;
@@ -149,6 +159,7 @@ typedef struct khr_cam {
     float r0[3];
     float r1[3];
     float r2[3];
+    float aspect; /* viewport width / height; defaults to 1.0f if <= 0 */
 } khr_cam_t;
 
 void khr_cam_frame(khr_cam_t* cam, const float* xyz, uint32_t nv, bool reset_orient);
@@ -172,5 +183,10 @@ bool khr_mesh_setup(const void* base, size_t cap, VkDeviceAddress gpu_base,
 
 [[nodiscard]]
 size_t khr_blob_write_gizmo_arm(void* dst, size_t cap);
+
+/* Fast automated smooth normal accumulation on mesh vertices */
+void khr_blob_generate_smooth_normals(const float* verts, uint32_t vert_count,
+                                      const uint32_t* indices, uint32_t index_count,
+                                      float* out_normals);
 
 #endif /* KHOROS_GFX_BLOB_H */
