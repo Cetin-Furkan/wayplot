@@ -362,3 +362,52 @@ bool test_physics_double_buffer_bda_integration(void) {
     khr_topology_destroy(&topo);
     return true;
 }
+
+[[nodiscard]]
+bool test_capsule_plane_collision(void) {
+    khr_rigid_body_t plane = {};
+    float n[3] = { 0.0f, 1.0f, 0.0f };
+    khr_rigid_body_init_plane(&plane, n, -2.5f, 0.5f, 0.3f);
+
+    khr_rigid_body_t capsule = {};
+    float p0[3] = { 0.0f, -1.0f, 0.0f };
+    float p1[3] = { 0.0f,  1.0f, 0.0f };
+    khr_rigid_body_init_capsule(&capsule, p0, p1, 0.5f, 2.0f, 0.5f, 0.3f);
+    capsule.position[0] = 0.0f;
+    capsule.position[1] = -1.8f; /* lowest point = -1.8 - 1.0 - 0.5 = -3.3. Floor = -2.5. Pen = 0.8 */
+    capsule.position[2] = 0.0f;
+
+    khr_contact_t c = {};
+    bool hit = khr_collide_capsule_plane(&capsule, 1, &plane, 0, &c);
+    ASSERT_TRUE(hit);
+    ASSERT_TRUE(c.normal[1] == 1.0f);
+    ASSERT_FLOAT_NEAR(c.penetration, 0.8f, 1e-4f);
+    ASSERT_FLOAT_NEAR(c.point[1], -2.5f, 1e-4f);
+
+    /* Move capsule above floor: no collision */
+    capsule.position[1] = 0.0f; /* lowest point = -1.5 > -2.5 */
+    hit = khr_collide_capsule_plane(&capsule, 1, &plane, 0, &c);
+    ASSERT_TRUE(!hit);
+
+    return true;
+}
+
+[[nodiscard]]
+bool test_aabb_plane_collision(void) {
+    khr_rigid_body_t plane = {};
+    float n[3] = { 0.0f, 1.0f, 0.0f };
+    khr_rigid_body_init_plane(&plane, n, -2.5f, 0.4f, 0.5f);
+
+    khr_rigid_body_t aabb = {};
+    float hx[3] = { 0.8f, 0.8f, 0.8f };
+    float pos[3] = { 0.0f, -2.0f, 0.0f }; /* bottom = -2.8. Floor = -2.5. Pen = 0.3 */
+    khr_rigid_body_init_aabb(&aabb, pos, hx, 3.0f, 0.4f, 0.5f);
+
+    khr_contact_t c = {};
+    bool hit = khr_collide_aabb_plane(&aabb, 1, &plane, 0, &c);
+    ASSERT_TRUE(hit);
+    ASSERT_TRUE(c.normal[1] == 1.0f);
+    ASSERT_FLOAT_NEAR(c.penetration, 0.3f, 1e-4f);
+
+    return true;
+}

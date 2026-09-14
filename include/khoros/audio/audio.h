@@ -26,31 +26,43 @@ constexpr uint32_t KHR_AUDIO_RING_BUFFER_COUNT = 4;
 constexpr uint32_t KHR_AUDIO_CHUNK_FRAMES       = 512;
 constexpr size_t   KHR_AUDIO_CHUNK_BYTES        = KHR_AUDIO_CHUNK_FRAMES * 2 * sizeof(int16_t);
 
+typedef enum {
+    KHR_AUDIO_BACKEND_AUTO = 0,     /* PipeWire pw-cat or PulseAudio paplay pipe if available, else ALSA */
+    KHR_AUDIO_BACKEND_PIPEWIRE,     /* PipeWire pw-cat raw PCM pipe */
+    KHR_AUDIO_BACKEND_PULSE,        /* PulseAudio paplay raw PCM pipe */
+    KHR_AUDIO_BACKEND_ALSA,         /* Direct kernel /dev/snd/pcmC*D*p */
+    KHR_AUDIO_BACKEND_NULL,         /* /dev/null silent sink */
+} khr_audio_backend_t;
+
 typedef struct {
-    uint32_t sample_rate;
-    uint32_t period_frames;
-    uint32_t alsa_card;
-    uint32_t alsa_device;
-    int      custom_sink_fd; /* -1 for hardware /dev/snd/pcmC*D*p, >= 0 for mock pipe */
-    bool     use_io_uring;
-    bool     disabled;       /* true to disable audio hardware access (null sink) */
+    uint32_t            sample_rate;
+    uint32_t            period_frames;
+    uint32_t            alsa_card;
+    uint32_t            alsa_device;
+    int                 custom_sink_fd; /* -1 for auto/hardware, >= 0 for custom mock pipe */
+    khr_audio_backend_t backend;
+    bool                use_io_uring;
+    bool                disabled;       /* true to disable audio hardware access (null sink) */
 } khr_audio_config_t;
 
 typedef struct {
-    khr_alsa_pcm_t     alsa;
-    khr_audio_mixer_t  mixer;
-    khr_uring_t        ring;
-    bool               ring_live;
-    bool               buffers_registered;
-    int                timer_fd;
-    uint32_t           sample_rate;
-    uint32_t           period_frames;
-    size_t             chunk_bytes;
-    uint32_t           write_buffer_idx;
-    pthread_t          worker;
-    _Atomic bool       running;
-    _Atomic bool       worker_started;
-    pthread_mutex_t    lock;
+    khr_alsa_pcm_t      alsa;
+    khr_audio_mixer_t   mixer;
+    khr_uring_t         ring;
+    bool                ring_live;
+    bool                buffers_registered;
+    int                 timer_fd;
+    uint32_t            sample_rate;
+    uint32_t            period_frames;
+    size_t              chunk_bytes;
+    uint32_t            write_buffer_idx;
+    pthread_t           worker;
+    _Atomic bool        running;
+    _Atomic bool        worker_started;
+    pthread_mutex_t     lock;
+    pid_t               pipe_child_pid;
+    khr_audio_backend_t active_backend;
+    char                backend_description[64];
     alignas(64) int16_t chunk_buffers[KHR_AUDIO_RING_BUFFER_COUNT][KHR_AUDIO_CHUNK_FRAMES * 2];
 } khr_audio_engine_t;
 
@@ -58,6 +70,9 @@ typedef struct {
 bool khr_audio_engine_init(khr_audio_engine_t* engine, const khr_audio_config_t* cfg);
 
 void khr_audio_engine_destroy(khr_audio_engine_t* engine);
+
+[[nodiscard]]
+const char* khr_audio_engine_get_backend_name(const khr_audio_engine_t* engine);
 
 /* Process one period/chunk of audio: mixes active voices and submits buffer */
 [[nodiscard]]

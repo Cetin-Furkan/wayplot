@@ -265,6 +265,16 @@ bool khr_collide_aabb_aabb(const khr_rigid_body_t* a, uint32_t idx_a,
                            khr_contact_t* out_contact);
 
 [[nodiscard]]
+bool khr_collide_aabb_plane(const khr_rigid_body_t* aabb, uint32_t idx_aabb,
+                            const khr_rigid_body_t* plane, uint32_t idx_plane,
+                            khr_contact_t* out_contact);
+
+[[nodiscard]]
+bool khr_collide_capsule_plane(const khr_rigid_body_t* capsule, uint32_t idx_capsule,
+                               const khr_rigid_body_t* plane, uint32_t idx_plane,
+                               khr_contact_t* out_contact);
+
+[[nodiscard]]
 bool khr_collide_bodies(const khr_rigid_body_t* a, uint32_t idx_a,
                         const khr_rigid_body_t* b, uint32_t idx_b,
                         khr_contact_t* out_contact);

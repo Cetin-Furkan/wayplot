@@ -185,6 +185,7 @@ extern bool test_audio_engine_io_uring_direct_streaming(void);
 extern bool test_audio_sample_rate_conversion(void);
 extern bool test_audio_unaligned_clip_loop_avx2(void);
 extern bool test_audio_zero_sample_rate_fallback(void);
+extern bool test_audio_pipe_backend_auto_routing(void);
 
 /* Suite 13: Decoupled Action-Mapping Input System (Pillar 7) */
 extern bool test_input_ring_spsc_lockfree_stress(void);
@@ -214,6 +215,8 @@ extern bool test_narrowphase_sphere_sphere_collision(void);
 extern bool test_narrowphase_sphere_plane_collision(void);
 extern bool test_narrowphase_sphere_aabb_collision(void);
 extern bool test_narrowphase_sphere_capsule_collision(void);
+extern bool test_capsule_plane_collision(void);
+extern bool test_aabb_plane_collision(void);
 extern bool test_rigid_body_impulse_restitution_and_friction(void);
 extern bool test_physics_world_fixed_tick_simulation_stability(void);
 extern bool test_physics_double_buffer_bda_integration(void);
@@ -426,6 +429,7 @@ int main(void) {
     RUN_TEST(&stats, test_audio_sample_rate_conversion);
     RUN_TEST(&stats, test_audio_unaligned_clip_loop_avx2);
     RUN_TEST(&stats, test_audio_zero_sample_rate_fallback);
+    RUN_TEST(&stats, test_audio_pipe_backend_auto_routing);
 
     printf("\n" KHR_CLR_BOLD "Suite 13: Decoupled Action-Mapping Input System (Pillar 7)\n" KHR_CLR_RESET);
     RUN_TEST(&stats, test_input_ring_spsc_lockfree_stress);
@@ -455,6 +459,8 @@ int main(void) {
     RUN_TEST(&stats, test_narrowphase_sphere_plane_collision);
     RUN_TEST(&stats, test_narrowphase_sphere_aabb_collision);
     RUN_TEST(&stats, test_narrowphase_sphere_capsule_collision);
+    RUN_TEST(&stats, test_capsule_plane_collision);
+    RUN_TEST(&stats, test_aabb_plane_collision);
     RUN_TEST(&stats, test_rigid_body_impulse_restitution_and_friction);
     RUN_TEST(&stats, test_physics_world_fixed_tick_simulation_stability);
     RUN_TEST(&stats, test_physics_double_buffer_bda_integration);

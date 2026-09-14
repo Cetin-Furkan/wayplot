@@ -8,7 +8,49 @@
 #include <time.h>
 #include <poll.h>
 #include <sys/timerfd.h>
+#include <sys/wait.h>
+#include <signal.h>
 #include "khoros/core/cpu.h"
+
+static bool open_pipe_sink(khr_audio_engine_t* engine, const char* exe_path, char* const argv[]) {
+    int pipefds[2] = { -1, -1 };
+    if (pipe2(pipefds, O_CLOEXEC) < 0) {
+        return false;
+    }
+
+    pid_t pid = fork();
+    if (pid < 0) {
+        close(pipefds[0]);
+        close(pipefds[1]);
+        return false;
+    }
+
+    if (pid == 0) {
+        if (dup2(pipefds[0], STDIN_FILENO) < 0) {
+            _exit(127);
+        }
+        close(pipefds[0]);
+        close(pipefds[1]);
+
+        int devnull = open("/dev/null", O_WRONLY);
+        if (devnull >= 0) {
+            dup2(devnull, STDOUT_FILENO);
+            dup2(devnull, STDERR_FILENO);
+            close(devnull);
+        }
+
+        execv(exe_path, argv);
+        _exit(127);
+    }
+
+    close(pipefds[0]);
+    int write_fd = pipefds[1];
+    (void)fcntl(write_fd, F_SETPIPE_SZ, 262144);
+
+    engine->pipe_child_pid = pid;
+    return khr_alsa_pcm_open_mock(&engine->alsa, write_fd,
+                                  engine->sample_rate, 2U, engine->period_frames);
+}
 
 static void* audio_worker_thread(void* arg) {
     khr_audio_engine_t* engine = (khr_audio_engine_t*)arg;
@@ -88,8 +130,10 @@ bool khr_audio_engine_init(khr_audio_engine_t* engine, const khr_audio_config_t*
     engine->period_frames = (cfg && cfg->period_frames > 0) ? cfg->period_frames : KHR_AUDIO_CHUNK_FRAMES;
     engine->chunk_bytes   = (size_t)engine->period_frames * 2U * sizeof(int16_t);
     engine->timer_fd      = -1;
+    engine->active_backend = KHR_AUDIO_BACKEND_NULL;
+    (void)snprintf(engine->backend_description, sizeof(engine->backend_description), "Disabled");
 
-    /* 1. Open ALSA hardware device or custom/fallback/null sink */
+    /* 1. Open audio backend (PipeWire/Pulse pipe, ALSA hardware, or mock/null sink) */
     bool opened = false;
     if (cfg && cfg->disabled) {
         /* User explicitly disabled audio: bind null sink */
@@ -97,21 +141,93 @@ bool khr_audio_engine_init(khr_audio_engine_t* engine, const khr_audio_config_t*
         if (null_fd >= 0) {
             opened = khr_alsa_pcm_open_mock(&engine->alsa, null_fd,
                                             engine->sample_rate, 2U, engine->period_frames);
+            engine->active_backend = KHR_AUDIO_BACKEND_NULL;
+            (void)snprintf(engine->backend_description, sizeof(engine->backend_description), "Null sink (/dev/null)");
         }
     } else if (cfg && cfg->custom_sink_fd >= 0) {
         opened = khr_alsa_pcm_open_mock(&engine->alsa, cfg->custom_sink_fd,
                                         engine->sample_rate, 2U, engine->period_frames);
+        engine->active_backend = KHR_AUDIO_BACKEND_NULL;
+        (void)snprintf(engine->backend_description, sizeof(engine->backend_description), "Custom Sink (fd=%d)", cfg->custom_sink_fd);
     } else {
-        uint32_t card = cfg ? cfg->alsa_card : 0U;
-        uint32_t device = cfg ? cfg->alsa_device : 0U;
-        opened = khr_alsa_pcm_open(&engine->alsa, card, device,
-                                   engine->sample_rate, 2U, engine->period_frames);
+        khr_audio_backend_t req_backend = cfg ? cfg->backend : KHR_AUDIO_BACKEND_AUTO;
+        const char* xdg_runtime = getenv("XDG_RUNTIME_DIR");
+        if (xdg_runtime == nullptr || xdg_runtime[0] == '\0') {
+            xdg_runtime = "/run/user/1000";
+        }
+
+        /* Check if PipeWire is available */
+        char pw_sock[256];
+        (void)snprintf(pw_sock, sizeof(pw_sock), "%s/pipewire-0", xdg_runtime);
+        bool pw_available = (access(pw_sock, F_OK) == 0 && access("/usr/bin/pw-cat", X_OK) == 0);
+
+        /* Check if PulseAudio is available */
+        char pulse_sock[256];
+        (void)snprintf(pulse_sock, sizeof(pulse_sock), "%s/pulse/native", xdg_runtime);
+        bool pulse_available = (access(pulse_sock, F_OK) == 0 && access("/usr/bin/paplay", X_OK) == 0);
+
+        if (req_backend == KHR_AUDIO_BACKEND_PIPEWIRE ||
+            (req_backend == KHR_AUDIO_BACKEND_AUTO && pw_available && (cfg == nullptr || (cfg->alsa_card == 0 && cfg->alsa_device == 0)))) {
+            char rate_str[16];
+            (void)snprintf(rate_str, sizeof(rate_str), "--rate=%u", engine->sample_rate);
+            char* pw_argv[] = {
+                (char*)"pw-cat",
+                (char*)"-p",
+                (char*)"--raw",
+                (char*)"--format=s16",
+                rate_str,
+                (char*)"--channels=2",
+                (char*)"-",
+                nullptr,
+            };
+            opened = open_pipe_sink(engine, "/usr/bin/pw-cat", pw_argv);
+            if (opened) {
+                engine->active_backend = KHR_AUDIO_BACKEND_PIPEWIRE;
+                (void)snprintf(engine->backend_description, sizeof(engine->backend_description),
+                               "PipeWire (pw-cat pipe, %u kHz)", engine->sample_rate / 1000U);
+            }
+        }
+
+        if (!opened && (req_backend == KHR_AUDIO_BACKEND_PULSE ||
+            (req_backend == KHR_AUDIO_BACKEND_AUTO && pulse_available && (cfg == nullptr || (cfg->alsa_card == 0 && cfg->alsa_device == 0))))) {
+            char rate_str[16];
+            (void)snprintf(rate_str, sizeof(rate_str), "--rate=%u", engine->sample_rate);
+            char* pa_argv[] = {
+                (char*)"paplay",
+                (char*)"--raw",
+                (char*)"--format=s16le",
+                rate_str,
+                (char*)"--channels=2",
+                nullptr,
+            };
+            opened = open_pipe_sink(engine, "/usr/bin/paplay", pa_argv);
+            if (opened) {
+                engine->active_backend = KHR_AUDIO_BACKEND_PULSE;
+                (void)snprintf(engine->backend_description, sizeof(engine->backend_description),
+                               "PulseAudio (paplay pipe, %u kHz)", engine->sample_rate / 1000U);
+            }
+        }
+
+        if (!opened && (req_backend == KHR_AUDIO_BACKEND_ALSA || req_backend == KHR_AUDIO_BACKEND_AUTO)) {
+            uint32_t card = cfg ? cfg->alsa_card : 0U;
+            uint32_t device = cfg ? cfg->alsa_device : 0U;
+            opened = khr_alsa_pcm_open(&engine->alsa, card, device,
+                                       engine->sample_rate, 2U, engine->period_frames);
+            if (opened) {
+                engine->active_backend = KHR_AUDIO_BACKEND_ALSA;
+                (void)snprintf(engine->backend_description, sizeof(engine->backend_description),
+                               "ALSA (/dev/snd/pcmC%uD%up, %u kHz)", card, device, engine->sample_rate / 1000U);
+            }
+        }
+
         if (!opened) {
             /* Fallback to null sink for headless environments without ALSA audio */
             int null_fd = open("/dev/null", O_WRONLY | O_CLOEXEC);
             if (null_fd >= 0) {
                 opened = khr_alsa_pcm_open_mock(&engine->alsa, null_fd,
                                                 engine->sample_rate, 2U, engine->period_frames);
+                engine->active_backend = KHR_AUDIO_BACKEND_NULL;
+                (void)snprintf(engine->backend_description, sizeof(engine->backend_description), "Null sink (/dev/null)");
             }
         }
     }
@@ -195,8 +311,26 @@ void khr_audio_engine_destroy(khr_audio_engine_t* engine) {
         engine->ring_live = false;
     }
 
+    if (engine->pipe_child_pid > 0) {
+        if (engine->alsa.fd >= 0) {
+            close(engine->alsa.fd);
+            engine->alsa.fd = -1;
+        }
+        kill(engine->pipe_child_pid, SIGTERM);
+        int st = 0;
+        waitpid(engine->pipe_child_pid, &st, WNOHANG);
+        engine->pipe_child_pid = 0;
+    }
+
     khr_alsa_pcm_close(&engine->alsa);
     khr_audio_mixer_destroy(&engine->mixer);
+}
+
+const char* khr_audio_engine_get_backend_name(const khr_audio_engine_t* engine) {
+    if (engine == nullptr) {
+        return "None";
+    }
+    return engine->backend_description;
 }
 
 [[nodiscard]]

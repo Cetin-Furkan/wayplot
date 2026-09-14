@@ -22,11 +22,14 @@ typedef struct {
     const char* blob_path;
     const char* deck_path;
     bool        no_audio;
+    const char* audio_backend;
     uint32_t    audio_card;
     uint32_t    audio_device;
     uint32_t    stress_n;
     bool        unlocked;
     bool        stress_gpu;
+    uint32_t    target_fps;
+    uint32_t    max_frames;
 } khr_window_options_t;
 
 /*

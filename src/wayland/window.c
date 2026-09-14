@@ -252,12 +252,29 @@ bool khr_window_run_opts(khr_topology_t* topo, khr_gfx_device_t* dev,
     const char* blob_path = opts ? opts->blob_path : nullptr;
     const char* deck_path = opts ? opts->deck_path : nullptr;
     bool no_audio = opts ? opts->no_audio : false;
+    const char* audio_backend_str = opts ? opts->audio_backend : nullptr;
     uint32_t audio_card = opts ? opts->audio_card : 0;
     uint32_t audio_device = opts ? opts->audio_device : 0;
     uint32_t stress_n = opts ? opts->stress_n : 0;
     bool unlocked = opts ? opts->unlocked : false;
     bool stress_gpu = opts ? opts->stress_gpu : false;
+    uint32_t target_fps = opts ? opts->target_fps : 0;
+    uint32_t max_frames = opts ? opts->max_frames : 0;
     if (stress_gpu && stress_n == 0) stress_n = 1024;
+
+    khr_audio_backend_t audio_backend = KHR_AUDIO_BACKEND_AUTO;
+    if (audio_backend_str != nullptr) {
+        if (strcmp(audio_backend_str, "pipewire") == 0) {
+            audio_backend = KHR_AUDIO_BACKEND_PIPEWIRE;
+        } else if (strcmp(audio_backend_str, "pulse") == 0) {
+            audio_backend = KHR_AUDIO_BACKEND_PULSE;
+        } else if (strcmp(audio_backend_str, "alsa") == 0) {
+            audio_backend = KHR_AUDIO_BACKEND_ALSA;
+        } else if (strcmp(audio_backend_str, "null") == 0) {
+            audio_backend = KHR_AUDIO_BACKEND_NULL;
+            no_audio = true;
+        }
+    }
     khr_window_stop = 0;
     struct sigaction sa = {};
     sa.sa_handler = khr_window_on_sig;
@@ -872,6 +889,7 @@ bool khr_window_run_opts(khr_topology_t* topo, khr_gfx_device_t* dev,
         .alsa_card = audio_card,
         .alsa_device = audio_device,
         .custom_sink_fd = -1,
+        .backend = audio_backend,
         .use_io_uring = false,
         .disabled = no_audio,
     };
@@ -895,8 +913,8 @@ bool khr_window_run_opts(khr_topology_t* topo, khr_gfx_device_t* dev,
 
     if (audio_live) {
         if (khr_audio_engine_start_worker(&audio_engine)) {
-            printf("  Audio:        DAC-synchronized modal synthesis live (/dev/snd/pcmC%uD%up, 48 kHz)\n",
-                   audio_card, audio_device);
+            printf("  Audio:        Modal synthesis live [%s]\n",
+                   khr_audio_engine_get_backend_name(&audio_engine));
         } else {
             audio_live = false;
         }
@@ -966,6 +984,7 @@ bool khr_window_run_opts(khr_topology_t* topo, khr_gfx_device_t* dev,
 
     uint64_t telem_last_report_ns = 0;
     uint32_t telem_frames = 0;
+    uint32_t total_frames_committed = 0;
     uint64_t telem_cpu_render_ns = 0;
     uint64_t telem_gpu_wait_ns = 0;
     uint64_t telem_gpu_hw_total_ns = 0;
@@ -977,7 +996,9 @@ bool khr_window_run_opts(khr_topology_t* topo, khr_gfx_device_t* dev,
         clock_gettime(CLOCK_MONOTONIC, &ts_now);
         uint64_t now_ns = (uint64_t)ts_now.tv_sec * 1'000'000'000ULL + (uint64_t)ts_now.tv_nsec;
 
-        if (have_pt && pres_time.refresh_ns >= 4'000'000U && pres_time.refresh_ns <= 50'000'000U) {
+        if (target_fps > 0) {
+            min_interval_ns = 1'000'000'000ULL / (uint64_t)target_fps;
+        } else if (have_pt && pres_time.refresh_ns >= 4'000'000U && pres_time.refresh_ns <= 50'000'000U) {
             if (pres_time.refresh_ns <= 10'000'000U) {
                 min_interval_ns = (uint64_t)pres_time.refresh_ns * 2ULL; /* Pace 120/144 Hz display at 60 Hz */
             } else {
@@ -1559,6 +1580,10 @@ bool khr_window_run_opts(khr_topology_t* topo, khr_gfx_device_t* dev,
                 telem_gpu_wait_ns += (sync_t1_ns - sync_t0_ns);
                 telem_gpu_hw_total_ns += dp.last_gpu_ns;
                 telem_frames++;
+                total_frames_committed++;
+                if (max_frames > 0 && total_frames_committed >= max_frames) {
+                    khr_window_stop = 1;
+                }
 
                 if (have_pt) {
                     uint32_t fid = 0;
@@ -1592,10 +1617,17 @@ bool khr_window_run_opts(khr_topology_t* topo, khr_gfx_device_t* dev,
                     ? ((float)telem_gpu_hw_total_ns * 100.0f / (float)elapsed_ns)
                     : (gpu_frame_ms * fps * 0.1f);
 
+                char pacing_tag[32] = "";
+                if (unlocked) {
+                    (void)snprintf(pacing_tag, sizeof(pacing_tag), " [UNLOCKED]");
+                } else if (target_fps > 0) {
+                    (void)snprintf(pacing_tag, sizeof(pacing_tag), " [%u FPS CAP]", target_fps);
+                }
+
                 printf("[TELEMETRY] %5.1f FPS (%5.2f ms) | CPU Proc: %4.1f%% (%4.2f ms) | GPU HW: %5.2f ms (%4.1f%% load) | Bodies: %u (%u meshes)%s\n",
                        fps, frame_ms, cpu_total_pct, cpu_frame_ms, gpu_hw_avg_ms, gpu_load_pct,
                        scene.instance_count, active_passes,
-                       unlocked ? " [UNLOCKED]" : "");
+                       pacing_tag);
                 fflush(stdout);
 
                 telem_last_report_ns = now_ns;

@@ -23,9 +23,11 @@ static void print_usage(const char* prog) {
     printf("  --write-sphere <path>   Write procedural sphere mesh blob to file and exit\n");
     printf("  --write-cylinder <path> Write procedural cylinder mesh blob to file and exit\n");
     printf("  --write-torus <path>    Write procedural torus mesh blob to file and exit\n");
-    printf("  --no-audio              Disable ALSA audio engine (null sink)\n");
+    printf("  --audio=<backend>       Select audio backend: auto (default), pipewire, pulse, alsa, null\n");
+    printf("  --no-audio              Disable audio engine (null sink)\n");
     printf("  --audio-card=<N>        Select ALSA sound card index (default: 0)\n");
     printf("  --audio-device=<N>      Select ALSA playback device index (default: 0)\n");
+    printf("  --target-fps=<N>        Cap presentation rate to N FPS (e.g., 60, 120, 144, 240)\n");
     printf("  --stress-n=<N>          Spawn N rigid bodies in 3D scene to stress GPU & physics\n");
     printf("  --stress-gpu            Saturate GPU with 1024 rigid bodies\n");
     printf("  --unlocked              Unlock presentation rate (disable 60 Hz cap to maximize GPU throughput)\n");
@@ -114,11 +116,14 @@ int main(int argc, char** argv) {
     bool hash_only = false;
     bool headless = false;
     bool no_audio = false;
+    const char* audio_backend = nullptr;
     uint32_t audio_card = 0;
     uint32_t audio_device = 0;
     uint32_t stress_n = 0;
     bool unlocked = false;
     bool stress_gpu = false;
+    uint32_t target_fps = 0;
+    uint32_t max_frames = 0;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--write-box") == 0 && i + 1 < argc) {
@@ -167,10 +172,26 @@ int main(int argc, char** argv) {
             return 0;
         } else if (strcmp(argv[i], "--no-audio") == 0) {
             no_audio = true;
+        } else if (strncmp(argv[i], "--audio=", 8) == 0) {
+            audio_backend = argv[i] + 8;
+        } else if (strcmp(argv[i], "--audio") == 0 && i + 1 < argc) {
+            audio_backend = argv[++i];
         } else if (strncmp(argv[i], "--audio-card=", 13) == 0) {
             audio_card = (uint32_t)strtoul(argv[i] + 13, nullptr, 10);
         } else if (strncmp(argv[i], "--audio-device=", 15) == 0) {
             audio_device = (uint32_t)strtoul(argv[i] + 15, nullptr, 10);
+        } else if (strncmp(argv[i], "--target-fps=", 13) == 0) {
+            target_fps = (uint32_t)strtoul(argv[i] + 13, nullptr, 10);
+        } else if (strcmp(argv[i], "--target-fps") == 0 && i + 1 < argc) {
+            target_fps = (uint32_t)strtoul(argv[++i], nullptr, 10);
+        } else if (strncmp(argv[i], "--fps=", 6) == 0) {
+            target_fps = (uint32_t)strtoul(argv[i] + 6, nullptr, 10);
+        } else if (strncmp(argv[i], "--frames=", 9) == 0) {
+            max_frames = (uint32_t)strtoul(argv[i] + 9, nullptr, 10);
+        } else if (strcmp(argv[i], "--frames") == 0 && i + 1 < argc) {
+            max_frames = (uint32_t)strtoul(argv[++i], nullptr, 10);
+        } else if (strcmp(argv[i], "-f") == 0 && i + 1 < argc) {
+            max_frames = (uint32_t)strtoul(argv[++i], nullptr, 10);
         } else if (strncmp(argv[i], "--stress-n=", 11) == 0) {
             stress_n = (uint32_t)strtoul(argv[i] + 11, nullptr, 10);
         } else if (strcmp(argv[i], "--stress-gpu") == 0) {
@@ -229,11 +250,14 @@ int main(int argc, char** argv) {
         .blob_path = blob_path,
         .deck_path = deck_path,
         .no_audio = no_audio,
+        .audio_backend = audio_backend,
         .audio_card = audio_card,
         .audio_device = audio_device,
         .stress_n = stress_n,
         .unlocked = unlocked,
         .stress_gpu = stress_gpu,
+        .target_fps = target_fps,
+        .max_frames = max_frames,
     };
     auto ok = engine_init_opts(&opts);
     if (!ok) {

@@ -496,6 +496,75 @@ bool khr_collide_aabb_aabb(const khr_rigid_body_t* a, uint32_t idx_a,
 }
 
 [[nodiscard]]
+bool khr_collide_aabb_plane(const khr_rigid_body_t* aabb, uint32_t idx_aabb,
+                            const khr_rigid_body_t* plane, uint32_t idx_plane,
+                            khr_contact_t* out_contact) {
+    if (aabb == nullptr || plane == nullptr || out_contact == nullptr) {
+        return false;
+    }
+    const float* n = plane->shape.plane.normal;
+    float hx = aabb->shape.aabb.half_extents[0];
+    float hy = aabb->shape.aabb.half_extents[1];
+    float hz = aabb->shape.aabb.half_extents[2];
+    float r = hx * fabsf(n[0]) + hy * fabsf(n[1]) + hz * fabsf(n[2]);
+    float dist = khr_vec3_dot(n, aabb->position) - plane->shape.plane.distance;
+    if (dist >= r) {
+        return false;
+    }
+    out_contact->body_a = idx_plane;
+    out_contact->body_b = idx_aabb;
+    out_contact->normal[0] = n[0];
+    out_contact->normal[1] = n[1];
+    out_contact->normal[2] = n[2];
+    out_contact->penetration = r - dist;
+    out_contact->normal_impulse = 0.0f;
+    out_contact->tangent_impulse = 0.0f;
+    out_contact->point[0] = aabb->position[0] - n[0] * dist;
+    out_contact->point[1] = aabb->position[1] - n[1] * dist;
+    out_contact->point[2] = aabb->position[2] - n[2] * dist;
+    return true;
+}
+
+[[nodiscard]]
+bool khr_collide_capsule_plane(const khr_rigid_body_t* capsule, uint32_t idx_capsule,
+                               const khr_rigid_body_t* plane, uint32_t idx_plane,
+                               khr_contact_t* out_contact) {
+    if (capsule == nullptr || plane == nullptr || out_contact == nullptr) {
+        return false;
+    }
+    const float* n = plane->shape.plane.normal;
+    float p0_w[3], p1_w[3];
+    khr_quat_rotate_vec3(p0_w, capsule->rotation, capsule->shape.capsule.p0);
+    khr_quat_rotate_vec3(p1_w, capsule->rotation, capsule->shape.capsule.p1);
+    khr_vec3_add(p0_w, p0_w, capsule->position);
+    khr_vec3_add(p1_w, p1_w, capsule->position);
+
+    float d0 = khr_vec3_dot(n, p0_w) - plane->shape.plane.distance;
+    float d1 = khr_vec3_dot(n, p1_w) - plane->shape.plane.distance;
+
+    float r = capsule->shape.capsule.radius;
+    float min_d = (d0 < d1) ? d0 : d1;
+    const float* min_p = (d0 < d1) ? p0_w : p1_w;
+
+    if (min_d >= r) {
+        return false;
+    }
+
+    out_contact->body_a = idx_plane;
+    out_contact->body_b = idx_capsule;
+    out_contact->normal[0] = n[0];
+    out_contact->normal[1] = n[1];
+    out_contact->normal[2] = n[2];
+    out_contact->penetration = r - min_d;
+    out_contact->normal_impulse = 0.0f;
+    out_contact->tangent_impulse = 0.0f;
+    out_contact->point[0] = min_p[0] - n[0] * min_d;
+    out_contact->point[1] = min_p[1] - n[1] * min_d;
+    out_contact->point[2] = min_p[2] - n[2] * min_d;
+    return true;
+}
+
+[[nodiscard]]
 bool khr_collide_bodies(const khr_rigid_body_t* a, uint32_t idx_a,
                         const khr_rigid_body_t* b, uint32_t idx_b,
                         khr_contact_t* out_contact) {
@@ -528,30 +597,16 @@ bool khr_collide_bodies(const khr_rigid_body_t* a, uint32_t idx_a,
         return khr_collide_aabb_aabb(a, idx_a, b, idx_b, out_contact);
     }
     if (a->shape.type == KHR_SHAPE_AABB && b->shape.type == KHR_SHAPE_PLANE) {
-        const float* n = b->shape.plane.normal;
-        float hx = a->shape.aabb.half_extents[0];
-        float hy = a->shape.aabb.half_extents[1];
-        float hz = a->shape.aabb.half_extents[2];
-        float r = hx * fabsf(n[0]) + hy * fabsf(n[1]) + hz * fabsf(n[2]);
-        float dist = khr_vec3_dot(n, a->position) - b->shape.plane.distance;
-        if (dist >= r) {
-            return false;
-        }
-        out_contact->body_a = idx_b;
-        out_contact->body_b = idx_a;
-        out_contact->normal[0] = n[0];
-        out_contact->normal[1] = n[1];
-        out_contact->normal[2] = n[2];
-        out_contact->penetration = r - dist;
-        out_contact->normal_impulse = 0.0f;
-        out_contact->tangent_impulse = 0.0f;
-        out_contact->point[0] = a->position[0] - n[0] * dist;
-        out_contact->point[1] = a->position[1] - n[1] * dist;
-        out_contact->point[2] = a->position[2] - n[2] * dist;
-        return true;
+        return khr_collide_aabb_plane(a, idx_a, b, idx_b, out_contact);
     }
     if (a->shape.type == KHR_SHAPE_PLANE && b->shape.type == KHR_SHAPE_AABB) {
-        return khr_collide_bodies(b, idx_b, a, idx_a, out_contact);
+        return khr_collide_aabb_plane(b, idx_b, a, idx_a, out_contact);
+    }
+    if (a->shape.type == KHR_SHAPE_CAPSULE && b->shape.type == KHR_SHAPE_PLANE) {
+        return khr_collide_capsule_plane(a, idx_a, b, idx_b, out_contact);
+    }
+    if (a->shape.type == KHR_SHAPE_PLANE && b->shape.type == KHR_SHAPE_CAPSULE) {
+        return khr_collide_capsule_plane(b, idx_b, a, idx_a, out_contact);
     }
     return false;
 }

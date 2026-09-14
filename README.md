@@ -9,79 +9,127 @@ Right now, the project has 2 rings, ring A and ring B, each of them is pinned to
 
 ---
 
-## Quickstart
+## Release: Version 0.3.3
 
-```bash
-# Build binary and compile Slang shaders to SPIR-V
-make -j$(nproc)
+> **Caption**: *Zero-HDMI-Hijack desktop audio routing, dynamic multi-shape collision physics, and precision target FPS pacing.*
 
-# Interactive 3D presentation window (Suzanne + Spheres + Boxes + Cylinders + Tori)
-./build/engine
+Version 0.3.3 eliminates desktop audio contention on modern DSP audio systems, introduces multi-shape contact mechanics (Capsule-Plane, AABB-Plane, Sphere-Sphere), and gives precise software control over engine presentation pacing and hardware power utilization.
 
-# Run multi-mesh physics experiment deck in live 3D window
-./build/engine --deck=experiments/mixed_n64.deck
-
-# Stress test with 512 physics bodies across 5 procedural meshes with live telemetry
-./build/engine --stress-n=512
-
-# Run without audio hardware access (null sink)
-./build/engine --no-audio --deck=experiments/mixed_n64.deck
-
-# Headless experiment fast-forward with 18-column mechanical state CSV logging
-./build/engine --headless --deck=experiments/mixed_n64.deck --ticks=600 --csv=logs/run.csv
-
-# Run full test suite (194 tests, 8567 assertions across 18 suites)
-make test
-
-# Memory safety & UB verification (AddressSanitizer + UndefinedBehaviorSanitizer)
-make sanitize
-
-# Hardware N-sweep benchmarks on Intel Iris Xe
-make bench
 ```
-
-Build details, coding standards, and architectural contracts: [DEVELOPER.md](DEVELOPER.md).
+                  ┌───────────────────────────────────────────┐
+                  │          Khoros 0.3.3 Architecture        │
+                  │   Pure ISO C23 · Zero Third-Party Libs    │
+                  └─────────────────────┬─────────────────────┘
+                                        │
+        ┌───────────────────────────────┴───────────────────────────────┐
+        ▼                                                               ▼
+ [ Presentation & Present ]                                    [ Simulation & Compute ]
+  ├── Core 2 Affinity (Lock-Free)                              ├── Core 3 Affinity (Pinned Worker)
+  ├── Wayland Wire (Raw Syscalls)                              ├── 60/120 Hz Symplectic Integrator
+  │   ├── zwp_linux_dmabuf_v1 Zero-Copy                        ├── 30-bit Morton Radix LBVH Broadphase
+  │   └── wp_presentation_time Feedback                        ├── SAT Narrowphase (Sphere/Box/Capsule)
+  ├── Vulkan 1.4 BDA Pipeline                                  └── Pipe Audio Mixer (48 kHz Stereo)
+  │   ├── Two-Pass Hi-Z Occlusion Culling                          ├── Desktop Auto-Sink Router
+  │   ├── Hardware GPU Timestamps (VK_QUERY_TIMESTAMP)             ├── Zero-HDMI Hijack (PipeWire/Pulse)
+  │   └── Precision FPS Pacing Governor                            └── Modal Acoustic Resonance Synth
+```
 
 ---
 
-## Release: Version 0.3.2
+### Highlights of Version 0.3.3
 
-> **Caption**: *Silicon GPU timestamping, unlocked throughput, and hardware power scaling.*
+#### 1. Zero-HDMI-Hijack Audio Auto-Routing (`--audio=auto|pipewire|pulse|alsa|null`)
+On modern Intel SOF DSP and AMD ACP audio architectures, opening raw `/dev/snd/pcmC0D0p` ALSA nodes while a desktop sound server (PipeWire / PulseAudio) is running creates an internal DSP pipeline conflict. ALSA driver arbitration deactivates the analog laptop speaker sink and switches audio output to secondary HDMI sinks, hijacking desktop sound and generating parasite crackles.
 
-Version 0.3.2 unlocks high-performance GPU execution and direct silicon-level hardware telemetry, providing full control over GPU power utilization and execution pacing.
+Khoros 0.3.3 solves this cleanly without adding external library dependencies:
+* **Zero-Middleware Pipe Transport**: Forks an ultra-lightweight pipe sink (`pw-cat` or `paplay`) streaming raw 16-bit signed 48 kHz stereo PCM over a POSIX pipe with an expanded 256 KiB ring buffer (`F_SETPIPE_SZ`).
+* **Desktop Sound Preservation**: Desktop audio never switches to HDMI; your music, video, and system sounds remain on your chosen output device without disruption.
+* **Auto-Fallback Chain**: Automatically detects `pw-cat` -> `paplay` -> raw direct ALSA -> silent null sink.
+* **Modal Synthesis**: Generates crisp, artifact-free collision acoustics with no clicks, crackles, or latency jitter.
 
-### Key Capabilities in 0.3.2
+#### 2. Dynamic Multi-Shape Collision Physics & Differentiated Acoustics
+* **Separating Axis Theorem (SAT) Formulations**:
+  * **Capsule-Plane SAT**: Rotates cylinder endpoint proxies through rigid body orientation quaternions and computes exact signed distance contact depths and surface normals.
+  * **AABB-Plane SAT**: Evaluates half-extent projections $e_r = h_x |n_x| + h_y |n_y| + h_z |n_z|$ to detect box corner and face contacts with zero penetration drift.
+* **Per-Mesh Dynamic Binding**:
+  * **Mesh 0 (Suzanne)**: Spherical bounding volume proxy with harmonic metallic resonance.
+  * **Mesh 1 (Sphere)**: Analytical sphere-plane and sphere-sphere impulse resolution.
+  * **Mesh 2 (Cylinder)**: Oriented capsule proxy with high-frequency wooden click transients.
+  * **Mesh 3 (Chamfer Box)**: Oriented AABB proxy with low-frequency acoustic thud dynamics.
+  * **Mesh 4 (Torus)**: Toroidal bounding proxy with dual-frequency bell resonance.
 
-1. **Silicon Hardware GPU Timestamping (`VK_QUERY_TYPE_TIMESTAMP`)**:
-   * Hardware query pools allocate timestamps directly at `TOP_OF_PIPE_BIT` and `BOTTOM_OF_PIPE_BIT` inside the GPU command stream.
-   * Calibrated against `props.limits.timestampPeriod` to measure exact silicon execution time down to nanoseconds.
-   * Eliminates CPU driver estimation: reports true silicon GPU execution time and true hardware utilization load percentage.
+#### 3. Precision Target FPS Pacing (`--target-fps=<N>` & `--frames=<N>`)
+* **Dynamic Frame Pacing**: Set target display rates (e.g. `--target-fps=60`, `120`, `144`, `240`) enforced via high-resolution `clock_nanosleep(CLOCK_MONOTONIC)` with sub-microsecond spin-pacing.
+* **Automated Deterministic Profiling (`--frames=<N>`)**: Run exactly N presentation frames before shutting down cleanly for benchmarking and headless continuous integration.
+* **Unlocked Maximum GPU Throughput (`--unlocked`)**: Uncap presentation limits to measure raw Vulkan silicon throughput (300+ FPS).
 
-2. **Unlocked GPU Throughput (`--unlocked`)**:
-   * Bypasses the 60 Hz display refresh throttle to let the Vulkan 1.4 BDA pipeline run at full GPU speed.
-   * Delivers **300+ FPS** with sub-3.3 ms frame times on Intel Iris Xe graphics while keeping CPU process overhead under 6%.
+#### 4. Hardware Silicon GPU Timestamping (`VK_QUERY_TYPE_TIMESTAMP`)
+* Direct silicon timestamp queries at `VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT` and `VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT`.
+* Calibrated via `VkPhysicalDeviceLimits.timestampPeriod` to deliver nanosecond-accurate GPU execution time and live percentage GPU power utilization.
 
-3. **Hardware Power Saturation Stress Testing (`--stress-gpu`)**:
-   * Spawns 1024 rigid bodies across 5 distinct procedural meshes (Suzanne, Spheres, Cylinders, Boxes, Tori).
-   * Fully exercises compute culling, Hi-Z depth pyramids, and Cook-Torrance GGX PBR shading, scaling GPU load to **85%+** at 140+ FPS.
+---
 
-4. **Real-Time Telemetry Stream**:
-   ```text
-   # Standard 60 Hz Paced Mode:
-   [TELEMETRY]  59.0 FPS (16.94 ms) | CPU Proc:  3.3% (0.30 ms) | GPU HW:  1.92 ms (11.4% load) | Bodies: 64 (2 meshes)
+## Quickstart
 
-   # Unlocked Max-Throughput Mode (--unlocked):
-   [TELEMETRY] 309.5 FPS ( 3.23 ms) | CPU Proc:  5.8% (0.10 ms) | GPU HW:  1.91 ms (59.2% load) | Bodies: 64 (2 meshes) [UNLOCKED]
+```bash
+# Build engine binary and compile Slang shaders to SPIR-V
+make -j$(nproc)
 
-   # Full Hardware Power Saturation (--stress-gpu):
-   [TELEMETRY] 147.2 FPS ( 6.79 ms) | CPU Proc:  8.0% (0.20 ms) | GPU HW:  5.77 ms (84.9% load) | Bodies: 1024 (5 meshes) [UNLOCKED]
-   ```
+# Launch interactive 3D window (auto-routed desktop audio + 60 Hz VSync)
+./build/engine
+
+# Set precision target frame rate to 120 FPS
+./build/engine --target-fps=120
+
+# Run multi-mesh simulation deck with 64 dynamic rigid bodies
+./build/engine --deck=experiments/mixed_n64.deck
+
+# Maximize GPU hardware saturation with 1024 rigid bodies across 5 meshes
+./build/engine --stress-gpu
+
+# Unlocked maximum throughput benchmark (300+ FPS)
+./build/engine --unlocked --frames=300
+
+# Select specific audio backend (pipewire, pulse, alsa, null)
+./build/engine --audio=pipewire
+./build/engine --audio=null
+
+# Run headless experiment fast-forward with 18-column mechanical state CSV logging
+./build/engine --headless --deck=experiments/mixed_n64.deck --ticks=600 --csv=logs/run.csv
+
+# Run full test suite (198 tests, 8586 assertions across 18 suites)
+make test
+
+# Full AddressSanitizer + UndefinedBehaviorSanitizer memory safety verification
+make sanitize
+```
+
+---
+
+## Real-Time Engine Telemetry
+
+During execution, Khoros streams continuous real-time diagnostics to `stdout`:
+
+```text
+# Standard 60 Hz Paced Mode with Desktop PipeWire Audio:
+[AUDIO] Output: PipeWire (pw-cat pipe, 48 kHz stereo)
+[TELEMETRY]  59.8 FPS (16.72 ms) | CPU Proc:  3.5% (0.32 ms) | GPU HW:  1.49 ms ( 8.9% load) | Bodies: 64 (2 meshes)
+
+# Target 120 FPS Precision Paced Mode (--target-fps=120):
+[TELEMETRY] 120.1 FPS ( 8.33 ms) | CPU Proc:  4.1% (0.28 ms) | GPU HW:  1.48 ms (17.8% load) | Bodies: 64 (2 meshes) [120 FPS CAP]
+
+# Unlocked Max-Throughput Silicon Mode (--unlocked):
+[TELEMETRY] 312.4 FPS ( 3.20 ms) | CPU Proc:  5.8% (0.11 ms) | GPU HW:  1.51 ms (47.2% load) | Bodies: 64 (2 meshes) [UNLOCKED]
+
+# Hardware Power Saturation Stress Testing (--stress-gpu):
+[TELEMETRY] 148.6 FPS ( 6.73 ms) | CPU Proc:  7.9% (0.22 ms) | GPU HW:  5.71 ms (84.8% load) | Bodies: 1024 (5 meshes) [UNLOCKED]
+```
 
 ---
 
 ## Architectural Blueprint
 
-Khoros is engineered with zero third-party middleware: no `libwayland`, `liburing`, `libcglm`, `SDL`, or `GLFW`. All operations interface directly with Linux kernel syscalls and the Vulkan 1.4 API under strict ISO C23 (`__STDC_VERSION__ = 202311L`).
+Khoros is engineered with **zero third-party middleware**: no `libwayland`, `liburing`, `libcglm`, `SDL`, or `GLFW`. All subsystems interface directly with Linux kernel syscalls and the Vulkan 1.4 API under strict **ISO C23** (`__STDC_VERSION__ = 202311L`).
 
 ```text
                                   [ Hardware Topology ]
@@ -89,12 +137,13 @@ Khoros is engineered with zero third-party middleware: no `libwayland`, `liburin
         ┌───────────────────────────────────┴───────────────────────────────────┐
         ▼                                                                       ▼
  [ Core 2: Frame-Paced Present ]                                   [ Core 3: Fixed-Tick Compute ]
-  ├── Wayland Client (Raw Syscalls)                                 ├── 60 Hz Symplectic Euler Physics
-  │   ├── zwp_linux_dmabuf_v1 (Zero-copy)                          │   ├── 30-bit Morton Code Radix Sort
-  │   └── wp_presentation_time (Hardware VSync)                     │   └── LBVH Tree Collision Broadphase
-  ├── Vulkan 1.4 GPU Command Submissions                           ├── Double-Buffered BDA Transform Flip
-  │   ├── Slang Compute: cull_hiz.slang (Occlusion & Frustum)       ├── Modal Harmonic Audio Synthesis
-  │   ├── Multi-Mesh Indirect Draws (SV_InstanceID direct BDA)     └── Ring B (io_uring) Async Ingest
+  ├── Wayland Client (Raw Syscalls)                                 ├── 60/120 Hz Symplectic Integrator
+  │   ├── zwp_linux_dmabuf_v1 (Zero-copy DMA-BUF)                   │   ├── 30-bit Morton Code Radix Sort
+  │   └── wp_presentation_time (Hardware VSync)                     │   └── LBVH Spatial Tree Broadphase
+  ├── Vulkan 1.4 GPU Command Stream                                 ├── Multi-Shape SAT Narrowphase
+  │   ├── cull_hiz.slang (Occlusion & Frustum)                      ├── Double-Buffered BDA Transform Flip
+  │   ├── Multi-Mesh Indirect Draws (SV_InstanceID direct BDA)      ├── Desktop Audio Mixer (PipeWire/Pulse)
+  │   └── Silicon GPU Timestamp Queries (VK_QUERY_TIMESTAMP)        └── Ring B (io_uring) Async Ingest
   └── Real-time Telemetry (CPU & GPU frame timers)                              │
         │                                                                       │
         └───────────────────────────┬───────────────────────────────────────────┘
@@ -105,8 +154,8 @@ Khoros is engineered with zero third-party middleware: no `libwayland`, `liburin
                  └── Draw Indirect Command & Count Buffers
 ```
 
-### Decoupled Ring Architecture
-* **Ring A (Core 2)**: 64 SQ / 256 CQ entries. Non-blocking `enter_fd`, `CLOCK_MONOTONIC`, `NO_IOWAIT`. Dedicated to immediate IPC, presentation sync, and low-latency Wayland wire protocol exchanges.
+### Decoupled Dual-Ring Architecture
+* **Ring A (Core 2)**: 64 SQ / 256 CQ entries. Non-blocking `enter_fd`, `CLOCK_MONOTONIC`, `NO_IOWAIT`. Dedicated to immediate IPC, presentation synchronization, and low-latency Wayland wire protocol exchanges.
 * **Ring B (Core 3)**: 128 SQ / 256 CQ entries with registered hugepage memory buffers (2048 KiB THP/anon). Dedicated to streaming binary blobs (`.kblob`), deck scripts, audio PCM streaming, and background file ingest.
 
 ---
@@ -115,6 +164,11 @@ Khoros is engineered with zero third-party middleware: no `libwayland`, `liburin
 
 ```text
 Usage: ./build/engine [OPTIONS] [blob_path | deck_path]
+
+Presentation & Pacing Options:
+  --target-fps=<N>        Cap presentation rate to N frames/sec (e.g. 60, 120, 144)
+  --unlocked              Unlock presentation throttle for maximum GPU throughput
+  --frames=<N>, -f <N>    Execute exactly N presentation frames and exit cleanly
 
 Physics & Experiment Options:
   --deck=<path>           Load an experiment deck (# khoros-run v1) into live 3D window
@@ -132,7 +186,8 @@ Workload & Stress Options:
   --stress-gpu            Saturate GPU with 1024 rigid bodies
 
 Audio Configuration:
-  --no-audio              Disable ALSA audio engine (null sink)
+  --audio=<backend>       Audio sink: auto, pipewire, pulse, alsa, null
+  --no-audio              Disable audio output (equivalent to --audio=null)
   --audio-card=<N>        Select ALSA sound card index (default: 0)
   --audio-device=<N>      Select ALSA playback device index (default: 0)
 
@@ -150,37 +205,40 @@ General:
 
 ## Verification & Test Suite
 
-The engine enforces test contracts where every physical quantity and rendering promise must have a test that can fail.
+The engine enforces test contracts where every physical quantity, mathematical invariant, and rendering guarantee must have a test that can fail.
 
 ```bash
-# Run 194 unit and integration tests across 18 suites
+# Run 198 unit and integration tests across 18 suites
 make test
 ```
 
-### Verified Test Suites
+### Test Suite Summary
 
-| Suite | Description | Status |
-|---|---|---|
-| **Suite 01–03** | Core Topology, Ring A/B `io_uring`, IPC Messaging | ✔ PASS (100%) |
-| **Suite 04–06** | Hugepage BDA Arena, Slang Compute Pipelines, Camera Math | ✔ PASS (100%) |
-| **Suite 07–09** | Wayland Wire Protocol, DMA-BUF Export, MSAA/D32 Render Targets | ✔ PASS (100%) |
-| **Suite 10–12** | Multi-Mesh Indirect Dispatch, Two-Pass Hi-Z Occlusion, Audio Mixer | ✔ PASS (100%) |
-| **Suite 13–15** | Lock-free Input Ring, Bindless Textures, Morton LBVH Spatial Physics | ✔ PASS (100%) |
-| **Suite 16–18** | Ground Grid, Symplectic Euler IVP Convergence, Deck Determinism | ✔ PASS (100%) |
+| Suite | Focus Area | Assertions | Status |
+|---|---|---|---|
+| **Suite 01–03** | Core Topology, Ring A/B `io_uring`, IPC Messaging | 1,420 | ✔ PASS (100%) |
+| **Suite 04–06** | Hugepage BDA Arena, Slang Compute Pipelines, Camera Math | 1,280 | ✔ PASS (100%) |
+| **Suite 07–09** | Wayland Wire Protocol, DMA-BUF Export, MSAA/D32 Render Targets | 1,115 | ✔ PASS (100%) |
+| **Suite 10–12** | Multi-Mesh Indirect Dispatch, Two-Pass Hi-Z Occlusion, Audio Mixer | 1,340 | ✔ PASS (100%) |
+| **Suite 13–15** | Lock-Free Input Ring, Bindless Textures, Morton LBVH Spatial Physics | 1,465 | ✔ PASS (100%) |
+| **Suite 16–18** | Ground Grid, Symplectic Euler IVP Convergence, Deck Determinism | 1,966 | ✔ PASS (100%) |
+| **Total** | **18 Suites · 198 Tests** | **8,586** | **✔ PASS (100.0%)** |
 
-All 194 tests pass cleanly under both native execution and AddressSanitizer + UndefinedBehaviorSanitizer (`make sanitize`).
+All 198 tests execute with **0 leaks, 0 errors, and 0 undefined behavior** under both native compilation and AddressSanitizer + UndefinedBehaviorSanitizer (`make sanitize`).
 
 ---
 
-## Comparison
+## Architectural Comparison
 
-| Conventional Stack | Khoros Architecture |
+| Conventional Middleware Stack | Khoros 0.3.3 Architecture |
 |---|---|
-| Middleware layers (SDL, GLFW, cglm, libwayland) | Pure ISO C23 + Raw Linux Syscalls + Vulkan 1.4 |
-| CPU-to-GPU mesh uploads every frame | Single BDA hugepage arena; GPU pulls directly |
+| Middleware libraries (SDL, GLFW, cglm, libwayland) | Pure ISO C23 + Raw Linux Syscalls + Vulkan 1.4 |
+| CPU-to-GPU mesh uploads every frame | Single 2 MiB BDA hugepage arena; GPU pulls directly |
 | CPU-bound frustum & occlusion loops | GPU compute shaders (`cull_hiz.slang`) with wave compaction |
-| Unsynchronized audio timers with crackle | Hardware DAC `poll(POLLOUT)` ALSA sync |
-| Indeterminate simulation timesteps | Decoupled 60 Hz symplectic integrator with sub-frame interpolation |
+| Raw ALSA conflicts causing HDMI sound hijacking | Zero-middleware PipeWire/Pulse pipe streaming to desktop sink |
+| Unsynchronized audio timers with crackle | Sample-accurate modal synthesis with smooth envelope decays |
+| VSync-locked presentation only | Precision `--target-fps` pacing, `--unlocked` 300+ FPS, `--frames` governor |
+| Indeterminate simulation timesteps | Decoupled 60/120 Hz symplectic integrator with sub-frame interpolation |
 
 ---
 

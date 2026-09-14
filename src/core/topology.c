@@ -839,11 +839,32 @@ bool khr_topology_start_sim(khr_topology_t* topo, uint32_t rate_hz, uint32_t ins
     for (uint32_t i = 0; i < instance_count && i < KHR_PHYSICS_MAX_BODIES; i++) {
         khr_rigid_body_t body;
         float r = (insts[i].radius > 0.1f) ? insts[i].radius : 1.0f;
-        /* Dynamic bodies: SI mass in kg, restitution e, friction mu */
         float mass_kg = 2.0f;
         float restitution = 0.70f;
         float friction = 0.40f;
-        khr_rigid_body_init_sphere(&body, insts[i].position, r, mass_kg, restitution, friction);
+
+        uint32_t mid = insts[i].mesh_id;
+        if (mid == 2) {
+            /* Cylinder / Capsule proxy (height 1.4, radius 0.5) */
+            float p0[3] = { 0.0f, -0.45f, 0.0f };
+            float p1[3] = { 0.0f,  0.45f, 0.0f };
+            khr_rigid_body_init_capsule(&body, p0, p1, 0.5f, 2.5f, 0.55f, 0.45f);
+            body.position[0] = insts[i].position[0];
+            body.position[1] = insts[i].position[1];
+            body.position[2] = insts[i].position[2];
+        } else if (mid == 3) {
+            /* Chamfer Box (half-extents 0.7) */
+            float hx[3] = { 0.7f, 0.7f, 0.7f };
+            khr_rigid_body_init_aabb(&body, insts[i].position, hx, 3.0f, 0.40f, 0.60f);
+        } else if (mid == 4) {
+            /* Torus */
+            restitution = 0.75f;
+            friction = 0.30f;
+            khr_rigid_body_init_sphere(&body, insts[i].position, r, 1.8f, restitution, friction);
+        } else {
+            /* Sphere (mid == 1) or Suzanne (mid == 0) */
+            khr_rigid_body_init_sphere(&body, insts[i].position, r, mass_kg, restitution, friction);
+        }
         body.user_id = i;
         (void)khr_physics_world_add_body(&topo->sim.physics, &body);
     }
@@ -973,9 +994,17 @@ void khr_topology_sim_step(khr_topology_t* topo, uint64_t tick_index) {
                     const khr_rigid_body_t* bA = &topo->sim.physics.bodies[contact->body_a];
                     const khr_rigid_body_t* bB = &topo->sim.physics.bodies[contact->body_b];
                     if (bA->shape.type == KHR_SHAPE_PLANE || bB->shape.type == KHR_SHAPE_PLANE) {
-                        stype = KHR_COLLISION_SOUND_THUD;
+                        if (bA->shape.type == KHR_SHAPE_AABB || bB->shape.type == KHR_SHAPE_AABB) {
+                            stype = KHR_COLLISION_SOUND_THUD; /* Low wooden thud for boxes */
+                        } else if (bA->shape.type == KHR_SHAPE_CAPSULE || bB->shape.type == KHR_SHAPE_CAPSULE) {
+                            stype = KHR_COLLISION_SOUND_CLICK; /* Snappy transient for rolling cylinders */
+                        } else {
+                            stype = KHR_COLLISION_SOUND_THUD;
+                        }
                     } else if (contact->normal_impulse < 0.25f) {
                         stype = KHR_COLLISION_SOUND_CLICK;
+                    } else {
+                        stype = KHR_COLLISION_SOUND_IMPACT;
                     }
                     khr_collision_event_t evt = {
                         .point = { contact->point[0], contact->point[1], contact->point[2] },

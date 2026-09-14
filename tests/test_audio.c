@@ -357,3 +357,34 @@ bool test_audio_zero_sample_rate_fallback(void) {
     khr_audio_mixer_destroy(&mixer);
     return true;
 }
+
+[[nodiscard]]
+bool test_audio_pipe_backend_auto_routing(void) {
+    /* 1. Test null sink explicitly disabled */
+    khr_audio_config_t cfg_null = {
+        .sample_rate = 48'000,
+        .period_frames = 512,
+        .disabled = true,
+    };
+    khr_audio_engine_t eng_null = {};
+    TEST_ASSERT(khr_audio_engine_init(&eng_null, &cfg_null), "init null engine");
+    TEST_ASSERT_EQ(eng_null.active_backend, KHR_AUDIO_BACKEND_NULL, "active backend null");
+    const char* desc = khr_audio_engine_get_backend_name(&eng_null);
+    TEST_ASSERT(desc != nullptr && strstr(desc, "Null") != nullptr, "null desc contains Null");
+    khr_audio_engine_destroy(&eng_null);
+
+    /* 2. Test auto backend selection (PipeWire pipe or fallback) */
+    khr_audio_config_t cfg_auto = {
+        .sample_rate = 48'000,
+        .period_frames = 512,
+        .backend = KHR_AUDIO_BACKEND_AUTO,
+    };
+    khr_audio_engine_t eng_auto = {};
+    TEST_ASSERT(khr_audio_engine_init(&eng_auto, &cfg_auto), "init auto engine");
+    const char* auto_desc = khr_audio_engine_get_backend_name(&eng_auto);
+    TEST_ASSERT(auto_desc != nullptr && strlen(auto_desc) > 0, "auto desc valid");
+    TEST_ASSERT(khr_audio_engine_tick(&eng_auto), "tick auto engine");
+    khr_audio_engine_destroy(&eng_auto);
+
+    return true;
+}
