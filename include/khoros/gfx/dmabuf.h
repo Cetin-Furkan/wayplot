@@ -151,6 +151,10 @@ typedef struct khr_gpu_scene_pass {
     const khr_descriptor_heap_t*         descriptor_heap;
     const khr_grid_pipeline_t*           grid_pipe;
     const khr_grid_push_t*               grid_push;
+    uint32_t                             mesh_pass_count;
+    khr_mesh_instanced_push_t            mesh_pushes[8];
+    VkDeviceSize                         indirect_cmd_offsets[8];
+    uint32_t                             draw_counts[8];
 } khr_gpu_scene_pass_t;
 
 /* Cards plus mesh (preferred), plot ribbon, or GPU-driven PBR scene in the client rect.

@@ -244,12 +244,17 @@ static bool khr_window_register_mesh_from_payload(void* payload, size_t cap,
 
 
 [[nodiscard]]
-bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
-                    khr_bda_arena_t* arena, const char* blob_path,
-                    const char* deck_path) {
+bool khr_window_run_opts(khr_topology_t* topo, khr_gfx_device_t* dev,
+                         khr_bda_arena_t* arena, const khr_window_options_t* opts) {
     if (topo == nullptr || dev == nullptr || arena == nullptr) {
         return false;
     }
+    const char* blob_path = opts ? opts->blob_path : nullptr;
+    const char* deck_path = opts ? opts->deck_path : nullptr;
+    bool no_audio = opts ? opts->no_audio : false;
+    uint32_t audio_card = opts ? opts->audio_card : 0;
+    uint32_t audio_device = opts ? opts->audio_device : 0;
+    uint32_t stress_n = opts ? opts->stress_n : 0;
     khr_window_stop = 0;
     struct sigaction sa = {};
     sa.sa_handler = khr_window_on_sig;
@@ -559,17 +564,26 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
     VkDeviceAddress sph_v = 0, sph_n = 0, sph_i = 0;
     uint32_t sph_vc = 0, sph_ic = 0;
     (void)khr_scene_generate_sphere(&scene_arena, 1.0f, 24, 48, &sph_v, &sph_n, &sph_i, &sph_vc, &sph_ic);
-    uint32_t sph_mesh_id = khr_scene_register_mesh(&scene, sph_v, sph_i, sph_n, sph_vc, sph_ic, 1.0f);
+    uint32_t sph_mesh_id = 1;
+    (void)khr_scene_register_mesh_normals(&scene, sph_mesh_id, sph_v, sph_i, sph_n, sph_vc, sph_ic, 1.0f);
 
     VkDeviceAddress cyl_v = 0, cyl_n = 0, cyl_i = 0;
     uint32_t cyl_vc = 0, cyl_ic = 0;
-    (void)khr_scene_generate_cylinder(&scene_arena, 1.2f, 1.5f, 36, &cyl_v, &cyl_n, &cyl_i, &cyl_vc, &cyl_ic);
-    uint32_t cyl_mesh_id = khr_scene_register_mesh(&scene, cyl_v, cyl_i, cyl_n, cyl_vc, cyl_ic, 1.5f);
+    (void)khr_scene_generate_cylinder(&scene_arena, 1.0f, 1.5f, 36, &cyl_v, &cyl_n, &cyl_i, &cyl_vc, &cyl_ic);
+    uint32_t cyl_mesh_id = 2;
+    (void)khr_scene_register_mesh_normals(&scene, cyl_mesh_id, cyl_v, cyl_i, cyl_n, cyl_vc, cyl_ic, 1.5f);
 
     VkDeviceAddress cube_v = 0, cube_n = 0, cube_i = 0;
     uint32_t cube_vc = 0, cube_ic = 0;
     (void)khr_scene_generate_chamfer_box(&scene_arena, 1.0f, 0.15f, &cube_v, &cube_n, &cube_i, &cube_vc, &cube_ic);
-    uint32_t cube_mesh_id = khr_scene_register_mesh_normals(&scene, 3, cube_v, cube_i, cube_n, cube_vc, cube_ic, 1.73f);
+    uint32_t cube_mesh_id = 3;
+    (void)khr_scene_register_mesh_normals(&scene, cube_mesh_id, cube_v, cube_i, cube_n, cube_vc, cube_ic, 1.73f);
+
+    VkDeviceAddress tor_v = 0, tor_n = 0, tor_i = 0;
+    uint32_t tor_vc = 0, tor_ic = 0;
+    (void)khr_scene_generate_torus(&scene_arena, 1.0f, 0.35f, 32, 16, &tor_v, &tor_n, &tor_i, &tor_vc, &tor_ic);
+    uint32_t tor_mesh_id = 4;
+    (void)khr_scene_register_mesh_normals(&scene, tor_mesh_id, tor_v, tor_i, tor_n, tor_vc, tor_ic, 1.35f);
 
     /* Check for experiment deck */
     khr_deck_t deck = {};
@@ -583,36 +597,41 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
         }
     }
 
-    uint32_t active_mesh_id = 0;
+    const float palette[][3] = {
+        { 1.00f, 0.85f, 0.40f }, /* Damascus Gold */
+        { 0.95f, 0.95f, 0.98f }, /* Chrome Silver */
+        { 0.95f, 0.50f, 0.35f }, /* Brushed Copper */
+        { 0.30f, 0.85f, 0.95f }, /* Cyan Crystal */
+        { 0.95f, 0.30f, 0.45f }, /* Ruby Red */
+        { 0.40f, 0.95f, 0.55f }, /* Emerald Green */
+        { 0.70f, 0.50f, 0.95f }, /* Amethyst Purple */
+        { 0.95f, 0.70f, 0.30f }, /* Amber Bronze */
+    };
+    const size_t pal_count = sizeof(palette) / sizeof(palette[0]);
 
     if (have_deck && deck.body_count > 0) {
-        bool any_sphere = false;
-        bool any_box = false;
+        /* Sort deck bodies into contiguous shape groups so multi-mesh rendering is 100% direct */
+        khr_deck_t sorted_deck = deck;
+        uint32_t b_idx = 0;
         for (uint32_t i = 0; i < deck.body_count; i++) {
-            if (deck.bodies[i].shape.type == KHR_SHAPE_AABB) any_box = true;
-            if (deck.bodies[i].shape.type == KHR_SHAPE_SPHERE) any_sphere = true;
+            if (deck.bodies[i].shape.type == KHR_SHAPE_SPHERE) sorted_deck.bodies[b_idx++] = deck.bodies[i];
         }
-        if (any_sphere && !any_box) {
-            active_mesh_id = sph_mesh_id;
-        } else if (any_box && !any_sphere) {
-            active_mesh_id = cube_mesh_id;
-        } else if (any_sphere) {
-            active_mesh_id = sph_mesh_id;
-        } else {
-            active_mesh_id = 0;
+        for (uint32_t i = 0; i < deck.body_count; i++) {
+            if (deck.bodies[i].shape.type == KHR_SHAPE_CAPSULE) sorted_deck.bodies[b_idx++] = deck.bodies[i];
         }
-
-        const float palette[][3] = {
-            { 1.00f, 0.85f, 0.40f }, /* Damascus Gold */
-            { 0.95f, 0.95f, 0.98f }, /* Chrome Silver */
-            { 0.95f, 0.50f, 0.35f }, /* Brushed Copper */
-            { 0.30f, 0.85f, 0.95f }, /* Cyan Crystal */
-            { 0.95f, 0.30f, 0.45f }, /* Ruby Red */
-            { 0.40f, 0.95f, 0.55f }, /* Emerald Green */
-            { 0.70f, 0.50f, 0.95f }, /* Amethyst Purple */
-            { 0.95f, 0.70f, 0.30f }, /* Amber Bronze */
-        };
-        const size_t pal_count = sizeof(palette) / sizeof(palette[0]);
+        for (uint32_t i = 0; i < deck.body_count; i++) {
+            if (deck.bodies[i].shape.type == KHR_SHAPE_AABB) sorted_deck.bodies[b_idx++] = deck.bodies[i];
+        }
+        for (uint32_t i = 0; i < deck.body_count; i++) {
+            if (deck.bodies[i].shape.type != KHR_SHAPE_SPHERE &&
+                deck.bodies[i].shape.type != KHR_SHAPE_CAPSULE &&
+                deck.bodies[i].shape.type != KHR_SHAPE_AABB &&
+                deck.bodies[i].shape.type != KHR_SHAPE_PLANE) {
+                sorted_deck.bodies[b_idx++] = deck.bodies[i];
+            }
+        }
+        sorted_deck.body_count = b_idx;
+        deck = sorted_deck;
 
         for (uint32_t i = 0; i < deck.body_count && i < 1024; i++) {
             const khr_rigid_body_t* b = &deck.bodies[i];
@@ -620,7 +639,7 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
 
             float r = 0.5f;
             float sx = 1.0f, sy = 1.0f, sz = 1.0f;
-            uint32_t mid = active_mesh_id;
+            uint32_t mid = 0;
             if (b->shape.type == KHR_SHAPE_SPHERE) {
                 r = b->shape.sphere.radius;
                 sx = sy = sz = r;
@@ -631,6 +650,12 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
                 sy = b->shape.aabb.half_extents[1];
                 sz = b->shape.aabb.half_extents[2];
                 mid = cube_mesh_id;
+            } else if (b->shape.type == KHR_SHAPE_CAPSULE) {
+                r = 0.6f;
+                sx = 0.5f; sy = 1.0f; sz = 0.5f;
+                mid = cyl_mesh_id;
+            } else {
+                mid = 0;
             }
 
             const float* col = palette[i % pal_count];
@@ -655,15 +680,44 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
                                         (float[]){ 0.0f, 1.0f, 0.0f },
                                         (float[]){ 0.0f, 1.0f, 0.0f });
         }
+    } else if (stress_n > 0) {
+        printf("  Stress Test:  Spawning %u rigid bodies across 5 procedural meshes\n", stress_n);
+        for (uint32_t m = 0; m < 5; m++) {
+            uint32_t count = (stress_n + 4 - m) / 5;
+            for (uint32_t k = 0; k < count && scene.instance_count < scene.max_instances; k++) {
+                uint32_t idx = scene.instance_count;
+                float x = ((float)(idx % 16) - 7.5f) * 2.2f;
+                float y = ((float)((idx / 16) % 16)) * 2.2f + 1.0f;
+                float z = ((float)(idx / 256) - 1.5f) * 2.2f;
+                const float* col = palette[idx % pal_count];
+                khr_gpu_instance_t inst = {
+                    .position = { x, y, z },
+                    .radius = 0.8f,
+                    .rotation = { 0.0f, 0.0f, 0.0f, 1.0f },
+                    .scale = { 0.8f, 0.8f, 0.8f },
+                    .mesh_id = m,
+                    .albedo = { col[0], col[1], col[2] },
+                    .roughness = 0.2f + ((float)(idx % 4) * 0.1f),
+                    .metallic = 0.5f + ((float)(idx % 3) * 0.2f),
+                    .ao = 1.0f,
+                    .albedo_tex_id = UINT32_MAX,
+                    .normal_tex_id = UINT32_MAX,
+                };
+                (void)khr_scene_add_instance(&scene, &inst);
+            }
+        }
+        khr_camera_look_at(&camera, (float[]){ 0.0f, 16.0f, 38.0f },
+                                    (float[]){ 0.0f, 5.0f, 0.0f },
+                                    (float[]){ 0.0f, 1.0f, 0.0f });
     } else {
-        /* Instance 0: Cook-Torrance GGX PBR Metallic Damascus Suzanne (Hero Mesh) */
+        /* Instance 0: Cook-Torrance GGX PBR Metallic Damascus Suzanne (Hero Mesh 0) */
         khr_gpu_instance_t main_inst = {
             .position = { 0.0f, 0.4f, 0.0f },
             .radius = 2.5f,
             .rotation = { 0.0f, 0.0f, 0.0f, 1.0f },
             .scale = { 1.0f, 1.0f, 1.0f },
             .mesh_id = 0,
-            .albedo = { 1.0f, 0.88f, 0.65f }, /* Damascened Gold/Steel */
+            .albedo = { 1.0f, 0.88f, 0.65f },
             .roughness = 0.20f,
             .metallic = 0.95f,
             .ao = 1.0f,
@@ -672,13 +726,13 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
         };
         (void)khr_scene_add_instance(&scene, &main_inst);
 
-        /* Instance 1: Companion Left - Chrome Silver UV Sphere */
+        /* Instance 1: Companion Left - Chrome Silver UV Sphere (Mesh 1) */
         khr_gpu_instance_t chrome_inst = {
             .position = { -3.5f, 0.0f, 0.0f },
             .radius = 1.5f,
             .rotation = { 0.0f, 0.0f, 0.0f, 1.0f },
             .scale = { 1.2f, 1.2f, 1.2f },
-            .mesh_id = (sph_mesh_id != UINT32_MAX) ? sph_mesh_id : 0,
+            .mesh_id = sph_mesh_id,
             .albedo = { 0.95f, 0.95f, 0.95f },
             .roughness = 0.08f,
             .metallic = 0.98f,
@@ -688,13 +742,29 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
         };
         (void)khr_scene_add_instance(&scene, &chrome_inst);
 
-        /* Instance 2: Pedestal Column - Veined Italian Carrara Marble Column beneath Suzanne */
+        /* Instance 2: Dynamic Falling Gold Sphere (Mesh 1) */
+        khr_gpu_instance_t fall_inst = {
+            .position = { 0.0f, 7.5f, 0.0f },
+            .radius = 1.0f,
+            .rotation = { 0.0f, 0.0f, 0.0f, 1.0f },
+            .scale = { 0.9f, 0.9f, 0.9f },
+            .mesh_id = sph_mesh_id,
+            .albedo = { 1.0f, 0.85f, 0.3f },
+            .roughness = 0.12f,
+            .metallic = 0.92f,
+            .ao = 1.0f,
+            .albedo_tex_id = UINT32_MAX,
+            .normal_tex_id = UINT32_MAX,
+        };
+        (void)khr_scene_add_instance(&scene, &fall_inst);
+
+        /* Instance 3: Pedestal Column - Italian Carrara Marble Cylinder (Mesh 2) */
         khr_gpu_instance_t ped_inst = {
             .position = { 0.0f, -1.8f, 0.0f },
             .radius = 2.0f,
             .rotation = { 0.0f, 0.0f, 0.0f, 1.0f },
             .scale = { 1.6f, 0.8f, 1.6f },
-            .mesh_id = (cyl_mesh_id != UINT32_MAX) ? cyl_mesh_id : 0,
+            .mesh_id = cyl_mesh_id,
             .albedo = { 0.95f, 0.95f, 0.98f },
             .roughness = 0.18f,
             .metallic = 0.05f,
@@ -704,13 +774,13 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
         };
         (void)khr_scene_add_instance(&scene, &ped_inst);
 
-        /* Instance 3: Companion Right - Brushed Copper Cube */
+        /* Instance 4: Companion Right - Brushed Copper Chamfer Box (Mesh 3) */
         khr_gpu_instance_t copper_inst = {
             .position = { 3.5f, 0.0f, 0.0f },
             .radius = 1.5f,
             .rotation = { 0.0f, 0.0f, 0.0f, 1.0f },
             .scale = { 1.1f, 1.1f, 1.1f },
-            .mesh_id = (cube_mesh_id != UINT32_MAX) ? cube_mesh_id : 0,
+            .mesh_id = cube_mesh_id,
             .albedo = { 0.95f, 0.64f, 0.54f },
             .roughness = 0.30f,
             .metallic = 0.88f,
@@ -719,6 +789,33 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
             .normal_tex_id = tex_normal.descriptor_index,
         };
         (void)khr_scene_add_instance(&scene, &copper_inst);
+
+        /* Instance 5: Floating Emerald Crystal Torus (Mesh 4) */
+        khr_gpu_instance_t tor_inst = {
+            .position = { 0.0f, 3.8f, -2.5f },
+            .radius = 1.8f,
+            .rotation = { 0.707f, 0.0f, 0.0f, 0.707f },
+            .scale = { 1.2f, 1.2f, 1.2f },
+            .mesh_id = tor_mesh_id,
+            .albedo = { 0.2f, 0.95f, 0.6f },
+            .roughness = 0.15f,
+            .metallic = 0.85f,
+            .ao = 1.0f,
+            .albedo_tex_id = UINT32_MAX,
+            .normal_tex_id = UINT32_MAX,
+        };
+        (void)khr_scene_add_instance(&scene, &tor_inst);
+    }
+
+    uint32_t mesh_start[5] = {};
+    uint32_t mesh_count[5] = {};
+    for (uint32_t i = 0; i < scene.instance_count; i++) {
+        uint32_t mid = scene.instances[i].mesh_id;
+        if (mid > 4) mid = 0;
+        if (mesh_count[mid] == 0) {
+            mesh_start[mid] = i;
+        }
+        mesh_count[mid]++;
     }
 
     /* Real Physical Lights (Pillar D) */
@@ -769,13 +866,19 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
     khr_audio_config_t acfg = {
         .sample_rate = 48000,
         .period_frames = 512,
-        .alsa_card = 0,
-        .alsa_device = 0,
+        .alsa_card = audio_card,
+        .alsa_device = audio_device,
         .custom_sink_fd = -1,
         .use_io_uring = false,
+        .disabled = no_audio,
     };
     khr_audio_engine_t audio_engine = {};
-    bool audio_live = khr_audio_engine_init(&audio_engine, &acfg);
+    bool audio_live = false;
+    if (!no_audio) {
+        audio_live = khr_audio_engine_init(&audio_engine, &acfg);
+    } else {
+        printf("  Audio:        disabled by CLI flag (--no-audio)\n");
+    }
 
     khr_audio_clip_t impact_clip = {};
     khr_audio_clip_t thud_clip = {};
@@ -789,7 +892,8 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
 
     if (audio_live) {
         if (khr_audio_engine_start_worker(&audio_engine)) {
-            printf("  Audio:        Procedural modal harmonic synthesis + 3D spatial mixer live (48 kHz direct PCM)\n");
+            printf("  Audio:        DAC-synchronized modal synthesis live (/dev/snd/pcmC%uD%up, 48 kHz)\n",
+                   audio_card, audio_device);
         } else {
             audio_live = false;
         }
@@ -856,6 +960,13 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
     khr_hit_t drag_hit = KHR_HIT_CLIENT;
     uint64_t last_commit_ns = 0;
     uint64_t min_interval_ns = 16'666'667ULL; /* 60 Hz default */
+
+    uint64_t telem_last_report_ns = 0;
+    uint32_t telem_frames = 0;
+    uint64_t telem_cpu_render_ns = 0;
+    uint64_t telem_gpu_wait_ns = 0;
+    struct timespec telem_proc_cpu_prev = {};
+    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &telem_proc_cpu_prev);
 
     while (!shell.closed && !client.display_error && !khr_window_stop) {
         struct timespec ts_now = {};
@@ -1344,8 +1455,49 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
                 cull_push.flags = 0;
             }
 
+            /* Setup multi-mesh passes (0.3.1) */
+            cull_push.flags |= 8U;
+            if (have_hiz) {
+                hiz_push.flags |= 8U;
+            }
+
+            khr_gpu_scene_pass_t gpu_pass = {};
+            uint32_t active_passes = 0;
+            for (uint32_t m = 0; m < 5 && m < scene.mesh_count; m++) {
+                if (mesh_count[m] == 0) continue;
+
+                scene.draw_cmd[active_passes] = (khr_draw_indirect_cmd_t){
+                    .vertexCount = scene.meshes[m].index_count,
+                    .instanceCount = mesh_count[m],
+                    .firstVertex = 0,
+                    .firstInstance = 0,
+                };
+
+                khr_mesh_instanced_push_t m_push = {};
+                khr_scene_prepare_mesh_push(&scene, m, &camera, &m_push);
+                m_push.instances_addr = scene.culled_instances_gpu +
+                    (VkDeviceAddress)(mesh_start[m] * sizeof(khr_gpu_culled_instance_t));
+                m_push.verts_addr = scene.meshes[m].verts_addr;
+                m_push.indices_addr = scene.meshes[m].indices_addr;
+                m_push.normals_addr = scene.meshes[m].normals_addr;
+                m_push.index_count = scene.meshes[m].index_count;
+                m_push.vert_count = scene.meshes[m].vert_count;
+
+                gpu_pass.mesh_pushes[active_passes] = m_push;
+                gpu_pass.indirect_cmd_offsets[active_passes] = (VkDeviceSize)(
+                    (scene.draw_cmd_gpu + active_passes * sizeof(khr_draw_indirect_cmd_t)) - scene_arena.gpu_address
+                );
+                gpu_pass.draw_counts[active_passes] = 1;
+                active_passes++;
+            }
+            gpu_pass.mesh_pass_count = active_passes;
+
             khr_mesh_instanced_push_t inst_push = {};
-            khr_scene_prepare_mesh_push(&scene, active_mesh_id, &camera, &inst_push);
+            if (active_passes > 0) {
+                inst_push = gpu_pass.mesh_pushes[0];
+            } else {
+                khr_scene_prepare_mesh_push(&scene, 0, &camera, &inst_push);
+            }
 
             float sim_floor = have_deck ? deck.floor_y : KHR_PHYSICS_FLOOR_Y;
             khr_grid_push_t grid_push = {
@@ -1355,20 +1507,24 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
                 .params = { camera.fov_y, camera.aspect, camera.z_near, 120.0f },
             };
 
-            khr_gpu_scene_pass_t gpu_pass = {
-                .cull_pipe = &cull_pipe,
-                .cull_push = &cull_push,
-                .inst_pipe = &inst_pipe,
-                .inst_push = &inst_push,
-                .indirect_cmd_buffer = scene_arena.buffer,
-                .indirect_cmd_offset = (VkDeviceSize)(scene.draw_cmd_gpu - scene_arena.gpu_address),
-                .draw_count = 1,
-                .hiz = have_hiz ? &hiz : nullptr,
-                .hiz_push = have_hiz ? &hiz_push : nullptr,
-                .descriptor_heap = &heap,
-                .grid_pipe = have_grid ? &grid_pipe : nullptr,
-                .grid_push = have_grid ? &grid_push : nullptr,
-            };
+            gpu_pass.cull_pipe = &cull_pipe;
+            gpu_pass.cull_push = &cull_push;
+            gpu_pass.inst_pipe = &inst_pipe;
+            gpu_pass.inst_push = &inst_push;
+            gpu_pass.indirect_cmd_buffer = scene_arena.buffer;
+            gpu_pass.indirect_cmd_offset = (active_passes > 0)
+                ? gpu_pass.indirect_cmd_offsets[0]
+                : (VkDeviceSize)(scene.draw_cmd_gpu - scene_arena.gpu_address);
+            gpu_pass.draw_count = 1;
+            gpu_pass.hiz = have_hiz ? &hiz : nullptr;
+            gpu_pass.hiz_push = have_hiz ? &hiz_push : nullptr;
+            gpu_pass.descriptor_heap = &heap;
+            gpu_pass.grid_pipe = have_grid ? &grid_pipe : nullptr;
+            gpu_pass.grid_push = have_grid ? &grid_push : nullptr;
+
+            struct timespec ts_render0;
+            clock_gettime(CLOCK_MONOTONIC, &ts_render0);
+            uint64_t render_t0_ns = (uint64_t)ts_render0.tv_sec * 1'000'000'000ULL + (uint64_t)ts_render0.tv_nsec;
 
             if (khr_dmabuf_present_commit_scene(dev, &dp, cards_addr,
                                                 KHR_WINDOW_CARD_COUNT,
@@ -1378,7 +1534,21 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
                                                 giz_arg, top)) {
                 dirty = false;
                 last_commit_ns = now_ns;
+
+                struct timespec ts_sync0;
+                clock_gettime(CLOCK_MONOTONIC, &ts_sync0);
+                uint64_t sync_t0_ns = (uint64_t)ts_sync0.tv_sec * 1'000'000'000ULL + (uint64_t)ts_sync0.tv_nsec;
+
                 (void)khr_dmabuf_present_sync(dev, &dp);
+
+                struct timespec ts_sync1;
+                clock_gettime(CLOCK_MONOTONIC, &ts_sync1);
+                uint64_t sync_t1_ns = (uint64_t)ts_sync1.tv_sec * 1'000'000'000ULL + (uint64_t)ts_sync1.tv_nsec;
+
+                telem_cpu_render_ns += (sync_t0_ns - render_t0_ns);
+                telem_gpu_wait_ns += (sync_t1_ns - sync_t0_ns);
+                telem_frames++;
+
                 if (have_pt) {
                     uint32_t fid = 0;
                     (void)khr_presentation_request_feedback(&pres_time, shell.surface_id, dp.frames, &fid);
@@ -1386,6 +1556,33 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
                 if (dp.has_retiring && khr_dmabuf_present_can_drop_retired(dev, &dp)) {
                     khr_dmabuf_present_drop_retired(dev, &dp);
                 }
+            }
+
+            if (telem_last_report_ns == 0) {
+                telem_last_report_ns = now_ns;
+            } else if (now_ns - telem_last_report_ns >= 1'000'000'000ULL && telem_frames > 0) {
+                uint64_t elapsed_ns = now_ns - telem_last_report_ns;
+                float fps = (float)telem_frames * 1e9f / (float)elapsed_ns;
+                float frame_ms = 1000.0f / (fps > 0.01f ? fps : 1.0f);
+                float cpu_frame_ms = (float)telem_cpu_render_ns / ((float)telem_frames * 1e6f);
+                float gpu_frame_ms = (float)telem_gpu_wait_ns / ((float)telem_frames * 1e6f);
+
+                struct timespec proc_cpu_now = {};
+                clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &proc_cpu_now);
+                uint64_t proc_cpu_ns = (uint64_t)(proc_cpu_now.tv_sec - telem_proc_cpu_prev.tv_sec) * 1'000'000'000ULL +
+                                       (uint64_t)(proc_cpu_now.tv_nsec - telem_proc_cpu_prev.tv_nsec);
+                telem_proc_cpu_prev = proc_cpu_now;
+                float cpu_total_pct = (float)proc_cpu_ns * 100.0f / (float)elapsed_ns;
+
+                printf("[TELEMETRY] %5.1f FPS (%4.2f ms) | CPU Process: %4.1f%% | Render CPU: %4.2f ms | GPU Wait: %4.2f ms | Bodies: %u (%u meshes)\n",
+                       fps, frame_ms, cpu_total_pct, cpu_frame_ms, gpu_frame_ms,
+                       scene.instance_count, active_passes);
+                fflush(stdout);
+
+                telem_last_report_ns = now_ns;
+                telem_frames = 0;
+                telem_cpu_render_ns = 0;
+                telem_gpu_wait_ns = 0;
             }
 
             /* Harvest physical collision audio events from Core 3 simulation */
@@ -1480,4 +1677,15 @@ bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
         ok = true;
     }
     return ok;
+}
+
+[[nodiscard]]
+bool khr_window_run(khr_topology_t* topo, khr_gfx_device_t* dev,
+                    khr_bda_arena_t* arena, const char* blob_path,
+                    const char* deck_path) {
+    khr_window_options_t opts = {
+        .blob_path = blob_path,
+        .deck_path = deck_path,
+    };
+    return khr_window_run_opts(topo, dev, arena, &opts);
 }

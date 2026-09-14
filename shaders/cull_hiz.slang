@@ -188,6 +188,18 @@ void cs_main(uint32_t3 dtid : SV_DispatchThreadID) {
         push.visibility_mask[idx] = visible ? 1u : 0u;
     }
 
+    if (in_bounds && (push.flags & 8u) != 0u) {
+        if (!visible) {
+            culled.scale = float3(0.0, 0.0, 0.0);
+            culled.mvp.c0 = float4(0.0, 0.0, 0.0, 0.0);
+            culled.mvp.c1 = float4(0.0, 0.0, 0.0, 0.0);
+            culled.mvp.c2 = float4(0.0, 0.0, 0.0, 0.0);
+            culled.mvp.c3 = float4(0.0, 0.0, 0.0, 0.0);
+        }
+        push.culled_instances[idx] = culled;
+        return;
+    }
+
     // Subgroup Wave Compaction
     uint wave_count = WaveActiveCountBits(visible);
     uint prefix = WavePrefixCountBits(visible);

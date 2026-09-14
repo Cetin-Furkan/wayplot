@@ -33,6 +33,7 @@ typedef struct {
     uint32_t alsa_device;
     int      custom_sink_fd; /* -1 for hardware /dev/snd/pcmC*D*p, >= 0 for mock pipe */
     bool     use_io_uring;
+    bool     disabled;       /* true to disable audio hardware access (null sink) */
 } khr_audio_config_t;
 
 typedef struct {

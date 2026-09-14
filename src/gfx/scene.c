@@ -46,17 +46,17 @@ bool khr_scene_init(khr_scene_t* scene,
     }
     scene->culled_instances = (khr_gpu_culled_instance_t*)culled_host;
 
-    /* Allocate GPU BDA buffer for draw indirect command */
+    /* Allocate GPU BDA buffer for draw indirect commands (up to KHR_SCENE_MAX_MESHES) */
     void* cmd_host = nullptr;
-    if (!khr_bda_arena_alloc(arena, sizeof(khr_draw_indirect_cmd_t), 64,
+    if (!khr_bda_arena_alloc(arena, KHR_SCENE_MAX_MESHES * sizeof(khr_draw_indirect_cmd_t), 64,
                              &cmd_host, &scene->draw_cmd_gpu)) {
         return false;
     }
     scene->draw_cmd = (khr_draw_indirect_cmd_t*)cmd_host;
 
-    /* Allocate GPU BDA buffer for atomic draw count */
+    /* Allocate GPU BDA buffer for atomic draw counts (up to KHR_SCENE_MAX_MESHES) */
     void* count_host = nullptr;
-    if (!khr_bda_arena_alloc(arena, sizeof(uint32_t), 64,
+    if (!khr_bda_arena_alloc(arena, KHR_SCENE_MAX_MESHES * sizeof(uint32_t), 64,
                              &count_host, &scene->draw_count_gpu)) {
         return false;
     }

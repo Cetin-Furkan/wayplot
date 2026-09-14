@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <string.h>
 #include <errno.h>
+#include <poll.h>
 #include <sys/ioctl.h>
 
 static void set_mask(struct snd_mask* mask, unsigned int val) {
@@ -172,7 +173,14 @@ int64_t khr_alsa_pcm_write(khr_alsa_pcm_t* pcm, const void* frames, uint32_t fra
                 return -errno;
             }
         } else if (err == EAGAIN) {
-            return 0; /* Non-blocking buffer full */
+            /* Hardware buffer momentarily full: brief poll and retry once */
+            struct pollfd pfd = { .fd = pcm->fd, .events = POLLOUT, .revents = 0 };
+            if (poll(&pfd, 1, 10) > 0 && (pfd.revents & POLLOUT)) {
+                written = write(pcm->fd, frames, total_bytes);
+                if (written < 0) return 0;
+            } else {
+                return 0;
+            }
         } else {
             return -err;
         }

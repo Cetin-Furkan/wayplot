@@ -22,10 +22,22 @@
 
 constexpr uint32_t ENGINE_VERSION_MAJOR = 0;
 constexpr uint32_t ENGINE_VERSION_MINOR = 3;
-constexpr uint32_t ENGINE_VERSION_PATCH = 0;
+constexpr uint32_t ENGINE_VERSION_PATCH = 1;
 
 constexpr size_t   ENGINE_CACHE_LINE_SIZE   = 64;
 constexpr size_t   ENGINE_PAGE_SIZE         = 4'096;
+
+typedef struct {
+    const char* blob_path;
+    const char* deck_path;
+    bool        no_audio;
+    uint32_t    audio_card;
+    uint32_t    audio_device;
+    uint32_t    stress_n;
+} engine_options_t;
+
+[[nodiscard]]
+bool engine_init_opts(const engine_options_t* opts);
 
 [[nodiscard]]
 bool engine_init(const char* blob_path, const char* deck_path);

@@ -8,13 +8,13 @@
 
 [[nodiscard]]
 const char* engine_get_banner(void) {
-    static const char banner[] = "=== Khoros Engine 0.3.0 (Linux 7.2 / C23 / io_uring / Vulkan 1.4) ===\n"
-                                 "  Caption: colliders are spheres; mesh is skin. Instrument active.";
+    static const char banner[] = "=== Khoros Engine 0.3.1 (Linux 7.2 / C23 / io_uring / Vulkan 1.4) ===\n"
+                                 "  Caption: multi-mesh 3D PBR, DAC-synced modal audio, real-time GPU telemetry.";
     return banner;
 }
 
 [[nodiscard]]
-bool engine_init(const char* blob_path, const char* deck_path) {
+bool engine_init_opts(const engine_options_t* opts) {
     const char* banner = engine_get_banner();
     if (banner == nullptr) {
         return false;
@@ -58,22 +58,17 @@ bool engine_init(const char* blob_path, const char* deck_path) {
         if (!wrapped) {
             if (!khr_bda_arena_init(&dev, &arena, KHR_BDA_DEFAULT_ARENA_SZ)) {
                 printf("  Vulkan:       device up, BDA arena FAILED\n");
-                khr_gfx_device_destroy(&dev);
-                have_gpu = false;
+            } else {
+                printf("  Vulkan:       fallback arena %zu MiB at 0x%llx\n",
+                       arena.size / (1024 * 1024),
+                       (unsigned long long)arena.gpu_address);
             }
+        } else {
+            printf("  Vulkan:       hugepage mapped to BDA at 0x%llx\n",
+                   (unsigned long long)arena.gpu_address);
         }
-    }
-    if (have_gpu) {
-        printf("  Vulkan:       1.4 device up  BDA=0x%llx  %s\n",
-               (unsigned long long)arena.gpu_address,
-               wrapped ? "hugepage-imported (ingest==shader)"
-                       : "separate UMA arena");
-        printf("  Split:        payload %zu KiB @0 / UI %zu KiB @%zu\n",
-               khr_hp_payload_cap(arena.size) / 1024,
-               KHR_HP_UI_RESERVE / 1024,
-               khr_hp_ui_off(arena.size));
     } else {
-        printf("  Vulkan:       skipped (no device)\n");
+        printf("  Vulkan:       device unavailable (headless/mock mode)\n");
     }
 
     uint64_t bda = (have_gpu && arena.gpu_address != 0)
@@ -89,7 +84,15 @@ bool engine_init(const char* blob_path, const char* deck_path) {
 
     bool present_ok = true;
     if (ipc_ok && have_gpu && arena.gpu_address != 0) {
-        present_ok = khr_window_run(&topo, &dev, &arena, blob_path, deck_path);
+        khr_window_options_t wopts = {
+            .blob_path = opts ? opts->blob_path : nullptr,
+            .deck_path = opts ? opts->deck_path : nullptr,
+            .no_audio = opts ? opts->no_audio : false,
+            .audio_card = opts ? opts->audio_card : 0,
+            .audio_device = opts ? opts->audio_device : 0,
+            .stress_n = opts ? opts->stress_n : 0,
+        };
+        present_ok = khr_window_run_opts(&topo, &dev, &arena, &wopts);
     } else if (ipc_ok) {
         printf("  Present:      skipped (need GPU for DMA-BUF loop)\n");
     }
@@ -100,4 +103,13 @@ bool engine_init(const char* blob_path, const char* deck_path) {
     }
     khr_topology_destroy(&topo);
     return ipc_ok && present_ok;
+}
+
+[[nodiscard]]
+bool engine_init(const char* blob_path, const char* deck_path) {
+    engine_options_t opts = {
+        .blob_path = blob_path,
+        .deck_path = deck_path,
+    };
+    return engine_init_opts(&opts);
 }

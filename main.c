@@ -23,6 +23,11 @@ static void print_usage(const char* prog) {
     printf("  --write-sphere <path>   Write procedural sphere mesh blob to file and exit\n");
     printf("  --write-cylinder <path> Write procedural cylinder mesh blob to file and exit\n");
     printf("  --write-torus <path>    Write procedural torus mesh blob to file and exit\n");
+    printf("  --no-audio              Disable ALSA audio engine (null sink)\n");
+    printf("  --audio-card=<N>        Select ALSA sound card index (default: 0)\n");
+    printf("  --audio-device=<N>      Select ALSA playback device index (default: 0)\n");
+    printf("  --stress-n=<N>          Spawn N rigid bodies in 3D scene to stress GPU & physics\n");
+    printf("  --stress-gpu            Saturate GPU with 1024 rigid bodies\n");
     printf("  -h, --help              Display this help message\n");
 }
 
@@ -107,6 +112,10 @@ int main(int argc, char** argv) {
     bool no_wall_clock = false;
     bool hash_only = false;
     bool headless = false;
+    bool no_audio = false;
+    uint32_t audio_card = 0;
+    uint32_t audio_device = 0;
+    uint32_t stress_n = 0;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--write-box") == 0 && i + 1 < argc) {
@@ -153,6 +162,16 @@ int main(int argc, char** argv) {
             }
             fclose(f);
             return 0;
+        } else if (strcmp(argv[i], "--no-audio") == 0) {
+            no_audio = true;
+        } else if (strncmp(argv[i], "--audio-card=", 13) == 0) {
+            audio_card = (uint32_t)strtoul(argv[i] + 13, nullptr, 10);
+        } else if (strncmp(argv[i], "--audio-device=", 15) == 0) {
+            audio_device = (uint32_t)strtoul(argv[i] + 15, nullptr, 10);
+        } else if (strncmp(argv[i], "--stress-n=", 11) == 0) {
+            stress_n = (uint32_t)strtoul(argv[i] + 11, nullptr, 10);
+        } else if (strcmp(argv[i], "--stress-gpu") == 0) {
+            stress_n = 1024;
         } else if (strcmp(argv[i], "--headless") == 0) {
             headless = true;
         } else if (strncmp(argv[i], "--deck=", 7) == 0) {
@@ -199,7 +218,15 @@ int main(int argc, char** argv) {
         return run_headless_simulation(deck_path, ticks, seed, dt, csv_path, hash_only);
     }
 
-    auto ok = engine_init(blob_path, deck_path);
+    engine_options_t opts = {
+        .blob_path = blob_path,
+        .deck_path = deck_path,
+        .no_audio = no_audio,
+        .audio_card = audio_card,
+        .audio_device = audio_device,
+        .stress_n = stress_n,
+    };
+    auto ok = engine_init_opts(&opts);
     if (!ok) {
         return 1;
     }

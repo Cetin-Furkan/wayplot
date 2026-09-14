@@ -115,6 +115,18 @@ void cs_main(uint32_t3 dtid : SV_DispatchThreadID) {
         culled.normal_tex_id = inst.normal_tex_id;
     }
 
+    if (in_bounds && (push.flags & 8u) != 0u) {
+        if (!visible) {
+            culled.scale = float3(0.0, 0.0, 0.0);
+            culled.mvp.c0 = float4(0.0, 0.0, 0.0, 0.0);
+            culled.mvp.c1 = float4(0.0, 0.0, 0.0, 0.0);
+            culled.mvp.c2 = float4(0.0, 0.0, 0.0, 0.0);
+            culled.mvp.c3 = float4(0.0, 0.0, 0.0, 0.0);
+        }
+        push.culled_instances[idx] = culled;
+        return;
+    }
+
     // Subgroup Wave Compaction: Compact atomic allocations across the SIMD wave (16/32/64 threads)
     // to eliminate atomic DRAM contention and L3 cache line bouncing on integrated GPUs/APUs.
     uint wave_count = WaveActiveCountBits(visible);

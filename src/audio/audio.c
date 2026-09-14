@@ -6,6 +6,7 @@
 #include <string.h>
 #include <errno.h>
 #include <time.h>
+#include <poll.h>
 #include <sys/timerfd.h>
 #include "khoros/core/cpu.h"
 
@@ -20,7 +21,28 @@ static void* audio_worker_thread(void* arg) {
     clock_gettime(CLOCK_MONOTONIC, &deadline);
 
     while (atomic_load_explicit(&engine->running, memory_order_acquire)) {
-        if (engine->timer_fd >= 0) {
+        if (!engine->alsa.is_mock && engine->alsa.fd >= 0) {
+            /* DAC-Synchronized Hardware Pacing: poll ALSA PCM device for POLLOUT */
+            struct pollfd pfd = {
+                .fd = engine->alsa.fd,
+                .events = POLLOUT | POLLERR,
+                .revents = 0,
+            };
+            int ret = poll(&pfd, 1, 40); /* 40ms timeout ensures responsive shutdown */
+            if (ret < 0) {
+                if (errno == EINTR) continue;
+                break;
+            }
+            if (ret == 0) {
+                /* Poll timeout: recheck running flag */
+                continue;
+            }
+            if (pfd.revents & POLLERR) {
+                /* Recover from XRUN / buffer underrun */
+                (void)khr_alsa_pcm_prepare(&engine->alsa);
+                continue;
+            }
+        } else if (engine->timer_fd >= 0) {
             uint64_t expirations = 0;
             ssize_t s = read(engine->timer_fd, &expirations, sizeof(expirations));
             if (s <= 0) {
@@ -45,6 +67,10 @@ static void* audio_worker_thread(void* arg) {
             }
         }
 
+        if (!atomic_load_explicit(&engine->running, memory_order_acquire)) {
+            break;
+        }
+
         (void)khr_audio_engine_tick(engine);
     }
 
@@ -63,9 +89,16 @@ bool khr_audio_engine_init(khr_audio_engine_t* engine, const khr_audio_config_t*
     engine->chunk_bytes   = (size_t)engine->period_frames * 2U * sizeof(int16_t);
     engine->timer_fd      = -1;
 
-    /* 1. Open ALSA hardware device or custom/fallback sink */
+    /* 1. Open ALSA hardware device or custom/fallback/null sink */
     bool opened = false;
-    if (cfg && cfg->custom_sink_fd >= 0) {
+    if (cfg && cfg->disabled) {
+        /* User explicitly disabled audio: bind null sink */
+        int null_fd = open("/dev/null", O_WRONLY | O_CLOEXEC);
+        if (null_fd >= 0) {
+            opened = khr_alsa_pcm_open_mock(&engine->alsa, null_fd,
+                                            engine->sample_rate, 2U, engine->period_frames);
+        }
+    } else if (cfg && cfg->custom_sink_fd >= 0) {
         opened = khr_alsa_pcm_open_mock(&engine->alsa, cfg->custom_sink_fd,
                                         engine->sample_rate, 2U, engine->period_frames);
     } else {

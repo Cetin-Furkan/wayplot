@@ -857,12 +857,23 @@ bool khr_dmabuf_slot_render_scene(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
                                          VK_PIPELINE_BIND_POINT_GRAPHICS,
                                          gpu_scene->inst_pipe->layout);
             }
-            khr_mesh_instanced_draw_indirect(gpu_scene->inst_pipe, slot->cmd,
-                                             gpu_scene->inst_push,
-                                             gpu_scene->indirect_cmd_buffer,
-                                             gpu_scene->indirect_cmd_offset,
-                                             gpu_scene->draw_count,
-                                             sizeof(khr_draw_indirect_cmd_t));
+            if (gpu_scene->mesh_pass_count > 0) {
+                for (uint32_t m = 0; m < gpu_scene->mesh_pass_count; m++) {
+                    khr_mesh_instanced_draw_indirect(gpu_scene->inst_pipe, slot->cmd,
+                                                     &gpu_scene->mesh_pushes[m],
+                                                     gpu_scene->indirect_cmd_buffer,
+                                                     gpu_scene->indirect_cmd_offsets[m],
+                                                     gpu_scene->draw_counts[m],
+                                                     sizeof(khr_draw_indirect_cmd_t));
+                }
+            } else {
+                khr_mesh_instanced_draw_indirect(gpu_scene->inst_pipe, slot->cmd,
+                                                 gpu_scene->inst_push,
+                                                 gpu_scene->indirect_cmd_buffer,
+                                                 gpu_scene->indirect_cmd_offset,
+                                                 gpu_scene->draw_count,
+                                                 sizeof(khr_draw_indirect_cmd_t));
+            }
         } else if (draw_mesh) {
             khr_mesh_draw(mesh, slot->cmd, mesh_push);
         } else {
