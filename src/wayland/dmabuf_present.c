@@ -315,6 +315,12 @@ uint64_t khr_dmabuf_present_sync(khr_gfx_device_t* dev,
         if (khr_dmp_signal(dev->drm_fd, p->acquire_handle, done)) {
             p->last_signaled = done;
         }
+        for (uint32_t i = 0; i < KHR_DMABUF_PRESENT_SLOTS; i++) {
+            uint64_t ns = khr_dmabuf_slot_query_gpu_time_ns(dev, &p->slots[i].gfx);
+            if (ns > 0) {
+                p->last_gpu_ns = ns;
+            }
+        }
     }
     return p->last_signaled;
 }

@@ -87,7 +87,13 @@ typedef struct {
     VkImageLayout      msaa_color_layout;
     khr_depth_target_t depth_target;
     VkImageLayout      depth_layout;
+    VkQueryPool        query_pool;
+    bool               has_query_pool;
+    uint64_t           gpu_time_ns;
 } khr_dmabuf_slot_t;
+
+[[nodiscard]]
+uint64_t khr_dmabuf_slot_query_gpu_time_ns(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot);
 
 /* Image + DMA-BUF export + view + command pool/buffer + card pipeline. */
 [[nodiscard]]

@@ -288,3 +288,99 @@ bool test_gpu_compute_math_and_frustum_culling(void) {
     khr_gfx_device_destroy(&dev);
     return true;
 }
+
+[[nodiscard]]
+bool test_gpu_silicon_timestamp_queries(void) {
+    khr_gfx_device_t dev = {};
+    TEST_ASSERT(khr_gfx_device_init(&dev, (dev_t)0), "gfx device init");
+    TEST_ASSERT_GT(dev.timestamp_period, 0.0f, "timestampPeriod must be > 0.0 ns");
+    TEST_ASSERT(dev.has_timestamps, "GPU must support graphics & compute timestamps");
+
+    VkQueryPoolCreateInfo qpci = {
+        .sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
+        .queryType = VK_QUERY_TYPE_TIMESTAMP,
+        .queryCount = 2,
+    };
+    VkQueryPool qpool = VK_NULL_HANDLE;
+    TEST_ASSERT_EQ(vkCreateQueryPool(dev.device, &qpci, nullptr, &qpool), VK_SUCCESS, "create query pool");
+    TEST_ASSERT_NOT_NULL(qpool, "query pool not null");
+
+    VkCommandBufferAllocateInfo ai = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+        .commandPool = dev.pool,
+        .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+        .commandBufferCount = 1,
+    };
+    VkCommandBuffer cmd = VK_NULL_HANDLE;
+    TEST_ASSERT_EQ(vkAllocateCommandBuffers(dev.device, &ai, &cmd), VK_SUCCESS, "alloc cmd");
+
+    VkCommandBufferBeginInfo bi = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+    };
+    TEST_ASSERT_EQ(vkBeginCommandBuffer(cmd, &bi), VK_SUCCESS, "begin cmd");
+
+    vkCmdResetQueryPool(cmd, qpool, 0, 2);
+    vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, qpool, 0);
+
+    /* Insert an execution barrier to generate non-zero GPU execution work */
+    VkMemoryBarrier2 bar = {
+        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER_2,
+        .srcStageMask = VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
+        .srcAccessMask = 0,
+        .dstStageMask = VK_PIPELINE_STAGE_2_BOTTOM_OF_PIPE_BIT,
+        .dstAccessMask = 0,
+    };
+    VkDependencyInfo dep = {
+        .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .memoryBarrierCount = 1,
+        .pMemoryBarriers = &bar,
+    };
+    vkCmdPipelineBarrier2(cmd, &dep);
+
+    vkCmdWriteTimestamp(cmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, qpool, 1);
+    TEST_ASSERT_EQ(vkEndCommandBuffer(cmd), VK_SUCCESS, "end cmd");
+
+    uint64_t sig_val = dev.acquire_point + 1U;
+    dev.acquire_point = sig_val;
+
+    VkCommandBufferSubmitInfo csi = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+        .commandBuffer = cmd,
+    };
+    VkSemaphoreSubmitInfo ssi = {
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+        .semaphore = dev.acquire_sem,
+        .value = sig_val,
+        .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+    };
+    VkSubmitInfo2 si = {
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+        .commandBufferInfoCount = 1,
+        .pCommandBufferInfos = &csi,
+        .signalSemaphoreInfoCount = 1,
+        .pSignalSemaphoreInfos = &ssi,
+    };
+    TEST_ASSERT_EQ(vkQueueSubmit2(dev.gfx_queue, 1, &si, VK_NULL_HANDLE), VK_SUCCESS, "queue submit2");
+
+    VkSemaphoreWaitInfo wi = {
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
+        .semaphoreCount = 1,
+        .pSemaphores = &dev.acquire_sem,
+        .pValues = &sig_val,
+    };
+    TEST_ASSERT_EQ(vkWaitSemaphores(dev.device, &wi, 5'000'000'000ULL), VK_SUCCESS, "wait semaphore");
+
+    uint64_t ts[2] = {};
+    TEST_ASSERT_EQ(vkGetQueryPoolResults(dev.device, qpool, 0, 2, sizeof(ts), ts, sizeof(uint64_t), VK_QUERY_RESULT_64_BIT),
+                   VK_SUCCESS, "get query pool results");
+    TEST_ASSERT_GE(ts[1], ts[0], "bottom timestamp must be >= top timestamp");
+
+    uint64_t delta_ns = (uint64_t)((double)(ts[1] - ts[0]) * (double)dev.timestamp_period);
+    TEST_ASSERT_GE(delta_ns, 0ULL, "delta_ns >= 0");
+
+    vkFreeCommandBuffers(dev.device, dev.pool, 1, &cmd);
+    vkDestroyQueryPool(dev.device, qpool, nullptr);
+    khr_gfx_device_destroy(&dev);
+    return true;
+}

@@ -44,34 +44,38 @@ Build details, coding standards, and architectural contracts: [DEVELOPER.md](DEV
 
 ---
 
-## Release: Version 0.3.1
+## Release: Version 0.3.2
 
-> **Caption**: *Multi-mesh 3D PBR, DAC-synced modal audio, and real-time CPU/GPU telemetry.*
+> **Caption**: *Silicon GPU timestamping, unlocked throughput, and hardware power scaling.*
 
-Version 0.3.1 elevates Khoros from single-mesh visualization into a true multi-mesh 3D simulation engine with hardware-synchronized acoustics and sub-millisecond telemetry monitoring.
+Version 0.3.2 unlocks high-performance GPU execution and direct silicon-level hardware telemetry, providing full control over GPU power utilization and execution pacing.
 
-### Key Capabilities in 0.3.1
+### Key Capabilities in 0.3.2
 
-1. **True Multi-Mesh 3D Scene Graph**:
-   * Direct 1:1 GPU culling and multi-draw indirect passes for heterogeneous shapes in a single frame.
-   * Procedural parametric mesh generation: **Suzanne (Monkey)**, **UV Spheres**, **Cylinders**, **Chamfer Boxes**, and **Tori**.
-   * Decks containing mixed bodies (`shape=sphere`, `shape=aabb`, `shape=capsule`) render their true geometries simultaneously with Cook-Torrance GGX PBR materials.
+1. **Silicon Hardware GPU Timestamping (`VK_QUERY_TYPE_TIMESTAMP`)**:
+   * Hardware query pools allocate timestamps directly at `TOP_OF_PIPE_BIT` and `BOTTOM_OF_PIPE_BIT` inside the GPU command stream.
+   * Calibrated against `props.limits.timestampPeriod` to measure exact silicon execution time down to nanoseconds.
+   * Eliminates CPU driver estimation: reports true silicon GPU execution time and true hardware utilization load percentage.
 
-2. **DAC-Synchronized Audio Engine**:
-   * Replaced unsynchronized software `timerfd` timers with hardware DAC pacing via `poll(POLLOUT)` directly on the ALSA PCM file descriptor.
-   * Completely eliminates crystal drift, buffer under-runs (`EPIPE`), and parasitic crackle clicks.
-   * Added CLI controls: `--no-audio` for silent/null-sink operation, `--audio-card=<N>`, and `--audio-device=<N>` to prevent unexpected HDMI audio hijacking.
+2. **Unlocked GPU Throughput (`--unlocked`)**:
+   * Bypasses the 60 Hz display refresh throttle to let the Vulkan 1.4 BDA pipeline run at full GPU speed.
+   * Delivers **300+ FPS** with sub-3.3 ms frame times on Intel Iris Xe graphics while keeping CPU process overhead under 6%.
 
-3. **High-Precision CPU & GPU Telemetry**:
-   * Continuous real-time measurement of overall process CPU utilization via `CLOCK_PROCESS_CPUTIME_ID`.
-   * Frame CPU rendering latency (scene encoding + DMA-BUF presentation commit) and GPU synchronization wait time.
-   * Real-time console reporting every 1000 ms:
-     ```text
-     [TELEMETRY]  59.2 FPS (16.90 ms) | CPU Process:  3.2% | Render CPU: 0.29 ms | GPU Wait: 0.00 ms | Bodies: 64 (2 meshes)
-     ```
+3. **Hardware Power Saturation Stress Testing (`--stress-gpu`)**:
+   * Spawns 1024 rigid bodies across 5 distinct procedural meshes (Suzanne, Spheres, Cylinders, Boxes, Tori).
+   * Fully exercises compute culling, Hi-Z depth pyramids, and Cook-Torrance GGX PBR shading, scaling GPU load to **85%+** at 140+ FPS.
 
-4. **Dynamic Stress Testing**:
-   * `--stress-n=<N>` and `--stress-gpu` CLI flags to spawn hundreds or thousands of colliding bodies across all 5 meshes, evaluating LBVH broadphase scaling and GPU instance throughput.
+4. **Real-Time Telemetry Stream**:
+   ```text
+   # Standard 60 Hz Paced Mode:
+   [TELEMETRY]  59.0 FPS (16.94 ms) | CPU Proc:  3.3% (0.30 ms) | GPU HW:  1.92 ms (11.4% load) | Bodies: 64 (2 meshes)
+
+   # Unlocked Max-Throughput Mode (--unlocked):
+   [TELEMETRY] 309.5 FPS ( 3.23 ms) | CPU Proc:  5.8% (0.10 ms) | GPU HW:  1.91 ms (59.2% load) | Bodies: 64 (2 meshes) [UNLOCKED]
+
+   # Full Hardware Power Saturation (--stress-gpu):
+   [TELEMETRY] 147.2 FPS ( 6.79 ms) | CPU Proc:  8.0% (0.20 ms) | GPU HW:  5.77 ms (84.9% load) | Bodies: 1024 (5 meshes) [UNLOCKED]
+   ```
 
 ---
 

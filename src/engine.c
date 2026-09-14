@@ -8,8 +8,8 @@
 
 [[nodiscard]]
 const char* engine_get_banner(void) {
-    static const char banner[] = "=== Khoros Engine 0.3.1 (Linux 7.2 / C23 / io_uring / Vulkan 1.4) ===\n"
-                                 "  Caption: multi-mesh 3D PBR, DAC-synced modal audio, real-time GPU telemetry.";
+    static const char banner[] = "=== Khoros Engine 0.3.2 (Linux 7.2 / C23 / io_uring / Vulkan 1.4) ===\n"
+                                 "  Caption: silicon GPU timestamping, unlocked throughput, and hardware power scaling.";
     return banner;
 }
 
@@ -91,6 +91,8 @@ bool engine_init_opts(const engine_options_t* opts) {
             .audio_card = opts ? opts->audio_card : 0,
             .audio_device = opts ? opts->audio_device : 0,
             .stress_n = opts ? opts->stress_n : 0,
+            .unlocked = opts ? opts->unlocked : false,
+            .stress_gpu = opts ? opts->stress_gpu : false,
         };
         present_ok = khr_window_run_opts(&topo, &dev, &arena, &wopts);
     } else if (ipc_ok) {

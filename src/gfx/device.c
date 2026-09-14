@@ -410,6 +410,8 @@ bool khr_gfx_device_init(khr_gfx_device_t* d, dev_t compositor_dev) {
     };
     vkGetPhysicalDeviceProperties2(d->phy, &props2);
     d->max_push_descriptors = p14.maxPushDescriptors;
+    d->timestamp_period = props2.properties.limits.timestampPeriod;
+    d->has_timestamps = props2.properties.limits.timestampComputeAndGraphics && d->timestamp_period > 0.0f;
 
     /* Companion 1.4-era features, chained only when the winning device
      * reports them (unknown sTypes would break creation on older drivers).

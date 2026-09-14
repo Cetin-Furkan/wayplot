@@ -530,6 +530,16 @@ bool khr_dmabuf_slot_init_shared_with_modifiers(khr_gfx_device_t* d, khr_dmabuf_
     }
     slot->pfn_push2 = (PFN_vkCmdPushConstants2KHR)
         vkGetDeviceProcAddr(d->device, "vkCmdPushConstants2KHR");
+    if (d->has_timestamps) {
+        VkQueryPoolCreateInfo qpci = {
+            .sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
+            .queryType = VK_QUERY_TYPE_TIMESTAMP,
+            .queryCount = 2,
+        };
+        if (vkCreateQueryPool(d->device, &qpci, nullptr, &slot->query_pool) == VK_SUCCESS) {
+            slot->has_query_pool = true;
+        }
+    }
     return true;
 }
 
@@ -566,6 +576,11 @@ void khr_dmabuf_slot_destroy(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot) {
         khr_slot_local_image_destroy(d, &slot->msaa_color, &slot->msaa_color_mem,
                                      &slot->msaa_color_view);
         khr_depth_target_destroy(d, &slot->depth_target);
+        if (slot->has_query_pool && slot->query_pool != VK_NULL_HANDLE) {
+            vkDestroyQueryPool(d->device, slot->query_pool, nullptr);
+            slot->query_pool = VK_NULL_HANDLE;
+            slot->has_query_pool = false;
+        }
     }
     khr_dmabuf_image_destroy(d, &slot->img);
     slot->cmd = VK_NULL_HANDLE;
@@ -617,6 +632,11 @@ bool khr_dmabuf_slot_render_scene(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
     };
     if (vkBeginCommandBuffer(slot->cmd, &begin) != VK_SUCCESS) {
         return false;
+    }
+
+    if (slot->has_query_pool) {
+        vkCmdResetQueryPool(slot->cmd, slot->query_pool, 0, 2);
+        vkCmdWriteTimestamp(slot->cmd, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, slot->query_pool, 0);
     }
 
     VkMemoryBarrier2 host_bar = {
@@ -976,6 +996,10 @@ bool khr_dmabuf_slot_render_scene(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
     };
     vkCmdPipelineBarrier2(slot->cmd, &dep2);
 
+    if (slot->has_query_pool) {
+        vkCmdWriteTimestamp(slot->cmd, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, slot->query_pool, 1);
+    }
+
     if (vkEndCommandBuffer(slot->cmd) != VK_SUCCESS) {
         return false;
     }
@@ -1038,4 +1062,21 @@ bool khr_dmabuf_slot_render(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot,
     };
     return khr_dmabuf_slot_render_cards(d, slot, inst_addr, 1, signal_sem,
                                         signal_value);
+}
+
+[[nodiscard]]
+uint64_t khr_dmabuf_slot_query_gpu_time_ns(khr_gfx_device_t* d, khr_dmabuf_slot_t* slot) {
+    if (d == nullptr || d->device == VK_NULL_HANDLE || slot == nullptr || !slot->has_query_pool) {
+        return 0;
+    }
+    uint64_t ts[2] = {};
+    VkResult res = vkGetQueryPoolResults(d->device, slot->query_pool, 0, 2,
+                                         sizeof(ts), ts, sizeof(uint64_t),
+                                         VK_QUERY_RESULT_64_BIT);
+    if (res == VK_SUCCESS && ts[1] >= ts[0]) {
+        double diff = (double)(ts[1] - ts[0]);
+        slot->gpu_time_ns = (uint64_t)(diff * (double)d->timestamp_period);
+        return slot->gpu_time_ns;
+    }
+    return 0;
 }

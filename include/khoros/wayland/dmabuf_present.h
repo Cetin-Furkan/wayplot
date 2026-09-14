@@ -87,6 +87,7 @@ typedef struct {
     uint32_t failed_count;
     uint64_t modifiers[64];
     uint32_t modifier_count;
+    uint64_t last_gpu_ns;
 } khr_dmabuf_present_t;
 
 /* Bind dmabuf + syncobj manager, create the syncobj endpoint, the DRM

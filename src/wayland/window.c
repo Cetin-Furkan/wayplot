@@ -255,6 +255,9 @@ bool khr_window_run_opts(khr_topology_t* topo, khr_gfx_device_t* dev,
     uint32_t audio_card = opts ? opts->audio_card : 0;
     uint32_t audio_device = opts ? opts->audio_device : 0;
     uint32_t stress_n = opts ? opts->stress_n : 0;
+    bool unlocked = opts ? opts->unlocked : false;
+    bool stress_gpu = opts ? opts->stress_gpu : false;
+    if (stress_gpu && stress_n == 0) stress_n = 1024;
     khr_window_stop = 0;
     struct sigaction sa = {};
     sa.sa_handler = khr_window_on_sig;
@@ -965,6 +968,7 @@ bool khr_window_run_opts(khr_topology_t* topo, khr_gfx_device_t* dev,
     uint32_t telem_frames = 0;
     uint64_t telem_cpu_render_ns = 0;
     uint64_t telem_gpu_wait_ns = 0;
+    uint64_t telem_gpu_hw_total_ns = 0;
     struct timespec telem_proc_cpu_prev = {};
     clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &telem_proc_cpu_prev);
 
@@ -983,6 +987,9 @@ bool khr_window_run_opts(khr_topology_t* topo, khr_gfx_device_t* dev,
                 min_interval_ns = 16'666'667ULL;
             }
         }
+        if (unlocked) {
+            min_interval_ns = 0;
+        }
 
         bool resizing =
             (shell.states & (1U << KHR_XDG_STATE_RESIZING)) != 0;
@@ -990,7 +997,7 @@ bool khr_window_run_opts(khr_topology_t* topo, khr_gfx_device_t* dev,
         bool sim_moving = topo->sim.active && khr_topology_sim_has_motion(topo);
         bool slots_full = have_dp && (khr_dmabuf_present_next_free(&dp) == UINT32_MAX);
 
-        bool time_ok = (last_commit_ns == 0) || (now_ns >= last_commit_ns + min_interval_ns) || (now_ns < last_commit_ns);
+        bool time_ok = unlocked || (last_commit_ns == 0) || (now_ns >= last_commit_ns + min_interval_ns) || (now_ns < last_commit_ns);
         uint64_t next_deadline_ns = last_commit_ns + min_interval_ns;
         uint32_t frame_remain_ms = (next_deadline_ns > now_ns)
             ? (uint32_t)((next_deadline_ns - now_ns + 999'999ULL) / 1'000'000ULL)
@@ -999,7 +1006,10 @@ bool khr_window_run_opts(khr_topology_t* topo, khr_gfx_device_t* dev,
         if (interval_ms == 0) interval_ms = 8U;
 
         uint32_t wait_ms = 500U;
-        if (dirty) {
+        if (unlocked) {
+            wait_ms = slots_full ? 1U : 0U;
+            dirty = true;
+        } else if (dirty) {
             if (!time_ok) {
                 wait_ms = (frame_remain_ms > 0) ? frame_remain_ms : 1U;
             } else if (slots_full) {
@@ -1547,6 +1557,7 @@ bool khr_window_run_opts(khr_topology_t* topo, khr_gfx_device_t* dev,
 
                 telem_cpu_render_ns += (sync_t0_ns - render_t0_ns);
                 telem_gpu_wait_ns += (sync_t1_ns - sync_t0_ns);
+                telem_gpu_hw_total_ns += dp.last_gpu_ns;
                 telem_frames++;
 
                 if (have_pt) {
@@ -1574,15 +1585,24 @@ bool khr_window_run_opts(khr_topology_t* topo, khr_gfx_device_t* dev,
                 telem_proc_cpu_prev = proc_cpu_now;
                 float cpu_total_pct = (float)proc_cpu_ns * 100.0f / (float)elapsed_ns;
 
-                printf("[TELEMETRY] %5.1f FPS (%4.2f ms) | CPU Process: %4.1f%% | Render CPU: %4.2f ms | GPU Wait: %4.2f ms | Bodies: %u (%u meshes)\n",
-                       fps, frame_ms, cpu_total_pct, cpu_frame_ms, gpu_frame_ms,
-                       scene.instance_count, active_passes);
+                float gpu_hw_avg_ms = (telem_frames > 0 && telem_gpu_hw_total_ns > 0)
+                    ? ((float)telem_gpu_hw_total_ns / ((float)telem_frames * 1e6f))
+                    : gpu_frame_ms;
+                float gpu_load_pct = (elapsed_ns > 0 && telem_gpu_hw_total_ns > 0)
+                    ? ((float)telem_gpu_hw_total_ns * 100.0f / (float)elapsed_ns)
+                    : (gpu_frame_ms * fps * 0.1f);
+
+                printf("[TELEMETRY] %5.1f FPS (%5.2f ms) | CPU Proc: %4.1f%% (%4.2f ms) | GPU HW: %5.2f ms (%4.1f%% load) | Bodies: %u (%u meshes)%s\n",
+                       fps, frame_ms, cpu_total_pct, cpu_frame_ms, gpu_hw_avg_ms, gpu_load_pct,
+                       scene.instance_count, active_passes,
+                       unlocked ? " [UNLOCKED]" : "");
                 fflush(stdout);
 
                 telem_last_report_ns = now_ns;
                 telem_frames = 0;
                 telem_cpu_render_ns = 0;
                 telem_gpu_wait_ns = 0;
+                telem_gpu_hw_total_ns = 0;
             }
 
             /* Harvest physical collision audio events from Core 3 simulation */

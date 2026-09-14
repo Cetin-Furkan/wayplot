@@ -28,6 +28,7 @@ static void print_usage(const char* prog) {
     printf("  --audio-device=<N>      Select ALSA playback device index (default: 0)\n");
     printf("  --stress-n=<N>          Spawn N rigid bodies in 3D scene to stress GPU & physics\n");
     printf("  --stress-gpu            Saturate GPU with 1024 rigid bodies\n");
+    printf("  --unlocked              Unlock presentation rate (disable 60 Hz cap to maximize GPU throughput)\n");
     printf("  -h, --help              Display this help message\n");
 }
 
@@ -116,6 +117,8 @@ int main(int argc, char** argv) {
     uint32_t audio_card = 0;
     uint32_t audio_device = 0;
     uint32_t stress_n = 0;
+    bool unlocked = false;
+    bool stress_gpu = false;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--write-box") == 0 && i + 1 < argc) {
@@ -171,7 +174,11 @@ int main(int argc, char** argv) {
         } else if (strncmp(argv[i], "--stress-n=", 11) == 0) {
             stress_n = (uint32_t)strtoul(argv[i] + 11, nullptr, 10);
         } else if (strcmp(argv[i], "--stress-gpu") == 0) {
+            stress_gpu = true;
             stress_n = 1024;
+            unlocked = true;
+        } else if (strcmp(argv[i], "--unlocked") == 0) {
+            unlocked = true;
         } else if (strcmp(argv[i], "--headless") == 0) {
             headless = true;
         } else if (strncmp(argv[i], "--deck=", 7) == 0) {
@@ -225,6 +232,8 @@ int main(int argc, char** argv) {
         .audio_card = audio_card,
         .audio_device = audio_device,
         .stress_n = stress_n,
+        .unlocked = unlocked,
+        .stress_gpu = stress_gpu,
     };
     auto ok = engine_init_opts(&opts);
     if (!ok) {

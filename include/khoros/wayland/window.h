@@ -25,6 +25,8 @@ typedef struct {
     uint32_t    audio_card;
     uint32_t    audio_device;
     uint32_t    stress_n;
+    bool        unlocked;
+    bool        stress_gpu;
 } khr_window_options_t;
 
 /*

@@ -22,7 +22,7 @@
 
 constexpr uint32_t ENGINE_VERSION_MAJOR = 0;
 constexpr uint32_t ENGINE_VERSION_MINOR = 3;
-constexpr uint32_t ENGINE_VERSION_PATCH = 1;
+constexpr uint32_t ENGINE_VERSION_PATCH = 2;
 
 constexpr size_t   ENGINE_CACHE_LINE_SIZE   = 64;
 constexpr size_t   ENGINE_PAGE_SIZE         = 4'096;
@@ -34,6 +34,8 @@ typedef struct {
     uint32_t    audio_card;
     uint32_t    audio_device;
     uint32_t    stress_n;
+    bool        unlocked;
+    bool        stress_gpu;
 } engine_options_t;
 
 [[nodiscard]]

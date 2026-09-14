@@ -151,6 +151,7 @@ extern bool test_gpu_math_struct_contracts(void);
 extern bool test_gpu_cull_pipeline_lifecycle(void);
 extern bool test_gpu_mesh_instanced_pipeline_lifecycle(void);
 extern bool test_gpu_compute_math_and_frustum_culling(void);
+extern bool test_gpu_silicon_timestamp_queries(void);
 
 /* Suite 9: Decoupled 3D Camera & PBR Material Pipeline (Pillars B & C) */
 extern bool test_camera_lifecycle_and_defaults(void);
@@ -391,6 +392,7 @@ int main(void) {
     RUN_TEST(&stats, test_gpu_cull_pipeline_lifecycle);
     RUN_TEST(&stats, test_gpu_mesh_instanced_pipeline_lifecycle);
     RUN_TEST(&stats, test_gpu_compute_math_and_frustum_culling);
+    RUN_TEST(&stats, test_gpu_silicon_timestamp_queries);
 
     printf("\n" KHR_CLR_BOLD "Suite 9: Decoupled 3D Camera & PBR Material Pipeline (Pillars B & C)\n" KHR_CLR_RESET);
     RUN_TEST(&stats, test_camera_lifecycle_and_defaults);

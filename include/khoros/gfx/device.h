@@ -97,6 +97,8 @@ typedef struct khr_gfx_device {
     int              drm_fd;
     dev_t            render_dev;
     dev_t            primary_dev;
+    float            timestamp_period;
+    bool             has_timestamps;
 
     /* Vulkan 1.4 & BDA Function Pointers */
     union {
