@@ -8,6 +8,7 @@
 void khr_seat_init(khr_seat_t* seat) {
     if (seat != nullptr) {
         *seat = (khr_seat_t){};
+        seat->spawn_mesh_pressed = -1;
     }
 }
 
@@ -87,6 +88,11 @@ uint32_t khr_seat_consume(khr_wl_client_t* client, khr_seat_t* seat,
     seat->esc_pressed = false;
     seat->f_pressed = false;
     seat->r_pressed = false;
+    seat->k_pressed = false;
+    seat->g_pressed = false;
+    seat->t_pressed = false;
+    seat->e_pressed = false;
+    seat->spawn_mesh_pressed = -1;
     uint32_t count = 0;
     size_t offset = 0;
     int32_t axis_fixed = 0;
@@ -297,6 +303,24 @@ uint32_t khr_seat_consume(khr_wl_client_t* client, khr_seat_t* seat,
                             seat->f_pressed = true;
                         } else if (key == KHR_KEY_R) {
                             seat->r_pressed = true;
+                        } else if (key == KHR_KEY_K) {
+                            seat->k_pressed = true;
+                        } else if (key == KHR_KEY_G) {
+                            seat->g_pressed = true;
+                        } else if (key == KHR_KEY_T) {
+                            seat->t_pressed = true;
+                        } else if (key == KHR_KEY_E) {
+                            seat->e_pressed = true;
+                        } else if (key == KHR_KEY_0) {
+                            seat->spawn_mesh_pressed = 0;
+                        } else if (key == KHR_KEY_1) {
+                            seat->spawn_mesh_pressed = 1;
+                        } else if (key == KHR_KEY_2) {
+                            seat->spawn_mesh_pressed = 2;
+                        } else if (key == KHR_KEY_3) {
+                            seat->spawn_mesh_pressed = 3;
+                        } else if (key == KHR_KEY_4) {
+                            seat->spawn_mesh_pressed = 4;
                         }
                     }
                     if (seat->input_ring != nullptr) {

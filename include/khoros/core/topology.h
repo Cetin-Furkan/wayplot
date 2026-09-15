@@ -340,4 +340,30 @@ bool khr_topology_wait_tick(khr_topology_t* topo, uint64_t* out_tick, uint32_t t
 [[nodiscard]]
 bool khr_topology_sim_pop_collision_event(khr_topology_t* topo, khr_collision_event_t* out_evt);
 
+/*
+ * Kick all dynamic rigid bodies upward with specified velocity and random torque.
+ */
+void khr_topology_sim_kick_all(khr_topology_t* topo, float upward_speed);
+
+/*
+ * Toggle gravity between Earth standard (-9.81 m/s^2) and Zero-G (0.0 m/s^2).
+ * Returns true if gravity is currently zero-g, false if normal gravity.
+ */
+[[nodiscard]]
+bool khr_topology_sim_toggle_gravity(khr_topology_t* topo);
+
+/*
+ * Get current vertical gravity acceleration in m/s^2.
+ */
+[[nodiscard]]
+float khr_topology_sim_get_gravity(const khr_topology_t* topo);
+
+/*
+ * Add a dynamic rigid body into the simulation at runtime.
+ */
+[[nodiscard]]
+uint32_t khr_topology_sim_spawn_body(khr_topology_t* topo, uint32_t mesh_id,
+                                    const float pos[3], const float vel[3],
+                                    float radius, float mass, float restitution, float friction);
+
 #endif /* KHOROS_CORE_TOPOLOGY_H */

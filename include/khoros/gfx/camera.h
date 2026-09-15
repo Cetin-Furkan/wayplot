@@ -78,4 +78,20 @@ int khr_camera_pick_axis(const khr_camera_t* cam, float nx, float ny);
 /* Frame a list of packed vertices in 3D space */
 void khr_camera_frame_verts(khr_camera_t* cam, const float* xyz, uint32_t nv, bool reset_orient);
 
+/* Cast a 3D world-space ray through screen pixel (screen_x, screen_y) */
+void khr_camera_screen_to_ray(const khr_camera_t* cam,
+                              float screen_x, float screen_y,
+                              float viewport_w, float viewport_h,
+                              float out_origin[3], float out_dir[3]);
+
+/* Test ray against bounding sphere; returns true if hit, sets *out_t */
+[[nodiscard]]
+bool khr_ray_intersect_sphere(const float ro[3], const float rd[3],
+                              const float center[3], float radius, float* out_t);
+
+/* Test ray against Axis-Aligned Bounding Box (AABB); returns true if hit, sets *out_t */
+[[nodiscard]]
+bool khr_ray_intersect_aabb(const float ro[3], const float rd[3],
+                            const float min_p[3], const float max_p[3], float* out_t);
+
 #endif /* KHOROS_GFX_CAMERA_H */

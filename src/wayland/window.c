@@ -1379,6 +1379,146 @@ bool khr_window_run_opts(khr_topology_t* topo, khr_gfx_device_t* dev,
             dirty = true;
             seat.r_pressed = false;
         }
+        /* Sandbox Interaction: K key (Upward impulse / chaotic kick to all dynamic bodies) */
+        if (seat.k_pressed) {
+            khr_topology_sim_kick_all(topo, 7.5f);
+            dirty = true;
+            seat.k_pressed = false;
+            if (audio_live) {
+                (void)khr_audio_engine_play(&audio_engine, &click_clip, camera.eye[0], camera.eye[1], camera.eye[2], 0.9f, false);
+            }
+        }
+        /* Sandbox Interaction: G key (Zero-G toggle: -9.81 m/s^2 <-> 0.0 m/s^2) */
+        if (seat.g_pressed) {
+            bool is_zero_g = khr_topology_sim_toggle_gravity(topo);
+            dirty = true;
+            seat.g_pressed = false;
+            if (audio_live) {
+                (void)khr_audio_engine_play(&audio_engine, &click_clip, camera.eye[0], camera.eye[1], camera.eye[2], is_zero_g ? 0.4f : 0.85f, false);
+            }
+        }
+        /* Sandbox Interaction: T key (Pacing Governor cycle: 0 -> 60 -> 120 -> 144 -> 240 -> 0) */
+        if (seat.t_pressed) {
+            if (target_fps == 0) {
+                target_fps = 60;
+            } else if (target_fps == 60) {
+                target_fps = 120;
+            } else if (target_fps == 120) {
+                target_fps = 144;
+            } else if (target_fps == 144) {
+                target_fps = 240;
+            } else {
+                target_fps = 0;
+            }
+            if (target_fps > 0) {
+                min_interval_ns = 1'000'000'000ULL / (uint64_t)target_fps;
+            } else {
+                min_interval_ns = 0;
+            }
+            seat.t_pressed = false;
+            if (audio_live) {
+                (void)khr_audio_engine_play(&audio_engine, &click_clip, camera.eye[0], camera.eye[1], camera.eye[2], 0.5f, false);
+            }
+        }
+        /* Sandbox Interaction: E key (3D Ray-Picking impulse toss along camera line-of-sight) */
+        if (seat.e_pressed) {
+            seat.e_pressed = false;
+            float ro[3] = {}, rd[3] = {};
+            khr_camera_screen_to_ray(&camera, (float)seat.x, (float)seat.y, (float)buf_w, (float)buf_h, ro, rd);
+            int32_t best_b = -1;
+            float best_t = 1e30f;
+            for (uint32_t b = 0; b < topo->sim.physics.body_count; b++) {
+                const khr_rigid_body_t* body = &topo->sim.physics.bodies[b];
+                if (!body->active || body->is_static) continue;
+                float hit_t = 0.0f;
+                bool hit_body = false;
+                if (body->shape.type == KHR_SHAPE_SPHERE || body->shape.type == KHR_SHAPE_CAPSULE) {
+                    float r = (body->shape.sphere.radius > 0.0f) ? body->shape.sphere.radius : 0.6f;
+                    hit_body = khr_ray_intersect_sphere(ro, rd, body->position, r, &hit_t);
+                } else if (body->shape.type == KHR_SHAPE_AABB) {
+                    float min_p[3] = { body->position[0] - body->shape.aabb.half_extents[0],
+                                       body->position[1] - body->shape.aabb.half_extents[1],
+                                       body->position[2] - body->shape.aabb.half_extents[2] };
+                    float max_p[3] = { body->position[0] + body->shape.aabb.half_extents[0],
+                                       body->position[1] + body->shape.aabb.half_extents[1],
+                                       body->position[2] + body->shape.aabb.half_extents[2] };
+                    hit_body = khr_ray_intersect_aabb(ro, rd, min_p, max_p, &hit_t);
+                }
+                if (hit_body && hit_t > 0.0f && hit_t < best_t) {
+                    best_t = hit_t;
+                    best_b = (int32_t)b;
+                }
+            }
+            if (best_b >= 0) {
+                float toss[3] = {
+                    rd[0] * 18.0f,
+                    fmaxf(rd[1] * 18.0f + 6.0f, 4.0f),
+                    rd[2] * 18.0f
+                };
+                float r_pt[3] = { 0.12f, 0.12f, 0.12f };
+                khr_topology_sim_apply_impulse(topo, (uint32_t)best_b, toss, r_pt);
+                khr_topology_sim_set_motion(topo, true);
+                dirty = true;
+                if (audio_live) {
+                    (void)khr_audio_engine_play(&audio_engine, &click_clip, ro[0], ro[1], ro[2], 1.0f, false);
+                }
+            }
+        }
+        /* Sandbox Interaction: Keys 0..4 (Spawn new dynamic rigid body falling from sky) */
+        if (seat.spawn_mesh_pressed >= 0 && scene.instance_count < scene.max_instances) {
+            uint32_t mesh_id = (uint32_t)seat.spawn_mesh_pressed;
+            seat.spawn_mesh_pressed = -1;
+            float hash = (float)(scene.instance_count * 17 + 5);
+            float spawn_pos[3] = {
+                sinf(hash) * 1.5f,
+                3.8f + (float)(scene.instance_count % 3) * 0.5f,
+                cosf(hash) * 1.5f
+            };
+            float spawn_vel[3] = {
+                sinf(hash * 2.3f) * 1.2f,
+                -1.0f,
+                cosf(hash * 2.3f) * 1.2f
+            };
+            uint32_t body_id = khr_topology_sim_spawn_body(topo, mesh_id, spawn_pos, spawn_vel, 0.45f, 2.0f, 0.5f, 0.35f);
+            if (body_id != UINT32_MAX) {
+                uint32_t inst_idx = scene.instance_count;
+                khr_gpu_instance_t* inst = &scene.instances[inst_idx];
+                *inst = (khr_gpu_instance_t){};
+                static const float palette[5][4] = {
+                    { 0.95f, 0.35f, 0.25f, 1.0f },
+                    { 0.25f, 0.85f, 0.45f, 1.0f },
+                    { 0.35f, 0.55f, 0.95f, 1.0f },
+                    { 0.95f, 0.75f, 0.20f, 1.0f },
+                    { 0.85f, 0.35f, 0.90f, 1.0f },
+                };
+                uint32_t p_idx = (mesh_id < 5) ? mesh_id : 0;
+                memcpy(inst->albedo, palette[p_idx], sizeof(float) * 3);
+                inst->roughness = 0.25f + ((inst_idx % 5) * 0.12f);
+                inst->metallic  = (mesh_id == 1 || mesh_id == 3) ? 0.7f : 0.05f;
+                inst->ao = 1.0f;
+                inst->albedo_tex_id = UINT32_MAX;
+                inst->normal_tex_id = UINT32_MAX;
+                inst->mesh_id = mesh_id;
+                inst->scale[0] = 0.45f;
+                inst->scale[1] = 0.45f;
+                inst->scale[2] = 0.45f;
+                inst->rotation[3] = 1.0f;
+                inst->position[0] = spawn_pos[0];
+                inst->position[1] = spawn_pos[1];
+                inst->position[2] = spawn_pos[2];
+                inst->radius = 0.45f;
+
+                if (scene.instances_b != nullptr) {
+                    scene.instances_b[inst_idx] = *inst;
+                }
+
+                scene.instance_count++;
+                dirty = true;
+                if (audio_live) {
+                    (void)khr_audio_engine_play(&audio_engine, &click_clip, spawn_pos[0], spawn_pos[1], spawn_pos[2], 0.8f, false);
+                }
+            }
+        }
         if (seat.f11_pressed) {
             if (shell.popup_live) {
                 khr_window_popup_teardown(&client, &shell, &popup_pool,

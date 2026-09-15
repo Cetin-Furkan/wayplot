@@ -160,6 +160,7 @@ extern bool test_camera_pan_zoom_and_aabb(void);
 extern bool test_camera_feed_cull_push_contract(void);
 extern bool test_pbr_material_and_brdf_properties(void);
 extern bool test_gpu_instanced_pbr_pipeline_execution(void);
+extern bool test_camera_screen_to_ray_and_intersection(void);
 
 /* Suite 10: Multi-Mesh Scene Graph & Physical Lights (Pillar D) */
 extern bool test_light_struct_contracts(void);
@@ -223,6 +224,7 @@ extern bool test_multi_shape_full_pairwise_coverage(void);
 extern bool test_rigid_body_impulse_restitution_and_friction(void);
 extern bool test_physics_world_fixed_tick_simulation_stability(void);
 extern bool test_physics_double_buffer_bda_integration(void);
+extern bool test_sandbox_kick_gravity_and_spawn(void);
 
 /* Suite 16: Ground Grid, Procedural Meshes & Physical Sound Synthesis (Pillars 3 & 4) */
 extern bool test_grid_pipeline_layout_and_push_contract(void);
@@ -407,6 +409,7 @@ int main(void) {
     RUN_TEST(&stats, test_camera_feed_cull_push_contract);
     RUN_TEST(&stats, test_pbr_material_and_brdf_properties);
     RUN_TEST(&stats, test_gpu_instanced_pbr_pipeline_execution);
+    RUN_TEST(&stats, test_camera_screen_to_ray_and_intersection);
 
     printf("\n" KHR_CLR_BOLD "Suite 10: Multi-Mesh Scene Graph & Physical Lights (Pillar D)\n" KHR_CLR_RESET);
     RUN_TEST(&stats, test_light_struct_contracts);
@@ -470,6 +473,7 @@ int main(void) {
     RUN_TEST(&stats, test_rigid_body_impulse_restitution_and_friction);
     RUN_TEST(&stats, test_physics_world_fixed_tick_simulation_stability);
     RUN_TEST(&stats, test_physics_double_buffer_bda_integration);
+    RUN_TEST(&stats, test_sandbox_kick_gravity_and_spawn);
 
     printf("\n" KHR_CLR_BOLD "Suite 16: Ground Grid, Procedural Meshes & Physical Sound Synthesis (Pillars 3 & 4)\n" KHR_CLR_RESET);
     RUN_TEST(&stats, test_grid_pipeline_layout_and_push_contract);

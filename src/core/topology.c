@@ -1121,3 +1121,83 @@ bool khr_topology_sim_pop_collision_event(khr_topology_t* topo, khr_collision_ev
     atomic_store_explicit(&topo->sim.collision_tail, (t + 1) % KHR_COLLISION_EVENT_CAP, memory_order_release);
     return true;
 }
+
+void khr_topology_sim_kick_all(khr_topology_t* topo, float upward_speed) {
+    if (topo == nullptr) return;
+    for (uint32_t b = 0; b < topo->sim.physics.body_count; b++) {
+        khr_rigid_body_t* body = &topo->sim.physics.bodies[b];
+        if (!body->active || body->is_static) continue;
+        body->velocity[1] = fmaxf(body->velocity[1] + upward_speed, upward_speed);
+        float hash_x = sinf((float)(b * 7 + 13)) * 1.5f;
+        float hash_z = cosf((float)(b * 11 + 17)) * 1.5f;
+        body->velocity[0] += hash_x;
+        body->velocity[2] += hash_z;
+        body->angular_velocity[0] += hash_z * 2.0f;
+        body->angular_velocity[1] += (hash_x - hash_z) * 1.5f;
+        body->angular_velocity[2] += -hash_x * 2.0f;
+    }
+    atomic_store_explicit(&topo->sim.has_motion, true, memory_order_release);
+}
+
+bool khr_topology_sim_toggle_gravity(khr_topology_t* topo) {
+    if (topo == nullptr) return false;
+    bool is_zero_g = false;
+    if (topo->sim.physics.gravity[1] < -0.1f) {
+        topo->sim.physics.gravity[1] = 0.0f;
+        is_zero_g = true;
+    } else {
+        topo->sim.physics.gravity[1] = -KHR_PHYSICS_GRAVITY_M_S2;
+        is_zero_g = false;
+    }
+    atomic_store_explicit(&topo->sim.has_motion, true, memory_order_release);
+    return is_zero_g;
+}
+
+float khr_topology_sim_get_gravity(const khr_topology_t* topo) {
+    if (topo == nullptr) return -KHR_PHYSICS_GRAVITY_M_S2;
+    return topo->sim.physics.gravity[1];
+}
+
+uint32_t khr_topology_sim_spawn_body(khr_topology_t* topo, uint32_t mesh_id,
+                                    const float pos[3], const float vel[3],
+                                    float radius, float mass, float restitution, float friction) {
+    if (topo == nullptr || topo->sim.physics.body_count >= KHR_PHYSICS_MAX_BODIES) {
+        return UINT32_MAX;
+    }
+    khr_rigid_body_t body;
+    float r = (radius > 0.05f) ? radius : 0.5f;
+    float m = (mass > 0.05f) ? mass : 2.0f;
+
+    if (mesh_id == 2) {
+        /* Cylinder / Capsule */
+        float p0[3] = { 0.0f, -0.45f, 0.0f };
+        float p1[3] = { 0.0f,  0.45f, 0.0f };
+        khr_rigid_body_init_capsule(&body, p0, p1, r * 0.5f, m, restitution, friction);
+        body.position[0] = pos[0];
+        body.position[1] = pos[1];
+        body.position[2] = pos[2];
+    } else if (mesh_id == 3) {
+        /* Chamfer Box */
+        float hx[3] = { r * 0.7f, r * 0.7f, r * 0.7f };
+        khr_rigid_body_init_aabb(&body, pos, hx, m, restitution, friction);
+    } else {
+        /* Sphere, Torus, Suzanne */
+        khr_rigid_body_init_sphere(&body, pos, r, m, restitution, friction);
+    }
+
+    if (vel != nullptr) {
+        body.velocity[0] = vel[0];
+        body.velocity[1] = vel[1];
+        body.velocity[2] = vel[2];
+    }
+    body.angular_velocity[0] = 1.0f;
+    body.angular_velocity[1] = 0.5f;
+    body.angular_velocity[2] = -0.7f;
+
+    uint32_t inst_idx = topo->sim.instance_count++;
+    body.user_id = inst_idx;
+
+    uint32_t body_idx = khr_physics_world_add_body(&topo->sim.physics, &body);
+    atomic_store_explicit(&topo->sim.has_motion, true, memory_order_release);
+    return body_idx;
+}

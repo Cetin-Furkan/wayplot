@@ -505,3 +505,39 @@ bool test_multi_shape_full_pairwise_coverage(void) {
     }
     return true;
 }
+
+[[nodiscard]]
+bool test_sandbox_kick_gravity_and_spawn(void) {
+    khr_topology_t topo = {};
+    khr_physics_world_init(&topo.sim.physics);
+
+    khr_rigid_body_t b0 = {};
+    khr_rigid_body_init_sphere(&b0, (float[]){ 0.0f, 1.0f, 0.0f }, 0.5f, 1.0f, 0.5f, 0.3f);
+    b0.active = true;
+    b0.is_static = false;
+    (void)khr_physics_world_add_body(&topo.sim.physics, &b0);
+
+    /* Test kick all */
+    khr_topology_sim_kick_all(&topo, 8.0f);
+    ASSERT_TRUE(topo.sim.physics.bodies[0].velocity[1] >= 8.0f);
+
+    /* Test toggle gravity */
+    float g_init = khr_topology_sim_get_gravity(&topo);
+    ASSERT_TRUE(g_init < -5.0f);
+    bool is_zero_g = khr_topology_sim_toggle_gravity(&topo);
+    ASSERT_TRUE(is_zero_g);
+    ASSERT_FLOAT_NEAR(khr_topology_sim_get_gravity(&topo), 0.0f, 1e-4f);
+    is_zero_g = khr_topology_sim_toggle_gravity(&topo);
+    ASSERT_TRUE(!is_zero_g);
+    ASSERT_FLOAT_NEAR(khr_topology_sim_get_gravity(&topo), -KHR_PHYSICS_GRAVITY_M_S2, 1e-4f);
+
+    /* Test dynamic spawn */
+    uint32_t b_idx = khr_topology_sim_spawn_body(&topo, 0, (float[]){ 1.0f, 4.0f, 2.0f }, (float[]){ 0.0f, -2.0f, 0.0f }, 0.4f, 2.0f, 0.5f, 0.3f);
+    ASSERT_TRUE(b_idx != UINT32_MAX);
+    ASSERT_TRUE(topo.sim.physics.body_count == 2);
+    ASSERT_FLOAT_NEAR(topo.sim.physics.bodies[b_idx].position[1], 4.0f, 1e-4f);
+    ASSERT_FLOAT_NEAR(topo.sim.physics.bodies[b_idx].velocity[1], -2.0f, 1e-4f);
+
+    return true;
+}
+

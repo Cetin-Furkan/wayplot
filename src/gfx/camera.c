@@ -427,3 +427,142 @@ void khr_camera_frame_verts(khr_camera_t* cam, const float* xyz, uint32_t nv, bo
     cam->eye[1] = cam->target[1] + cam->radius * sp;
     cam->eye[2] = cam->target[2] + cam->radius * cy * cp;
 }
+
+void khr_camera_screen_to_ray(const khr_camera_t* cam,
+                              float screen_x, float screen_y,
+                              float viewport_w, float viewport_h,
+                              float out_origin[3], float out_dir[3]) {
+    if (cam == nullptr || out_origin == nullptr || out_dir == nullptr) {
+        return;
+    }
+    out_origin[0] = cam->eye[0];
+    out_origin[1] = cam->eye[1];
+    out_origin[2] = cam->eye[2];
+
+    float w = (viewport_w > 0.0f) ? viewport_w : 960.0f;
+    float h = (viewport_h > 0.0f) ? viewport_h : 540.0f;
+
+    float ndc_x = (2.0f * screen_x / w) - 1.0f;
+    float ndc_y = 1.0f - (2.0f * screen_y / h);
+
+    float fwd[3] = {
+        cam->target[0] - cam->eye[0],
+        cam->target[1] - cam->eye[1],
+        cam->target[2] - cam->eye[2],
+    };
+    float flen = sqrtf(fwd[0] * fwd[0] + fwd[1] * fwd[1] + fwd[2] * fwd[2]);
+    if (flen > 1e-7f) {
+        fwd[0] /= flen; fwd[1] /= flen; fwd[2] /= flen;
+    } else {
+        fwd[0] = 0.0f; fwd[1] = 0.0f; fwd[2] = -1.0f;
+    }
+
+    float rgt[3] = {
+        fwd[1] * cam->up[2] - fwd[2] * cam->up[1],
+        fwd[2] * cam->up[0] - fwd[0] * cam->up[2],
+        fwd[0] * cam->up[1] - fwd[1] * cam->up[0],
+    };
+    float rlen = sqrtf(rgt[0] * rgt[0] + rgt[1] * rgt[1] + rgt[2] * rgt[2]);
+    if (rlen > 1e-7f) {
+        rgt[0] /= rlen; rgt[1] /= rlen; rgt[2] /= rlen;
+    } else {
+        rgt[0] = 1.0f; rgt[1] = 0.0f; rgt[2] = 0.0f;
+    }
+
+    float u[3] = {
+        rgt[1] * fwd[2] - rgt[2] * fwd[1],
+        rgt[2] * fwd[0] - rgt[0] * fwd[2],
+        rgt[0] * fwd[1] - rgt[1] * fwd[0],
+    };
+
+    float tan_fov = tanf(cam->fov_y * 0.5f);
+    float rx = ndc_x * cam->aspect * tan_fov;
+    float ry = ndc_y * tan_fov;
+
+    float rd[3] = {
+        fwd[0] + rgt[0] * rx + u[0] * ry,
+        fwd[1] + rgt[1] * rx + u[1] * ry,
+        fwd[2] + rgt[2] * rx + u[2] * ry,
+    };
+    float rd_len = sqrtf(rd[0] * rd[0] + rd[1] * rd[1] + rd[2] * rd[2]);
+    if (rd_len > 1e-7f) {
+        out_dir[0] = rd[0] / rd_len;
+        out_dir[1] = rd[1] / rd_len;
+        out_dir[2] = rd[2] / rd_len;
+    } else {
+        out_dir[0] = fwd[0];
+        out_dir[1] = fwd[1];
+        out_dir[2] = fwd[2];
+    }
+}
+
+bool khr_ray_intersect_sphere(const float ro[3], const float rd[3],
+                              const float center[3], float radius, float* out_t) {
+    if (ro == nullptr || rd == nullptr || center == nullptr || radius <= 0.0f) {
+        return false;
+    }
+    float m[3] = {
+        ro[0] - center[0],
+        ro[1] - center[1],
+        ro[2] - center[2],
+    };
+    float b = m[0] * rd[0] + m[1] * rd[1] + m[2] * rd[2];
+    float c = (m[0] * m[0] + m[1] * m[1] + m[2] * m[2]) - radius * radius;
+
+    if (c > 0.0f && b > 0.0f) {
+        return false;
+    }
+    float discr = b * b - c;
+    if (discr < 0.0f) {
+        return false;
+    }
+    float sqrt_d = sqrtf(discr);
+    float t = -b - sqrt_d;
+    if (t < 0.0f) {
+        t = -b + sqrt_d;
+    }
+    if (t < 0.0f) {
+        return false;
+    }
+    if (out_t != nullptr) {
+        *out_t = t;
+    }
+    return true;
+}
+
+bool khr_ray_intersect_aabb(const float ro[3], const float rd[3],
+                            const float min_p[3], const float max_p[3], float* out_t) {
+    if (ro == nullptr || rd == nullptr || min_p == nullptr || max_p == nullptr) {
+        return false;
+    }
+    float t_min = -1e30f;
+    float t_max = 1e30f;
+
+    for (int i = 0; i < 3; i++) {
+        if (fabsf(rd[i]) > 1e-7f) {
+            float inv_d = 1.0f / rd[i];
+            float t1 = (min_p[i] - ro[i]) * inv_d;
+            float t2 = (max_p[i] - ro[i]) * inv_d;
+            float near = (t1 < t2) ? t1 : t2;
+            float far  = (t1 > t2) ? t1 : t2;
+            if (near > t_min) t_min = near;
+            if (far < t_max)  t_max = far;
+            if (t_min > t_max) return false;
+        } else {
+            if (ro[i] < min_p[i] || ro[i] > max_p[i]) {
+                return false;
+            }
+        }
+    }
+    if (t_max < 0.0f) {
+        return false;
+    }
+    float t = (t_min >= 0.0f) ? t_min : t_max;
+    if (t < 0.0f) {
+        return false;
+    }
+    if (out_t != nullptr) {
+        *out_t = t;
+    }
+    return true;
+}

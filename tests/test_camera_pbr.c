@@ -631,3 +631,52 @@ bool test_gpu_instanced_pbr_pipeline_execution(void) {
     khr_gfx_device_destroy(&dev);
     return true;
 }
+
+[[nodiscard]]
+bool test_camera_screen_to_ray_and_intersection(void) {
+    khr_camera_t cam = {};
+    khr_camera_init(&cam, 1.04719755f, 1.0f, 0.1f);
+    cam.eye[0] = 0.0f; cam.eye[1] = 0.0f; cam.eye[2] = 5.0f;
+    cam.target[0] = 0.0f; cam.target[1] = 0.0f; cam.target[2] = 0.0f;
+    cam.up[0] = 0.0f; cam.up[1] = 1.0f; cam.up[2] = 0.0f;
+
+    float ro[3] = {}, rd[3] = {};
+    khr_camera_screen_to_ray(&cam, 480.0f, 270.0f, 960.0f, 540.0f, ro, rd);
+
+    TEST_ASSERT(fabsf(ro[0] - 0.0f) < 1e-4f, "Ray origin X is eye X");
+    TEST_ASSERT(fabsf(ro[1] - 0.0f) < 1e-4f, "Ray origin Y is eye Y");
+    TEST_ASSERT(fabsf(ro[2] - 5.0f) < 1e-4f, "Ray origin Z is eye Z");
+
+    float rd_len = sqrtf(rd[0]*rd[0] + rd[1]*rd[1] + rd[2]*rd[2]);
+    TEST_ASSERT(fabsf(rd_len - 1.0f) < 1e-4f, "Ray direction is unit vector");
+    TEST_ASSERT(fabsf(rd[0] - 0.0f) < 1e-3f, "Ray center X is 0");
+    TEST_ASSERT(fabsf(rd[1] - 0.0f) < 1e-3f, "Ray center Y is 0");
+    TEST_ASSERT(fabsf(rd[2] - (-1.0f)) < 1e-3f, "Ray center points down -Z");
+
+    /* Sphere intersection */
+    float sphere_c[3] = { 0.0f, 0.0f, 0.0f };
+    float t_sphere = 0.0f;
+    bool hit_s = khr_ray_intersect_sphere(ro, rd, sphere_c, 1.0f, &t_sphere);
+    TEST_ASSERT(hit_s, "Ray hits center sphere");
+    TEST_ASSERT(fabsf(t_sphere - 4.0f) < 1e-3f, "Hit distance is 5 - 1 = 4");
+
+    /* Sphere miss (opposite direction) */
+    float rd_rev[3] = { 0.0f, 0.0f, 1.0f };
+    hit_s = khr_ray_intersect_sphere(ro, rd_rev, sphere_c, 1.0f, &t_sphere);
+    TEST_ASSERT(!hit_s, "Ray in reverse direction misses sphere");
+
+    /* AABB intersection */
+    float min_p[3] = { -1.0f, -1.0f, -1.0f };
+    float max_p[3] = {  1.0f,  1.0f,  1.0f };
+    float t_aabb = 0.0f;
+    bool hit_b = khr_ray_intersect_aabb(ro, rd, min_p, max_p, &t_aabb);
+    TEST_ASSERT(hit_b, "Ray hits center AABB");
+    TEST_ASSERT(fabsf(t_aabb - 4.0f) < 1e-3f, "AABB hit distance is 4.0");
+
+    /* AABB miss */
+    hit_b = khr_ray_intersect_aabb(ro, rd_rev, min_p, max_p, &t_aabb);
+    TEST_ASSERT(!hit_b, "Ray in reverse direction misses AABB");
+
+    return true;
+}
+

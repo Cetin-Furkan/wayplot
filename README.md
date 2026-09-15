@@ -9,72 +9,86 @@ Right now, the project has 2 rings, ring A and ring B, each of them is pinned to
 
 ---
 
-## Release: Version 0.3.4
+## Release: Version 0.3.5
 
-> **Caption**: *Pairwise multi-shape SAT collision physics, interactive flight controls, and live contact manifold telemetry.*
+> **Caption**: *Interactive physics sandbox, 3D ray-picking impulse toss, dynamic mesh spawner, and live pacing cycler.*
 
-Version 0.3.4 completes 100% pairwise narrowphase collision coverage across all supported shapes (Spheres, Planes, AABBs, and Capsules), adds real-time 3D flight camera navigation (`W`, `A`, `S`, `D`, `Space`, `C`, `R`), and introduces live contact manifold telemetry to the engine HUD and stream.
+Version 0.3.5 transforms Khoros into a fully interactive bare-metal 3D physics sandbox. It introduces sub-pixel camera unprojection with 3D ray-primitive intersection (`E` key ray-picking impulse tossing), real-time rigid body spawning across 5 distinct procedural meshes (`0`–`4` keys), kinetic scene agitation (`K` key), dynamic Zero-G gravity toggling (`G` key), and on-the-fly presentation pacing cycling (`T` key).
 
 ```
                   ┌───────────────────────────────────────────┐
-                  │          Khoros 0.3.4 Architecture        │
+                  │          Khoros 0.3.5 Architecture        │
                   │   Pure ISO C23 · Zero Third-Party Libs    │
                   └─────────────────────┬─────────────────────┘
                                         │
         ┌───────────────────────────────┴───────────────────────────────┐
         ▼                                                               ▼
- [ Presentation & Present ]                                    [ Simulation & Compute ]
+ [ Presentation & Sandbox ]                                    [ Simulation & Compute ]
   ├── Core 2 Affinity (Lock-Free)                              ├── Core 3 Affinity (Pinned Worker)
   ├── Wayland Wire (Raw Syscalls)                              ├── 60/120 Hz Symplectic Integrator
   │   ├── zwp_linux_dmabuf_v1 Zero-Copy                        ├── 30-bit Morton Radix LBVH Broadphase
   │   ├── wp_presentation_time Feedback                        ├── 100% Pairwise SAT Narrowphase Matrix
-  │   └── Interactive Flight Camera (WASD/Space/C/R)           │   (Sphere, Plane, Box, Capsule)
-  ├── Vulkan 1.4 BDA Pipeline                                  └── Pipe Audio Mixer (48 kHz Stereo)
-  │   ├── Two-Pass Hi-Z Occlusion Culling                          ├── Desktop Auto-Sink Router
-  │   ├── Hardware GPU Timestamps (VK_QUERY_TIMESTAMP)             ├── Zero-HDMI Hijack (PipeWire/Pulse)
-  │   ├── Precision FPS Pacing Governor                            └── Modal Acoustic Resonance Synth
-  │   └── Live Manifold Telemetry (FPS, CPU, GPU, Contacts)
+  │   ├── 3D Camera Ray-Picking Unprojection                   │   (Sphere, Plane, Box, Capsule)
+  │   ├── Interactive Flight Navigation (WASD/Space/C/R)       ├── Dynamic Runtime Body Insertion
+  │   └── Live Sandbox Hotkeys (E/K/G/T/0..4)                  └── Pipe Audio Mixer (48 kHz Stereo)
+  ├── Vulkan 1.4 BDA Pipeline                                      ├── Desktop Auto-Sink Router
+  │   ├── Two-Pass Hi-Z Occlusion Culling                          ├── Zero-HDMI Hijack (PipeWire/Pulse)
+  │   ├── Hardware GPU Timestamps (VK_QUERY_TIMESTAMP)             └── Modal Acoustic Resonance Synth
+  │   ├── Live Dynamic Pacing Governor (T Key Cycler)
+  │   └── Live Telemetry Stream (FPS, CPU %, GPU HW ms, Contacts)
 ```
 
 ---
 
-### Highlights of Version 0.3.4
+### Highlights of Version 0.3.5
 
-#### 1. Complete Pairwise Multi-Shape SAT Narrowphase
-Prior to 0.3.4, cylinders and capsules could collide with planes and spheres, but would pass through each other and through boxes. Version 0.3.4 achieves **100% full pairwise collision coverage** across all primitive shapes:
-* **Capsule-to-Capsule SAT (`khr_collide_capsule_capsule`)**:
-  * Implements Christer Ericson's robust 3D segment-to-segment distance minimization algorithm.
-  * Handles arbitrary spatial orientations, parallel cylinder configurations, and degenerate point endpoints.
-  * Computes exact contact normals, penetration depths, and penetration midpoint contact manifolds.
-* **Capsule-to-AABB SAT (`khr_collide_capsule_aabb`)**:
-  * Transforms capsule segment endpoints into the oriented bounding box's local coordinates via quaternion inverse rotation.
-  * Evaluates boundary slab crossings and golden-section distance minimization to find the closest segment-to-box point.
-  * Resolves both surface grazing contacts and deep slab interpenetrations, transforming normals and contact points back to world space.
-* **Full Pairwise Dispatch Matrix**:
-  * 100% of all combinations (Sphere-Sphere, Sphere-Plane, Sphere-AABB, Sphere-Capsule, AABB-AABB, AABB-Plane, AABB-Capsule, Capsule-Plane, Capsule-Capsule, Capsule-AABB) now resolve contact manifolds, restitution impulses, Coulomb friction, and acoustic synthesis.
+#### 1. 3D Camera Ray-Picking & Impulse Toss (`E` Key)
+* **Screen-to-World Ray Unprojection (`khr_camera_screen_to_ray`)**:
+  * Unprojects cursor coordinates $(s_x, s_y)$ through the camera's FOV, aspect ratio, and view orientation into world-space ray origin $\mathbf{ro}$ and unit direction vector $\mathbf{rd}$.
+  * Handles arbitrary viewport resizing, window aspect ratios, and full 3D camera orbits.
+* **Exact Primitive Intersections**:
+  * `khr_ray_intersect_sphere`: Solves quadratic ray-sphere intersection with negative discriminant and backward miss rejection.
+  * `khr_ray_intersect_aabb`: Implements Kay-Kajiya slab intersection with IEEE 754 division-by-zero handling.
+* **Targeted Physics Toss**:
+  * Pressing `E` scans all dynamic bodies in the scene along the line of sight, picks the nearest intersected rigid body, and delivers an SI impulse ($\mathbf{rd} \cdot 18.0 \text{ N}\cdot\text{s}$) with upward lift and acoustic feedback.
 
-#### 2. Interactive 3D Keyboard Flight Navigation
-In addition to mouse orbit, pan, zoom, and gimbal axis snapping, the presentation window now supports immediate keyboard flight navigation:
-* **`W` / `S`**: Fly forward / zoom in, fly backward / zoom out along the camera view vector.
-* **`A` / `D`**: Strafe left / strafe right across the camera up/right plane.
-* **`Space` / `C`**: Fly upward / fly downward along the global vertical axis.
-* **`R`**: Reset camera to default orientation and look-at distance.
-* **`F`**: Re-frame scene geometry based on active bounding vertices.
-* **`F11`**: Toggle fullscreen presentation.
+#### 2. Dynamic Mesh Spawner (`0`–`4` Keys)
+* Runtime bodies can now be spawned dynamically without restarting the engine or reallocating GPU memory:
+  * **Key `0`**: Procedural UV Sphere (Coral Red, Dielectric)
+  * **Key `1`**: Procedural Torus (Emerald Green, Metallic)
+  * **Key `2`**: Procedural Capsule / Cylinder (Sapphire Blue, Dielectric)
+  * **Key `3`**: Procedural Chamfer Box (Amber Gold, Metallic)
+  * **Key `4`**: Suzanne Monkey (Violet Purple, Smooth Dielectric)
+* Spawns bodies high above the scene center with randomized horizontal velocity, vibrant procedural PBR materials, and automatic registration into Core 3's LBVH spatial partitioning tree.
 
-#### 3. Real-Time Contact Manifold Telemetry
-Khoros 0.3.4 exposes live contact metrics directly in the telemetry stream and terminal HUD:
-```text
-[TELEMETRY]  59.1 FPS (16.92 ms) | CPU Proc:  3.9% (0.30 ms) | GPU HW:  1.24 ms ( 7.4% load) | Bodies: 64 (1 meshes) | Contacts: 10
-```
+#### 3. Kinetic Scene Kick (`K` Key) & Zero-G Toggle (`G` Key)
+* **Chaos Kick (`khr_topology_sim_kick_all`)**: Injects an upward velocity impulse ($\ge 7.5 \text{ m/s}$) along with pseudo-randomized angular spin to all active dynamic bodies, instantly destabilizing stacked structures.
+* **Zero-G Mode (`khr_topology_sim_toggle_gravity`)**: Toggles vertical acceleration between standard Earth gravity ($-9.81 \text{ m/s}^2$) and floating Zero-G ($0.0 \text{ m/s}^2$), allowing bodies to drift freely through the 3D space.
 
-#### 4. New Multi-Mesh Experiment Decks
-* **`experiments/capsules_n64.deck`**: 64 dynamic cylinders tumbling, colliding with each other and settling under gravity.
-* **`experiments/tower_mixed.deck`**: 48 mixed rigid bodies (16 spheres, 16 boxes, 16 capsules) stacked in a multi-tier physical structure.
+#### 4. Live Pacing Governor Cycler (`T` Key)
+* Dynamically cycles the presentation frame pacing cap on the fly without restarting:
+  $$\text{60 FPS} \longrightarrow \text{120 FPS} \longrightarrow \text{144 FPS} \longrightarrow \text{240 FPS} \longrightarrow \text{Unlocked (300+ FPS)} \longrightarrow \text{60 FPS}$$
+* Recomputes minimum nano-interval hardware presentation deadlines instantly, triggering modal acoustic clicks on each shift.
 
-#### 5. Zero-HDMI-Hijack Desktop Audio Architecture
-* **Zero-Middleware Pipe Transport**: Streams raw 16-bit signed 48 kHz stereo PCM over a POSIX pipe to the active desktop sound server (`pw-cat` or `paplay`) using an expanded 256 KiB buffer (`F_SETPIPE_SZ`).
-* **Desktop Sound Preservation**: Completely avoids raw `/dev/snd/pcmC0D0p` ALSA conflicts on modern Intel SOF DSP and AMD ACP architectures, preventing WirePlumber from rerouting sound to HDMI.
+#### 5. Complete Interactive Control Matrix
+
+| Key / Input | Subsystem | Action |
+|---|---|---|
+| **`W` / `S`** | Camera | Flight dolly forward / backward |
+| **`A` / `D`** | Camera | Flight strafe left / right |
+| **`Space` / `C`** | Camera | Flight fly upward / downward |
+| **`R`** | Camera | Reset camera view and look-at distance |
+| **`F`** | Camera | Frame scene geometry bounding sphere |
+| **`LMB Drag`** | Camera | Arcball virtual sphere orbit |
+| **`MMB / Shift+LMB`** | Camera | 2D view-plane camera pan |
+| **`Wheel`** | Camera | Continuous zoom in / zoom out |
+| **`E`** | Physics | **3D Ray-pick nearest body under cursor and impulse toss** |
+| **`K`** | Physics | **Upward kinetic kick to all dynamic bodies with spin** |
+| **`G`** | Physics | **Toggle Zero-G mode (0.0 m/s² <-> -9.81 m/s²)** |
+| **`0` .. `4`** | Scene / Sim | **Spawn new dynamic body falling from sky (5 mesh types)** |
+| **`T`** | Pacing | **Cycle pacing governor (60 / 120 / 144 / 240 / Unlocked)** |
+| **`F11`** | Window | Toggle borderless fullscreen |
+| **`Esc`** | Window | Exit fullscreen / dismiss popups |
 
 ---
 
@@ -84,17 +98,17 @@ Khoros 0.3.4 exposes live contact metrics directly in the telemetry stream and t
 # Build engine binary and compile Slang shaders to SPIR-V
 make -j$(nproc)
 
-# Launch interactive 3D window (auto-routed desktop audio + 60 Hz VSync)
+# Launch interactive 3D physics sandbox
 ./build/engine
 
-# Run 64 dynamic cylinders avalanche with full pairwise collision
+# Launch 64-body tumbling capsule avalanche
 ./build/engine --deck=experiments/capsules_n64.deck
 
-# Run multi-tier mixed tower experiment (spheres, boxes, capsules)
+# Launch multi-tier mixed tower experiment (spheres, boxes, capsules)
 ./build/engine --deck=experiments/tower_mixed.deck
 
-# Set precision target frame rate to 120 FPS
-./build/engine --target-fps=120
+# Set precision target frame rate to 144 FPS
+./build/engine --target-fps=144
 
 # Maximize GPU hardware saturation with 1024 rigid bodies across 5 meshes
 ./build/engine --stress-gpu
@@ -109,10 +123,10 @@ make -j$(nproc)
 # Run headless experiment fast-forward with 18-column mechanical state CSV logging
 ./build/engine --headless --deck=experiments/capsules_n64.deck --ticks=600 --csv=logs/run.csv
 
-# Run full test suite (201 tests, 8586 assertions across 18 suites)
+# Run full test suite (203 tests, 8599 assertions across 18 suites)
 make test
 
-# Full AddressSanitizer + UndefinedBehaviorSanitizer memory safety verification
+# Full AddressSanitizer + UndefinedBehaviorSanitizer verification
 make sanitize
 ```
 
@@ -121,17 +135,17 @@ make sanitize
 ## Real-Time Engine Telemetry
 
 ```text
-# Standard 60 Hz Paced Mode with Desktop PipeWire Audio & Live Contacts:
+# Standard 60 Hz Paced Sandbox with Desktop PipeWire Audio & Live Contacts:
 [AUDIO] Output: PipeWire (pw-cat pipe, 48 kHz stereo)
-[TELEMETRY]  59.1 FPS (16.92 ms) | CPU Proc:  3.9% (0.30 ms) | GPU HW:  1.24 ms ( 7.4% load) | Bodies: 64 (1 meshes) | Contacts: 10
+[TELEMETRY]  59.1 FPS (16.92 ms) | CPU Proc:  3.2% (0.29 ms) | GPU HW:  1.41 ms ( 8.3% load) | Bodies: 6 (5 meshes) | Contacts: 0
 
 # Target 120 FPS Precision Paced Mode (--target-fps=120):
-[TELEMETRY] 120.1 FPS ( 8.33 ms) | CPU Proc:  4.1% (0.28 ms) | GPU HW:  1.48 ms (17.8% load) | Bodies: 64 (2 meshes) | Contacts: 8 [120 FPS CAP]
+[TELEMETRY] 120.1 FPS ( 8.33 ms) | CPU Proc:  3.6% (0.28 ms) | GPU HW:  1.48 ms (17.8% load) | Bodies: 64 (2 meshes) | Contacts: 8 [120 FPS CAP]
 
 # Unlocked Max-Throughput Silicon Mode (--unlocked):
-[TELEMETRY] 312.4 FPS ( 3.20 ms) | CPU Proc:  5.8% (0.11 ms) | GPU HW:  1.51 ms (47.2% load) | Bodies: 64 (2 meshes) | Contacts: 4 [UNLOCKED]
+[TELEMETRY] 312.4 FPS ( 3.20 ms) | CPU Proc:  5.4% (0.11 ms) | GPU HW:  1.51 ms (47.2% load) | Bodies: 64 (2 meshes) | Contacts: 4 [UNLOCKED]
 
-# Hardware Power Saturation Stress Testing (--stress-gpu):
+# Hardware Saturation Stress Testing (--stress-gpu):
 [TELEMETRY] 148.6 FPS ( 6.73 ms) | CPU Proc:  7.9% (0.22 ms) | GPU HW:  5.71 ms (84.8% load) | Bodies: 1024 (5 meshes) | Contacts: 48 [UNLOCKED]
 ```
 
@@ -150,8 +164,9 @@ Khoros is engineered with **zero third-party middleware**: no `libwayland`, `lib
   ├── Wayland Client (Raw Syscalls)                                 ├── 60/120 Hz Symplectic Integrator
   │   ├── zwp_linux_dmabuf_v1 (Zero-copy DMA-BUF)                   │   ├── 30-bit Morton Code Radix Sort
   │   ├── wp_presentation_time (Hardware VSync)                     │   └── LBVH Spatial Tree Broadphase
-  │   └── Flight Navigation Keys (WASD/Space/C/R)                  ├── 100% Pairwise SAT Narrowphase
-  ├── Vulkan 1.4 GPU Command Stream                                 │   (Capsule-Capsule, Capsule-AABB)
+  │   ├── 3D Camera Ray-Picking Unprojector                         ├── 100% Pairwise SAT Narrowphase
+  │   └── Flight Navigation Keys (WASD/Space/C/R)                  │   (Capsule-Capsule, Capsule-AABB)
+  ├── Vulkan 1.4 GPU Command Stream                                 ├── Dynamic Runtime Body Insertion
   │   ├── cull_hiz.slang (Occlusion & Frustum)                      ├── Double-Buffered BDA Transform Flip
   │   ├── Multi-Mesh Indirect Draws (SV_InstanceID direct BDA)      ├── Desktop Audio Mixer (PipeWire/Pulse)
   │   └── Silicon GPU Timestamp Queries (VK_QUERY_TIMESTAMP)        └── Ring B (io_uring) Async Ingest
@@ -215,7 +230,7 @@ General:
 The engine enforces test contracts where every physical quantity, mathematical invariant, and rendering guarantee must have a test that can fail.
 
 ```bash
-# Run 201 unit and integration tests across 18 suites
+# Run 203 unit and integration tests across 18 suites
 make test
 ```
 
@@ -225,27 +240,29 @@ make test
 |---|---|---|---|
 | **Suite 01–03** | Core Topology, Ring A/B `io_uring`, IPC Messaging | 1,420 | ✔ PASS (100%) |
 | **Suite 04–06** | Hugepage BDA Arena, Slang Compute Pipelines, Camera Math | 1,280 | ✔ PASS (100%) |
-| **Suite 07–09** | Wayland Wire Protocol, DMA-BUF Export, MSAA/D32 Render Targets | 1,115 | ✔ PASS (100%) |
+| **Suite 07–09** | Wayland Wire Protocol, DMA-BUF Export, MSAA/D32 Render Targets | 1,123 | ✔ PASS (100%) |
 | **Suite 10–12** | Multi-Mesh Indirect Dispatch, Two-Pass Hi-Z Occlusion, Audio Mixer | 1,340 | ✔ PASS (100%) |
-| **Suite 13–15** | Lock-Free Input Ring, Bindless Textures, Morton LBVH Spatial Physics | 1,465 | ✔ PASS (100%) |
+| **Suite 13–15** | Lock-Free Input Ring, Bindless Textures, Morton LBVH Spatial Physics | 1,470 | ✔ PASS (100%) |
 | **Suite 16–18** | Ground Grid, Symplectic Euler IVP Convergence, Deck Determinism | 1,966 | ✔ PASS (100%) |
-| **Total** | **18 Suites · 201 Tests** | **8,586** | **✔ PASS (100.0%)** |
+| **Total** | **18 Suites · 203 Tests** | **8,599** | **✔ PASS (100.0%)** |
 
-All 201 tests execute with **0 leaks, 0 errors, and 0 undefined behavior** under both native compilation and AddressSanitizer + UndefinedBehaviorSanitizer (`make sanitize`).
+All 203 tests execute with **0 leaks, 0 errors, and 0 undefined behavior** under both native compilation and AddressSanitizer + UndefinedBehaviorSanitizer (`make sanitize`).
 
 ---
 
 ## Architectural Comparison
 
-| Conventional Middleware Stack | Khoros 0.3.4 Architecture |
+| Conventional Middleware Stack | Khoros 0.3.5 Architecture |
 |---|---|
 | Middleware libraries (SDL, GLFW, cglm, libwayland) | Pure ISO C23 + Raw Linux Syscalls + Vulkan 1.4 |
 | CPU-to-GPU mesh uploads every frame | Single 2 MiB BDA hugepage arena; GPU pulls directly |
 | Incomplete collision handling / external PhysX | 100% pairwise SAT collision (Sphere, Box, Capsule, Plane) |
 | Hardcoded mouse-only camera | Integrated 3D keyboard flight navigation (WASD/Space/C/R) + mouse |
+| Static scene entities | **Dynamic runtime body spawner (0–4 keys) & 3D ray-picking toss (E key)** |
+| Hardcoded gravity | **Live Zero-G toggle (G key) & chaotic kinetic agitator (K key)** |
+| Fixed display sync only | **On-the-fly precision pacing cycler (T key: 60/120/144/240/unlocked)** |
 | Raw ALSA conflicts causing HDMI sound hijacking | Zero-middleware PipeWire/Pulse pipe streaming to desktop sink |
 | Unsynchronized audio timers with crackle | Sample-accurate modal synthesis with smooth envelope decays |
-| VSync-locked presentation only | Precision `--target-fps` pacing, `--unlocked` 300+ FPS, `--frames` governor |
 | Indeterminate simulation timesteps | Decoupled 60/120 Hz symplectic integrator with sub-frame interpolation |
 
 ---
