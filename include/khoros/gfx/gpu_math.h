@@ -152,7 +152,7 @@ typedef struct {
     uint32_t        index_count;                 /* offset 80 */
     uint32_t        vert_count;                  /* offset 84 */
     uint32_t        light_count;                 /* offset 88: number of active lights */
-    uint32_t        pad1;                        /* offset 92 */
+    uint32_t        target_mesh_id;              /* offset 92: filter by mesh id (UINT32_MAX = all) */
     VkDeviceAddress normals_addr;                /* offset 96: BDA: const float* (packed normal xyz) */
     uint32_t        pad2[2];                     /* offset 104: total 112 bytes */
 } khr_mesh_instanced_push_t;

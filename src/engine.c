@@ -8,8 +8,8 @@
 
 [[nodiscard]]
 const char* engine_get_banner(void) {
-    static const char banner[] = "=== Khoros Engine 0.3.5 (Linux 7.2 / C23 / io_uring / Vulkan 1.4) ===\n"
-                                 "  Caption: interactive physics sandbox, 3D ray-picking impulse toss, dynamic mesh spawner, and live pacing cycler.";
+    static const char banner[] = "=== Khoros Engine 0.3.5.1-bug-fixes (Linux 7.2 / C23 / io_uring / Vulkan 1.4) ===\n"
+                                 "  Caption: velocity clamping, motion interpolation stride alignment, and Hi-Z near-plane clipping fixes.";
     return banner;
 }
 
@@ -20,7 +20,7 @@ bool engine_init_opts(const engine_options_t* opts) {
         return false;
     }
     printf("%s\n", banner);
-    printf("Engine Version: %u.%u.%u\n", ENGINE_VERSION_MAJOR, ENGINE_VERSION_MINOR, ENGINE_VERSION_PATCH);
+    printf("Engine Version: %s\n", ENGINE_VERSION_STRING);
     printf("Standards Compliance: ISO C23 (__STDC_VERSION__ = %ldL)\n", __STDC_VERSION__);
     printf("Build Flag _GNU_SOURCE: Verified active\n");
 

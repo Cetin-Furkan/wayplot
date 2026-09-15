@@ -867,6 +867,7 @@ void khr_scene_prepare_mesh_push(const khr_scene_t* scene,
         .index_count = mesh != nullptr ? mesh->index_count : 0,
         .vert_count = mesh != nullptr ? mesh->vert_count : 0,
         .light_count = scene->light_count,
+        .target_mesh_id = mesh_id,
         .normals_addr = mesh != nullptr ? mesh->normals_addr : 0,
     };
 }

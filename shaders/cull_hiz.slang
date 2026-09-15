@@ -100,7 +100,9 @@ void cs_main(uint32_t3 dtid : SV_DispatchThreadID) {
         // 2. Read Instance Data via BDA with Sub-Frame Motion Interpolation
         GpuInstance inst = push.instances[idx];
         if ((push.flags & 1u) != 0u) {
-            int prev_offset = ((push.flags & 2u) != 0u) ? -(int)push.instance_count : (int)push.instance_count;
+            uint stride = (push.flags >> 16u) & 0xFFFFu;
+            if (stride == 0u) stride = push.instance_count;
+            int prev_offset = ((push.flags & 2u) != 0u) ? -(int)stride : (int)stride;
             GpuInstance prev = push.instances[idx + prev_offset];
             float prev_s2 = dot(prev.scale, prev.scale);
             float prev_q2 = dot(prev.rotation, prev.rotation);
@@ -134,6 +136,7 @@ void cs_main(uint32_t3 dtid : SV_DispatchThreadID) {
                 float2 min_uv = float2(1.0, 1.0);
                 float2 max_uv = float2(0.0, 0.0);
                 float max_depth = 0.0; // In reversed-Z, nearest depth is largest
+                int valid_corners = 0;
 
                 for (int i = 0; i < 8; i++) {
                     float3 corner = float3(
@@ -148,24 +151,27 @@ void cs_main(uint32_t3 dtid : SV_DispatchThreadID) {
                         min_uv = min(min_uv, uv);
                         max_uv = max(max_uv, uv);
                         max_depth = max(max_depth, ndc.z);
+                        valid_corners++;
                     }
                 }
 
-                min_uv = clamp(min_uv, float2(0.0, 0.0), float2(1.0, 1.0));
-                max_uv = clamp(max_uv, float2(0.0, 0.0), float2(1.0, 1.0));
+                if (valid_corners >= 4 && min_uv.x < max_uv.x && min_uv.y < max_uv.y) {
+                    min_uv = clamp(min_uv, float2(0.0, 0.0), float2(1.0, 1.0));
+                    max_uv = clamp(max_uv, float2(0.0, 0.0), float2(1.0, 1.0));
 
-                float2 pixel_size = (max_uv - min_uv) * float2(float(push.hiz_width), float(push.hiz_height));
-                float max_pixel = max(pixel_size.x, pixel_size.y);
-                float mip = ceil(log2(max(max_pixel, 1.0)));
-                mip = clamp(mip, 0.0, float(push.hiz_mips - 1u));
+                    float2 pixel_size = (max_uv - min_uv) * float2(float(push.hiz_width), float(push.hiz_height));
+                    float max_pixel = max(pixel_size.x, pixel_size.y);
+                    float mip = ceil(log2(max(max_pixel, 1.0)));
+                    mip = clamp(mip, 0.0, float(push.hiz_mips - 1u));
 
-                float2 center_uv = (min_uv + max_uv) * 0.5;
-                float hiz_val = hiz_pyramid.SampleLevel(hiz_sampler, center_uv, mip).r;
+                    float2 center_uv = (min_uv + max_uv) * 0.5;
+                    float hiz_val = hiz_pyramid.SampleLevel(hiz_sampler, center_uv, mip).r;
 
-                // In Reversed-Z: if max_depth (closest point) is less than hiz_val (farthest surface in tile),
-                // the entire object is occluded behind rendered geometry.
-                if (max_depth < hiz_val - 0.0001) {
-                    visible = false;
+                    // In Reversed-Z: if max_depth (closest point) is less than hiz_val (farthest surface in tile),
+                    // the entire object is occluded behind rendered geometry.
+                    if (max_depth < hiz_val - 0.0001) {
+                        visible = false;
+                    }
                 }
             }
         }
@@ -174,7 +180,7 @@ void cs_main(uint32_t3 dtid : SV_DispatchThreadID) {
         culled.model = model;
         culled.rotation = inst.rotation;
         culled.scale = inst.scale;
-        culled.pad0 = 0.0;
+        culled.pad0 = float(inst.mesh_id);
         culled.albedo = inst.albedo;
         culled.roughness = inst.roughness;
         culled.metallic = inst.metallic;

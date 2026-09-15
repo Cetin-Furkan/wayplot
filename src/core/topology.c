@@ -1127,14 +1127,15 @@ void khr_topology_sim_kick_all(khr_topology_t* topo, float upward_speed) {
     for (uint32_t b = 0; b < topo->sim.physics.body_count; b++) {
         khr_rigid_body_t* body = &topo->sim.physics.bodies[b];
         if (!body->active || body->is_static) continue;
-        body->velocity[1] = fmaxf(body->velocity[1] + upward_speed, upward_speed);
+        float new_vy = body->velocity[1] + upward_speed;
+        body->velocity[1] = fminf(fmaxf(new_vy, upward_speed), KHR_PHYSICS_MAX_LINEAR_SPEED);
         float hash_x = sinf((float)(b * 7 + 13)) * 1.5f;
         float hash_z = cosf((float)(b * 11 + 17)) * 1.5f;
-        body->velocity[0] += hash_x;
-        body->velocity[2] += hash_z;
-        body->angular_velocity[0] += hash_z * 2.0f;
-        body->angular_velocity[1] += (hash_x - hash_z) * 1.5f;
-        body->angular_velocity[2] += -hash_x * 2.0f;
+        body->velocity[0] = fminf(fmaxf(body->velocity[0] + hash_x, -KHR_PHYSICS_MAX_LINEAR_SPEED), KHR_PHYSICS_MAX_LINEAR_SPEED);
+        body->velocity[2] = fminf(fmaxf(body->velocity[2] + hash_z, -KHR_PHYSICS_MAX_LINEAR_SPEED), KHR_PHYSICS_MAX_LINEAR_SPEED);
+        body->angular_velocity[0] = fminf(fmaxf(body->angular_velocity[0] + hash_z * 2.0f, -KHR_PHYSICS_MAX_ANGULAR_SPEED), KHR_PHYSICS_MAX_ANGULAR_SPEED);
+        body->angular_velocity[1] = fminf(fmaxf(body->angular_velocity[1] + (hash_x - hash_z) * 1.5f, -KHR_PHYSICS_MAX_ANGULAR_SPEED), KHR_PHYSICS_MAX_ANGULAR_SPEED);
+        body->angular_velocity[2] = fminf(fmaxf(body->angular_velocity[2] - hash_x * 2.0f, -KHR_PHYSICS_MAX_ANGULAR_SPEED), KHR_PHYSICS_MAX_ANGULAR_SPEED);
     }
     atomic_store_explicit(&topo->sim.has_motion, true, memory_order_release);
 }

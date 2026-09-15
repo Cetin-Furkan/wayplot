@@ -37,7 +37,7 @@ struct MeshInstancedPush {
     uint               index_count;  // 4 bytes (offset 80)
     uint               vert_count;   // 4 bytes (offset 84)
     uint               light_count;  // 4 bytes (offset 88)
-    uint               pad1;         // 4 bytes (offset 92)
+    uint               target_mesh_id; // 4 bytes (offset 92)
     float*             normals;      // 8 bytes (packed normal xyz) (offset 96)
     uint2              pad2;         // 8 bytes (offset 104) -> 112 bytes
 };
@@ -102,6 +102,21 @@ VSOutput vs_main(uint vert_id : SV_VertexID, uint inst_id : SV_InstanceID) {
     }
 
     GpuCulledInstance inst = push.instances[inst_id];
+
+    // Multi-mesh filtering and culling safety collapse:
+    // If instance is culled (scale zero) or does not match target_mesh_id, collapse triangle to NDC (0,0,0)
+    // with w=1.0 to guarantee zero rasterized area and prevent 0/0 NaN perspective division.
+    if (dot(inst.scale, inst.scale) < 1e-8 || (push.target_mesh_id != 0xFFFFFFFFu && uint(inst.pad0 + 0.5) != push.target_mesh_id)) {
+        out.pos = float4(0.0, 0.0, 0.0, 1.0);
+        out.world_pos = float3(0.0, 0.0, 0.0);
+        out.normal = float3(0.0, 1.0, 0.0);
+        out.albedo = float3(0.0, 0.0, 0.0);
+        out.pbr_params = float3(0.5, 0.0, 1.0);
+        out.uv = float2(0.0, 0.0);
+        out.albedo_tex_id = 0xFFFFFFFFu;
+        out.normal_tex_id = 0xFFFFFFFFu;
+        return out;
+    }
 
     // Transform position to world space and clip space
     float4 p_world = inst.model.mul_vec(float4(p, 1.0));

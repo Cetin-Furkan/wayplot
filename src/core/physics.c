@@ -1271,6 +1271,48 @@ void khr_physics_world_step(khr_physics_world_t* world, float dt) {
         b->angular_velocity[1] *= 0.995f;
         b->angular_velocity[2] *= 0.995f;
 
+        /* Linear and angular speed limiters to prevent supersonic tunneling & NaN explosion */
+        float speed_sq = b->velocity[0] * b->velocity[0] +
+                         b->velocity[1] * b->velocity[1] +
+                         b->velocity[2] * b->velocity[2];
+        if (speed_sq > KHR_PHYSICS_MAX_LINEAR_SPEED * KHR_PHYSICS_MAX_LINEAR_SPEED) {
+            float inv_s = KHR_PHYSICS_MAX_LINEAR_SPEED / sqrtf(speed_sq);
+            b->velocity[0] *= inv_s;
+            b->velocity[1] *= inv_s;
+            b->velocity[2] *= inv_s;
+        }
+
+        float ang_speed_sq = b->angular_velocity[0] * b->angular_velocity[0] +
+                             b->angular_velocity[1] * b->angular_velocity[1] +
+                             b->angular_velocity[2] * b->angular_velocity[2];
+        if (ang_speed_sq > KHR_PHYSICS_MAX_ANGULAR_SPEED * KHR_PHYSICS_MAX_ANGULAR_SPEED) {
+            float inv_as = KHR_PHYSICS_MAX_ANGULAR_SPEED / sqrtf(ang_speed_sq);
+            b->angular_velocity[0] *= inv_as;
+            b->angular_velocity[1] *= inv_as;
+            b->angular_velocity[2] *= inv_as;
+        }
+
+        /* Anti-tunneling floor safety net */
+        float min_y = KHR_PHYSICS_FLOOR_Y + 0.2f;
+        if (b->position[1] < min_y) {
+            b->position[1] = min_y;
+            if (b->velocity[1] < 0.0f) {
+                b->velocity[1] = -b->velocity[1] * b->restitution * 0.5f;
+            }
+        }
+
+        /* Spatial containment: catch runaway bodies from extreme agitation */
+        if (b->position[1] > KHR_PHYSICS_CONTAINMENT_MAX_Y ||
+            fabsf(b->position[0]) > KHR_PHYSICS_CONTAINMENT_HALF_XZ ||
+            fabsf(b->position[2]) > KHR_PHYSICS_CONTAINMENT_HALF_XZ) {
+            b->position[0] = fminf(fmaxf(b->position[0], -25.0f), 25.0f);
+            b->position[1] = fminf(b->position[1], 15.0f);
+            b->position[2] = fminf(fmaxf(b->position[2], -25.0f), 25.0f);
+            b->velocity[0] *= 0.1f;
+            b->velocity[1] = 0.0f;
+            b->velocity[2] *= 0.1f;
+        }
+
         /* Clear transient forces and torques */
         b->force[0] = 0.0f;
         b->force[1] = 0.0f;

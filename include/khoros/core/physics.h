@@ -29,6 +29,10 @@ constexpr float    KHR_PHYSICS_DEFAULT_SLOP = 0.005f;
 constexpr float    KHR_PHYSICS_GRAVITY_M_S2 = 9.80665f;
 constexpr float    KHR_PHYSICS_FLOOR_Y      = -2.5f;
 constexpr float    KHR_PHYSICS_DEFAULT_DT_S = 1.0f / 60.0f;
+constexpr float    KHR_PHYSICS_MAX_LINEAR_SPEED  = 28.0f;
+constexpr float    KHR_PHYSICS_MAX_ANGULAR_SPEED = 20.0f;
+constexpr float    KHR_PHYSICS_CONTAINMENT_HALF_XZ = 60.0f;
+constexpr float    KHR_PHYSICS_CONTAINMENT_MAX_Y   = 80.0f;
 
 typedef enum {
     KHR_SHAPE_SPHERE  = 0,

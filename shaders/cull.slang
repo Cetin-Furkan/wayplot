@@ -80,7 +80,9 @@ void cs_main(uint32_t3 dtid : SV_DispatchThreadID) {
         // 2. Read Instance Data via BDA with Sub-Frame Motion Interpolation
         GpuInstance inst = push.instances[idx];
         if ((push.flags & 1) != 0) {
-            int prev_offset = ((push.flags & 2) != 0) ? -(int)push.instance_count : (int)push.instance_count;
+            uint stride = (push.flags >> 16u) & 0xFFFFu;
+            if (stride == 0u) stride = push.instance_count;
+            int prev_offset = ((push.flags & 2) != 0) ? -(int)stride : (int)stride;
             GpuInstance prev = push.instances[idx + prev_offset];
             float prev_s2 = dot(prev.scale, prev.scale);
             float prev_q2 = dot(prev.rotation, prev.rotation);
@@ -106,7 +108,7 @@ void cs_main(uint32_t3 dtid : SV_DispatchThreadID) {
         culled.model = model;
         culled.rotation = inst.rotation;
         culled.scale = inst.scale;
-        culled.pad0 = 0.0;
+        culled.pad0 = float(inst.mesh_id);
         culled.albedo = inst.albedo;
         culled.roughness = inst.roughness;
         culled.metallic = inst.metallic;

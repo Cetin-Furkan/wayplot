@@ -9,15 +9,15 @@ Right now, the project has 2 rings, ring A and ring B, each of them is pinned to
 
 ---
 
-## Release: Version 0.3.5
+## Release: Version 0.3.5.1-bug-fixes
 
-> **Caption**: *Interactive physics sandbox, 3D ray-picking impulse toss, dynamic mesh spawner, and live pacing cycler.*
+> **Caption**: *Velocity clamping, motion interpolation stride alignment, near-plane Hi-Z clipping fixes, and direct BDA multi-mesh filtering.*
 
-Version 0.3.5 transforms Khoros into a fully interactive bare-metal 3D physics sandbox. It introduces sub-pixel camera unprojection with 3D ray-primitive intersection (`E` key ray-picking impulse tossing), real-time rigid body spawning across 5 distinct procedural meshes (`0`–`4` keys), kinetic scene agitation (`K` key), dynamic Zero-G gravity toggling (`G` key), and on-the-fly presentation pacing cycling (`T` key).
+Version 0.3.5.1-bug-fixes is a targeted stability and precision release resolving visual anomalies during extreme interactive agitation (such as repeated kinetic kicks), eliminating near-plane Hi-Z false-culling, correcting BDA motion interpolation slot offsets, and introducing zero-overhead vertex-stage multi-mesh filtering.
 
 ```
                   ┌───────────────────────────────────────────┐
-                  │          Khoros 0.3.5 Architecture        │
+                  │    Khoros 0.3.5.1-bug-fixes Architecture  │
                   │   Pure ISO C23 · Zero Third-Party Libs    │
                   └─────────────────────┬─────────────────────┘
                                         │
@@ -33,14 +33,41 @@ Version 0.3.5 transforms Khoros into a fully interactive bare-metal 3D physics s
   │   └── Live Sandbox Hotkeys (E/K/G/T/0..4)                  └── Pipe Audio Mixer (48 kHz Stereo)
   ├── Vulkan 1.4 BDA Pipeline                                      ├── Desktop Auto-Sink Router
   │   ├── Two-Pass Hi-Z Occlusion Culling                          ├── Zero-HDMI Hijack (PipeWire/Pulse)
-  │   ├── Hardware GPU Timestamps (VK_QUERY_TIMESTAMP)             └── Modal Acoustic Resonance Synth
+  │   ├── Near-Plane Depth-Safety Guard                            └── Modal Acoustic Resonance Synth
+  │   ├── Sub-Frame BDA Stride Alignment                       ├── Supersonic Velocity Limiter (28 m/s)
+  │   ├── Direct BDA Multi-Mesh Vertex Filter                  ├── Rotational Velocity Limiter (20 rad/s)
+  │   ├── Hardware GPU Timestamps (VK_QUERY_TIMESTAMP)         └── Anti-Tunneling Floor Safety Net
   │   ├── Live Dynamic Pacing Governor (T Key Cycler)
   │   └── Live Telemetry Stream (FPS, CPU %, GPU HW ms, Contacts)
 ```
 
 ---
 
-### Highlights of Version 0.3.5
+### Bug Fixes & Improvements in Version 0.3.5.1-bug-fixes
+
+#### 1. Kinetic Kick Velocity Clamping & Anti-Tunneling Safety Net
+* **Runaway Velocity Prevention**: Rapidly pressing `K` (kinetic kick) previously accumulated unbounded upward and angular velocity ($v_y > 200 \text{ m/s}$), catapulting bodies thousands of meters into the sky and causing numerical precision degradation.
+* **Physics Limiters**:
+  * `KHR_PHYSICS_MAX_LINEAR_SPEED = 28.0f` ($\approx 100 \text{ km/h}$)
+  * `KHR_PHYSICS_MAX_ANGULAR_SPEED = 20.0f` ($\approx 190 \text{ rpm}$)
+  * Both linear and angular velocities are clamped at each tick in `khr_physics_world_step` and upon impulse injection in `khr_topology_sim_kick_all`.
+* **Floor Safety Net & Arena Containment**: An explicit floor boundary guard (`y >= KHR_PHYSICS_FLOOR_Y + 0.2f`) catches tunneling bodies under heavy multi-body pileups, while spatial containment preserves simulation integrity under extreme agitation.
+
+#### 2. BDA Motion Interpolation Stride Alignment
+* **Slot Stride Desynchronization Fixed**: In `shaders/cull.slang` and `shaders/cull_hiz.slang`, previous double-buffer slot offsets were computed using active `push.instance_count` (which could be 5 or 64), whereas Slot A and Slot B in `scene.instances` are separated by `scene.max_instances` (1024).
+* **Precise Stride Decoding**: The render host now packs `scene.max_instances` into `push.flags >> 16u`. Compute culling shaders decode the exact 1024-body stride, guaranteeing that sub-frame motion interpolation reads the correct corresponding body in the opposite double-buffer slot with zero memory corruption or visual jitter.
+
+#### 3. Hi-Z Near-Plane False-Occlusion Guard
+* **Near-Plane Bounding Box Clipping**: When objects approached the camera closely or were tossed upward, bounding box corners clipped the camera near plane ($w \le 0$). NDC coordinate bounds collapsed to default values ($min\_uv = (1,1), max\_uv = (0,0)$), forcing `max_depth = 0.0`. In reversed-Z depth buffers, $0.0$ is the far plane, causing the Hi-Z test to falsely mark visible foreground objects as occluded and vanish them from screen.
+* **Near-Clip Guard**: Added `valid_corners >= 4 && min_uv.x < max_uv.x && min_uv.y < max_uv.y` condition. If bounding corners intersect the near plane, Hi-Z occlusion culling safely defaults to visible, preserving near-field geometry.
+
+#### 4. Direct BDA Multi-Mesh Vertex-Stage Filtering
+* **Dynamic Mesh Spawner Immune to Index Shuffling**: In `shaders/mesh_instanced.slang`, `MeshInstancedPush` now specifies `target_mesh_id` at push constant offset 92, and compute culling passes `inst.mesh_id` via `culled.pad0`.
+* **Zero-NaN Geometry Collapse**: Vertex shader `vs_main` instantly collapses non-matching mesh instances and culled instances to NDC $(0,0,0)$ with $w=1.0$, completely avoiding $0/0$ NaN rasterizer breakdown. Dynamic spawning via keys `0`–`4` operates with zero index slicing conflicts.
+
+---
+
+### Highlights of Version 0.3.5 Sandbox Systems
 
 #### 1. 3D Camera Ray-Picking & Impulse Toss (`E` Key)
 * **Screen-to-World Ray Unprojection (`khr_camera_screen_to_ray`)**:

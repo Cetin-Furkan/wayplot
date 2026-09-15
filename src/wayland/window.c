@@ -827,16 +827,6 @@ bool khr_window_run_opts(khr_topology_t* topo, khr_gfx_device_t* dev,
         (void)khr_scene_add_instance(&scene, &tor_inst);
     }
 
-    uint32_t mesh_start[5] = {};
-    uint32_t mesh_count[5] = {};
-    for (uint32_t i = 0; i < scene.instance_count; i++) {
-        uint32_t mid = scene.instances[i].mesh_id;
-        if (mid > 4) mid = 0;
-        if (mesh_count[mid] == 0) {
-            mesh_start[mid] = i;
-        }
-        mesh_count[mid]++;
-    }
 
     /* Real Physical Lights (Pillar D) */
     khr_gpu_light_t sun = {
@@ -1642,6 +1632,7 @@ bool khr_window_run_opts(khr_topology_t* topo, khr_gfx_device_t* dev,
                 uint32_t flags = 0;
                 khr_topology_sim_get_render_state(topo, now_ns, &read_bda, &prev_bda, &alpha, &flags);
                 if (read_bda != 0) {
+                    flags |= ((scene.max_instances & 0xFFFFU) << 16U);
                     cull_push.instances_addr = read_bda;
                     cull_push.alpha = alpha;
                     cull_push.flags = flags;
@@ -1665,20 +1656,18 @@ bool khr_window_run_opts(khr_topology_t* topo, khr_gfx_device_t* dev,
 
             khr_gpu_scene_pass_t gpu_pass = {};
             uint32_t active_passes = 0;
-            for (uint32_t m = 0; m < 5 && m < scene.mesh_count; m++) {
-                if (mesh_count[m] == 0) continue;
-
+            for (uint32_t m = 0; m < 5 && m < scene.mesh_count && active_passes < 8; m++) {
                 scene.draw_cmd[active_passes] = (khr_draw_indirect_cmd_t){
                     .vertexCount = scene.meshes[m].index_count,
-                    .instanceCount = mesh_count[m],
+                    .instanceCount = scene.instance_count,
                     .firstVertex = 0,
                     .firstInstance = 0,
                 };
 
                 khr_mesh_instanced_push_t m_push = {};
                 khr_scene_prepare_mesh_push(&scene, m, &camera, &m_push);
-                m_push.instances_addr = scene.culled_instances_gpu +
-                    (VkDeviceAddress)(mesh_start[m] * sizeof(khr_gpu_culled_instance_t));
+                m_push.instances_addr = scene.culled_instances_gpu;
+                m_push.target_mesh_id = m;
                 m_push.verts_addr = scene.meshes[m].verts_addr;
                 m_push.indices_addr = scene.meshes[m].indices_addr;
                 m_push.normals_addr = scene.meshes[m].normals_addr;
