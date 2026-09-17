@@ -339,6 +339,47 @@ bool khr_xdg_set_window_geometry(khr_wl_client_t* client,
 }
 
 [[nodiscard]]
+bool khr_xdg_set_opaque_region(khr_wl_client_t* client,
+                               const khr_xdg_shell_t* shell,
+                               int32_t x, int32_t y, int32_t w, int32_t h) {
+    if (client == nullptr || shell == nullptr || shell->compositor_id == 0 ||
+        shell->surface_id == 0 || w <= 0 || h <= 0) {
+        return false;
+    }
+    uint32_t region_id = khr_wl_client_alloc_id(client);
+    if (region_id == 0) {
+        return false;
+    }
+    khr_wl_msg_buf_t out = {};
+    khr_wl_buf_init(&out);
+
+    /* 1. wl_compositor.create_region(new_id region) */
+    if (!khr_wl_encode_header(&out, shell->compositor_id, KHR_WL_COMPOSITOR_CREATE_REGION, 12) ||
+        !khr_wl_encode_u32(&out, region_id)) {
+        return false;
+    }
+    /* 2. wl_region.add(x, y, w, h) */
+    if (!khr_wl_encode_header(&out, region_id, KHR_WL_REGION_ADD, 24) ||
+        !khr_wl_encode_i32(&out, x) ||
+        !khr_wl_encode_i32(&out, y) ||
+        !khr_wl_encode_i32(&out, w) ||
+        !khr_wl_encode_i32(&out, h)) {
+        return false;
+    }
+    /* 3. wl_surface.set_opaque_region(region) */
+    if (!khr_wl_encode_header(&out, shell->surface_id, KHR_WL_SURFACE_SET_OPAQUE_REGION, 12) ||
+        !khr_wl_encode_u32(&out, region_id)) {
+        return false;
+    }
+    /* 4. wl_region.destroy() - region geometry is retained by wl_surface */
+    if (!khr_wl_encode_header(&out, region_id, KHR_WL_REGION_DESTROY, 8)) {
+        return false;
+    }
+
+    return khr_wl_client_send_skip(client, out.data, out.size);
+}
+
+[[nodiscard]]
 bool khr_xdg_move(khr_wl_client_t* client, const khr_xdg_shell_t* shell,
                   uint32_t seat_id, uint32_t serial) {
     if (client == nullptr || shell == nullptr || shell->xdg_toplevel_id == 0 ||

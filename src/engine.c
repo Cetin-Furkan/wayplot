@@ -8,8 +8,8 @@
 
 [[nodiscard]]
 const char* engine_get_banner(void) {
-    static const char banner[] = "=== Khoros Engine 0.3.5.1-bug-fixes (Linux 7.2 / C23 / io_uring / Vulkan 1.4) ===\n"
-                                 "  Caption: velocity clamping, motion interpolation stride alignment, and Hi-Z near-plane clipping fixes.";
+    static const char banner[] = "=== Khoros Engine 0.3.5.2 (Linux 7.2 / C23 / io_uring / Vulkan 1.4) ===\n"
+                                 "  Caption: NVIDIA GTX 1650 hybrid GPU compatibility, Wayland opaque region, and Vulkan Sync 2 fixes.";
     return banner;
 }
 

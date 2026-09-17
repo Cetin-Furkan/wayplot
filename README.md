@@ -9,61 +9,61 @@ Right now, the project has 2 rings, ring A and ring B, each of them is pinned to
 
 ---
 
-## Release: Version 0.3.5.1-bug-fixes
+## Release: Version 0.3.5.2
 
-> **Caption**: *Velocity clamping, motion interpolation stride alignment, near-plane Hi-Z clipping fixes, and direct BDA multi-mesh filtering.*
+> **Caption**: *NVIDIA GTX 1650 hybrid GPU compatibility, Wayland atomic opaque region, and Vulkan Sync 2 fixes.*
 
-Version 0.3.5.1-bug-fixes is a targeted stability and precision release resolving visual anomalies during extreme interactive agitation (such as repeated kinetic kicks), eliminating near-plane Hi-Z false-culling, correcting BDA motion interpolation slot offsets, and introducing zero-overhead vertex-stage multi-mesh filtering.
+Version 0.3.5.2 is a targeted hardware compatibility and display server integration release resolving cross-vendor DMA-BUF tiling mismatches on hybrid Optimus laptops (NVIDIA dGPU + Intel iGPU), eliminating window transparency bleed-through via atomic `wl_surface.set_opaque_region` dispatch, modernizing timeline semaphore queue submission to Vulkan 1.4 Synchronization 2 (`vkQueueSubmit2`), and guaranteeing zero compiler diagnostics across all test suites.
 
 ```
                   ┌───────────────────────────────────────────┐
-                  │    Khoros 0.3.5.1-bug-fixes Architecture  │
+                  │        Khoros 0.3.5.2 Architecture        │
                   │   Pure ISO C23 · Zero Third-Party Libs    │
                   └─────────────────────┬─────────────────────┘
                                         │
         ┌───────────────────────────────┴───────────────────────────────┐
         ▼                                                               ▼
- [ Presentation & Sandbox ]                                    [ Simulation & Compute ]
+ [ Presentation & Display Server ]                             [ Simulation & Compute ]
   ├── Core 2 Affinity (Lock-Free)                              ├── Core 3 Affinity (Pinned Worker)
   ├── Wayland Wire (Raw Syscalls)                              ├── 60/120 Hz Symplectic Integrator
-  │   ├── zwp_linux_dmabuf_v1 Zero-Copy                        ├── 30-bit Morton Radix LBVH Broadphase
-  │   ├── wp_presentation_time Feedback                        ├── 100% Pairwise SAT Narrowphase Matrix
-  │   ├── 3D Camera Ray-Picking Unprojection                   │   (Sphere, Plane, Box, Capsule)
-  │   ├── Interactive Flight Navigation (WASD/Space/C/R)       ├── Dynamic Runtime Body Insertion
-  │   └── Live Sandbox Hotkeys (E/K/G/T/0..4)                  └── Pipe Audio Mixer (48 kHz Stereo)
-  ├── Vulkan 1.4 BDA Pipeline                                      ├── Desktop Auto-Sink Router
-  │   ├── Two-Pass Hi-Z Occlusion Culling                          ├── Zero-HDMI Hijack (PipeWire/Pulse)
-  │   ├── Near-Plane Depth-Safety Guard                            └── Modal Acoustic Resonance Synth
-  │   ├── Sub-Frame BDA Stride Alignment                       ├── Supersonic Velocity Limiter (28 m/s)
-  │   ├── Direct BDA Multi-Mesh Vertex Filter                  ├── Rotational Velocity Limiter (20 rad/s)
-  │   ├── Hardware GPU Timestamps (VK_QUERY_TIMESTAMP)         └── Anti-Tunneling Floor Safety Net
+  │   ├── zwp_linux_dmabuf_v1 Universal LINEAR Fallback        ├── 30-bit Morton Radix LBVH Broadphase
+  │   ├── wl_surface.set_opaque_region Atomic Opaque Box       ├── 100% Pairwise SAT Narrowphase Matrix
+  │   ├── wp_presentation_time Feedback & VBlank Pacing        │   (Sphere, Plane, Box, Capsule)
+  │   ├── 3D Camera Ray-Picking Unprojection                   ├── Dynamic Runtime Body Insertion
+  │   ├── Interactive Flight Navigation (WASD/Space/C/R)       └── Pipe Audio Mixer (48 kHz Stereo)
+  │   └── Live Sandbox Hotkeys (E/K/G/T/0..4)                      ├── Desktop Auto-Sink Router
+  ├── Vulkan 1.4 Sync 2 Pipeline                                   ├── Zero-HDMI Hijack (PipeWire/Pulse)
+  │   ├── vkQueueSubmit2 + VkSemaphoreSubmitInfo                   └── Modal Acoustic Resonance Synth
+  │   ├── Two-Pass Hi-Z Occlusion Culling                      ├── Supersonic Velocity Limiter (28 m/s)
+  │   ├── Near-Plane Depth-Safety Guard                        ├── Rotational Velocity Limiter (20 rad/s)
+  │   ├── Sub-Frame BDA Stride Alignment                       └── Anti-Tunneling Floor Safety Net
+  │   ├── Direct BDA Multi-Mesh Vertex Filter
+  │   ├── Opaque Reversed-Z Ground Grid & UI Shaders
+  │   ├── Hardware GPU Timestamps (VK_QUERY_TIMESTAMP)
   │   ├── Live Dynamic Pacing Governor (T Key Cycler)
   │   └── Live Telemetry Stream (FPS, CPU %, GPU HW ms, Contacts)
 ```
 
 ---
 
-### Bug Fixes & Improvements in Version 0.3.5.1-bug-fixes
+### Bug Fixes & Improvements in Version 0.3.5.2
 
-#### 1. Kinetic Kick Velocity Clamping & Anti-Tunneling Safety Net
-* **Runaway Velocity Prevention**: Rapidly pressing `K` (kinetic kick) previously accumulated unbounded upward and angular velocity ($v_y > 200 \text{ m/s}$), catapulting bodies thousands of meters into the sky and causing numerical precision degradation.
-* **Physics Limiters**:
-  * `KHR_PHYSICS_MAX_LINEAR_SPEED = 28.0f` ($\approx 100 \text{ km/h}$)
-  * `KHR_PHYSICS_MAX_ANGULAR_SPEED = 20.0f` ($\approx 190 \text{ rpm}$)
-  * Both linear and angular velocities are clamped at each tick in `khr_physics_world_step` and upon impulse injection in `khr_topology_sim_kick_all`.
-* **Floor Safety Net & Arena Containment**: An explicit floor boundary guard (`y >= KHR_PHYSICS_FLOOR_Y + 0.2f`) catches tunneling bodies under heavy multi-body pileups, while spatial containment preserves simulation integrity under extreme agitation.
+#### 1. NVIDIA Hybrid Optimus DMA-BUF Tiling Compatibility
+* **Root Cause Diagnosis**: On hybrid laptops (discrete NVIDIA GPU paired with an integrated Intel display GPU running Wayland), compositor modifier negotiation produces an empty modifier intersection. The previous fallback probed `VK_IMAGE_TILING_OPTIMAL` first, creating NVIDIA block-linear tiled images and exporting them with `DRM_FORMAT_MOD_INVALID`. The Intel compositor imported them as linear or Intel-tiled, resulting in scrambled 16x16 pixel blocks, transparent pixel holes, and checkerboard damage trails.
+* **Universal LINEAR Fallback**: In `src/gfx/dmabuf.c`, fallback image export for discrete GPUs and cross-GPU un-negotiated targets now prioritizes `VK_IMAGE_TILING_LINEAR` and assigns `DRM_FORMAT_MOD_LINEAR` ($0$). Row pitches and offsets are queried directly via `vkGetImageSubresourceLayout`. Every compositor and display GPU correctly reads linear memory, entirely eliminating tile scrambling.
 
-#### 2. BDA Motion Interpolation Stride Alignment
-* **Slot Stride Desynchronization Fixed**: In `shaders/cull.slang` and `shaders/cull_hiz.slang`, previous double-buffer slot offsets were computed using active `push.instance_count` (which could be 5 or 64), whereas Slot A and Slot B in `scene.instances` are separated by `scene.max_instances` (1024).
-* **Precise Stride Decoding**: The render host now packs `scene.max_instances` into `push.flags >> 16u`. Compute culling shaders decode the exact 1024-body stride, guaranteeing that sub-frame motion interpolation reads the correct corresponding body in the opposite double-buffer slot with zero memory corruption or visual jitter.
+#### 2. Wayland Atomic Opaque Surface Region
+* **Zero Desktop Bleed-Through**: Wayland compositors treat `DRM_FORMAT_ARGB8888` surfaces as translucent by default unless `wl_surface.set_opaque_region` is explicitly specified. Khoros now encodes `wl_compositor.create_region`, `wl_region.add(0, 0, w, h)`, `wl_surface.set_opaque_region`, and `wl_region.destroy` in a single atomic wire dispatch upon window creation and resize. Compositors disable alpha blending behind the window, preventing terminal and browser text bleed-through.
 
-#### 3. Hi-Z Near-Plane False-Occlusion Guard
-* **Near-Plane Bounding Box Clipping**: When objects approached the camera closely or were tossed upward, bounding box corners clipped the camera near plane ($w \le 0$). NDC coordinate bounds collapsed to default values ($min\_uv = (1,1), max\_uv = (0,0)$), forcing `max_depth = 0.0`. In reversed-Z depth buffers, $0.0$ is the far plane, causing the Hi-Z test to falsely mark visible foreground objects as occluded and vanish them from screen.
-* **Near-Clip Guard**: Added `valid_corners >= 4 && min_uv.x < max_uv.x && min_uv.y < max_uv.y` condition. If bounding corners intersect the near plane, Hi-Z occlusion culling safely defaults to visible, preserving near-field geometry.
+#### 3. Vulkan 1.4 Core Synchronization 2 Submission
+* **Vulkan Specification Contract Compliance**: In `tests/test_gpu_driven.c`, legacy `VkSubmitInfo` with timeline semaphore wait previously omitted `pWaitDstStageMask`, violating VUID-VkSubmitInfo-waitSemaphoreCount-00078 and stalling queue submissions on NVIDIA proprietary drivers.
+* **Modernized Sync 2**: Replaced with standard Vulkan 1.4 `VkSubmitInfo2`, `VkCommandBufferSubmitInfo`, and `VkSemaphoreSubmitInfo` with explicit `stageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT` via `vkQueueSubmit2`. Resolves the 5-second `vkWaitSemaphores` timeout on NVIDIA.
 
-#### 4. Direct BDA Multi-Mesh Vertex-Stage Filtering
-* **Dynamic Mesh Spawner Immune to Index Shuffling**: In `shaders/mesh_instanced.slang`, `MeshInstancedPush` now specifies `target_mesh_id` at push constant offset 92, and compute culling passes `inst.mesh_id` via `culled.pad0`.
-* **Zero-NaN Geometry Collapse**: Vertex shader `vs_main` instantly collapses non-matching mesh instances and culled instances to NDC $(0,0,0)$ with $w=1.0$, completely avoiding $0/0$ NaN rasterizer breakdown. Dynamic spawning via keys `0`–`4` operates with zero index slicing conflicts.
+#### 4. Opaque Shading Composition
+* **Solid Ground Grid & UI Panels**: In `shaders/grid.slang`, horizon fog now lerps floor color towards the sky background while guaranteeing solid alpha `1.0` output (`out.color = float4(color, 1.0);`), and rays missing the ground return background color at depth $0.0$. In `shaders/card.slang`, solid UI cards write solid alpha `1.0`, eliminating hollow transparent centers.
+
+#### 5. Zero-Warning Standards Compliance
+* **Compiler Cleanliness**: Fixed integer signedness comparison warnings (`-Wsign-compare`) in `tests/test_audio.c`, `tests/test_dmabuf_present.c`, and `tests/test_vulkan_bda.c`. All 203 tests compile with zero warnings under `-Wall -Wextra -Wpedantic -Werror=vla`.
 
 ---
 

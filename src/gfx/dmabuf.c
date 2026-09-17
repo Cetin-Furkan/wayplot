@@ -273,10 +273,19 @@ bool khr_dmabuf_image_init_with_modifiers(khr_gfx_device_t* d, khr_dmabuf_image_
     }
 
     /* Attempt 2: Fallback to optimal/linear exportability probe */
-    static const VkImageTiling try_tilings[2] = {
-        VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_TILING_LINEAR,
-    };
-    VkImageTiling chosen = VK_IMAGE_TILING_OPTIMAL;
+    VkImageTiling try_tilings[2];
+    if (!d->is_uma || (wayland_modifiers != nullptr && wayland_modifier_count > 0)) {
+        /* Discrete GPUs (e.g. NVIDIA in hybrid Optimus setups) and un-negotiated
+         * cross-GPU compositor environments cannot share private block-linear tiling.
+         * Enforce universal LINEAR fallback (DRM_FORMAT_MOD_LINEAR) to prevent
+         * block-scrambling and transparent checkerboard artifacts. */
+        try_tilings[0] = VK_IMAGE_TILING_LINEAR;
+        try_tilings[1] = VK_IMAGE_TILING_OPTIMAL;
+    } else {
+        try_tilings[0] = VK_IMAGE_TILING_OPTIMAL;
+        try_tilings[1] = VK_IMAGE_TILING_LINEAR;
+    }
+    VkImageTiling chosen = try_tilings[0];
     bool exportable = false;
     for (uint32_t i = 0; i < 2; i++) {
         VkPhysicalDeviceExternalImageFormatInfo ext_info = {

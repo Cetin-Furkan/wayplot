@@ -386,6 +386,8 @@ bool khr_window_run_opts(khr_topology_t* topo, khr_gfx_device_t* dev,
     khr_window_buffer_size(&shell, &buf_w, &buf_h);
     (void)khr_xdg_set_window_geometry(&client, &shell, 0, 0, (int32_t)buf_w,
                                       (int32_t)buf_h);
+    (void)khr_xdg_set_opaque_region(&client, &shell, 0, 0, (int32_t)buf_w,
+                                    (int32_t)buf_h);
     printf("  XDG:          configured %dx%d (buffer %ux%u) serial=%u max=%d full=%d\n",
            shell.width, shell.height, buf_w, buf_h, shell.last_ack_serial,
            shell.maximized, shell.fullscreen);
@@ -1144,6 +1146,8 @@ bool khr_window_run_opts(khr_topology_t* topo, khr_gfx_device_t* dev,
             khr_camera_set_aspect(&camera, (float)buf_w / (float)init_ph);
             (void)khr_xdg_set_window_geometry(&client, &shell, 0, 0,
                                               (int32_t)want_w, (int32_t)want_h);
+            (void)khr_xdg_set_opaque_region(&client, &shell, 0, 0,
+                                            (int32_t)want_w, (int32_t)want_h);
             have_hiz = khr_hiz_init(&hiz, dev, buf_w, buf_h);
             if (have_hiz) {
                 printf("  Hi-Z:         %ux%u pyramid (%u mips, 2-pass occlusion culling enabled)\n",
@@ -1587,6 +1591,8 @@ bool khr_window_run_opts(khr_topology_t* topo, khr_gfx_device_t* dev,
                 khr_camera_set_aspect(&camera, (float)buf_w / (float)resize_ph);
                 (void)khr_xdg_set_window_geometry(&client, &shell, 0, 0,
                                                   (int32_t)want_w, (int32_t)want_h);
+                (void)khr_xdg_set_opaque_region(&client, &shell, 0, 0,
+                                                (int32_t)want_w, (int32_t)want_h);
                 if (have_hiz) {
                     khr_hiz_destroy(&hiz);
                     have_hiz = khr_hiz_init(&hiz, dev, buf_w, buf_h);

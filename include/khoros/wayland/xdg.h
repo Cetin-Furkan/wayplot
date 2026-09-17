@@ -31,12 +31,21 @@
  * Ping is answered with pong immediately inside khr_xdg_consume().
  */
 
-/* wl_compositor / wl_surface (wayland.xml). Registry bind lives in wire.h. */
+/* wl_compositor / wl_surface / wl_region (wayland.xml). Registry bind lives in wire.h. */
 constexpr uint16_t KHR_WL_COMPOSITOR_CREATE_SURFACE = 0;
-constexpr uint16_t KHR_WL_SURFACE_DESTROY        = 0;
-constexpr uint16_t KHR_WL_SURFACE_ATTACH         = 1;
-constexpr uint16_t KHR_WL_SURFACE_DAMAGE         = 2;
-constexpr uint16_t KHR_WL_SURFACE_COMMIT         = 6;
+constexpr uint16_t KHR_WL_COMPOSITOR_CREATE_REGION  = 1;
+
+/* wl_region (wayland.xml) */
+constexpr uint16_t KHR_WL_REGION_DESTROY  = 0;
+constexpr uint16_t KHR_WL_REGION_ADD      = 1;
+constexpr uint16_t KHR_WL_REGION_SUBTRACT = 2;
+
+constexpr uint16_t KHR_WL_SURFACE_DESTROY           = 0;
+constexpr uint16_t KHR_WL_SURFACE_ATTACH            = 1;
+constexpr uint16_t KHR_WL_SURFACE_DAMAGE            = 2;
+constexpr uint16_t KHR_WL_SURFACE_SET_OPAQUE_REGION = 4;
+constexpr uint16_t KHR_WL_SURFACE_SET_INPUT_REGION  = 5;
+constexpr uint16_t KHR_WL_SURFACE_COMMIT            = 6;
 
 /* xdg_wm_base (xdg-shell.xml): get_xdg_surface=2, pong=3, event ping=0 */
 constexpr uint16_t KHR_XDG_WM_BASE_CREATE_POSITIONER = 1;
@@ -213,6 +222,11 @@ bool khr_xdg_set_min_size(khr_wl_client_t* client, const khr_xdg_shell_t* shell,
 bool khr_xdg_set_window_geometry(khr_wl_client_t* client,
                                  const khr_xdg_shell_t* shell,
                                  int32_t x, int32_t y, int32_t w, int32_t h);
+
+[[nodiscard]]
+bool khr_xdg_set_opaque_region(khr_wl_client_t* client,
+                               const khr_xdg_shell_t* shell,
+                               int32_t x, int32_t y, int32_t w, int32_t h);
 
 [[nodiscard]]
 bool khr_xdg_move(khr_wl_client_t* client, const khr_xdg_shell_t* shell,

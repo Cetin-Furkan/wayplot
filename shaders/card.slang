@@ -103,5 +103,8 @@ float4 fs_main(VSOutput pin) : SV_Target
         col = lerp(pin.border_color, pin.bg_color, inner_alpha);
     }
 
-    return float4(col.rgb, col.a * alpha);
+    // When card background/border are opaque (alpha >= 0.99) and inside the shape,
+    // ensure output alpha is solid 1.0 rather than fractional subpixel rounding
+    float out_a = (col.a >= 0.99 && alpha >= 0.99) ? 1.0 : (col.a * alpha);
+    return float4(col.rgb, out_a);
 }

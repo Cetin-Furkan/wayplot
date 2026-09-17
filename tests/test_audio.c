@@ -368,7 +368,7 @@ bool test_audio_pipe_backend_auto_routing(void) {
     };
     khr_audio_engine_t eng_null = {};
     TEST_ASSERT(khr_audio_engine_init(&eng_null, &cfg_null), "init null engine");
-    TEST_ASSERT_EQ(eng_null.active_backend, KHR_AUDIO_BACKEND_NULL, "active backend null");
+    TEST_ASSERT_EQ((int)eng_null.active_backend, (int)KHR_AUDIO_BACKEND_NULL, "active backend null");
     const char* desc = khr_audio_engine_get_backend_name(&eng_null);
     TEST_ASSERT(desc != nullptr && strstr(desc, "Null") != nullptr, "null desc contains Null");
     khr_audio_engine_destroy(&eng_null);

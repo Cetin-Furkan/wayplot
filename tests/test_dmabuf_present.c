@@ -190,7 +190,7 @@ static bool test_dmabuf_present_loop_mock_body(khr_topology_t* topo_ctx) {
      * release, all imported exactly once (no per-frame churn). Exact send
      * accounting: xdg ack_configure + 2 binds + get_surface + acquire import
      * + 2 x (params, add, immed, release import) = 13 messages. */
-    TEST_ASSERT_EQ(mock_compositor_drain(&comp), 13, "exact init send count");
+    TEST_ASSERT_EQ(mock_compositor_drain(&comp), 13U, "exact init send count");
     TEST_ASSERT_EQ(comp.timeline_id_count, 3U, "three timelines expected");
     TEST_ASSERT(dp.acquire_tl_id != 0, "acquire timeline missing");
     TEST_ASSERT(dp.slots[0].buffer_id != 0 && dp.slots[1].buffer_id != 0,
@@ -213,7 +213,7 @@ static bool test_dmabuf_present_loop_mock_body(khr_topology_t* topo_ctx) {
     uint32_t commits_before = comp.commit_count;
     TEST_ASSERT(khr_dmabuf_present_commit_frame(&dev, &dp, &arena, 1),
                 "commit frame 1 failed");
-    TEST_ASSERT_EQ(mock_compositor_drain(&comp), 5, "commit send count");
+    TEST_ASSERT_EQ(mock_compositor_drain(&comp), 5U, "commit send count");
     TEST_ASSERT_EQ(dp.frames, 1U, "frame counter must advance");
     TEST_ASSERT_EQ(comp.acquire_timeline_id, dp.acquire_tl_id,
                    "acquire must name our timeline");
@@ -229,7 +229,7 @@ static bool test_dmabuf_present_loop_mock_body(khr_topology_t* topo_ctx) {
     /* Frame 1 → slot 1 (round-robin), then both busy: refused, no block. */
     TEST_ASSERT(khr_dmabuf_present_commit_frame(&dev, &dp, &arena, 2),
                 "commit frame 2 failed");
-    TEST_ASSERT_EQ(mock_compositor_drain(&comp), 5, "commit send count");
+    TEST_ASSERT_EQ(mock_compositor_drain(&comp), 5U, "commit send count");
     TEST_ASSERT_EQ(dp.slots[1].gfx.painted, 1U, "slot 1 must render once");
     TEST_ASSERT_EQ(comp.acquire_point, 2U, "acquire must advance to 2");
     TEST_ASSERT_EQ(khr_dmabuf_present_next_free(&dp), UINT32_MAX,
@@ -246,7 +246,7 @@ static bool test_dmabuf_present_loop_mock_body(khr_topology_t* topo_ctx) {
     TEST_ASSERT_EQ(khr_dmabuf_present_next_free(&dp), 0U, "slot 0 recycles");
     TEST_ASSERT(khr_dmabuf_present_commit_frame(&dev, &dp, &arena, 3),
                 "recommit slot 0 failed");
-    TEST_ASSERT_EQ(mock_compositor_drain(&comp), 5, "commit send count");
+    TEST_ASSERT_EQ(mock_compositor_drain(&comp), 5U, "commit send count");
     TEST_ASSERT_EQ(dp.frames, 3U, "three frames total");
     TEST_ASSERT_EQ(dp.slots[0].gfx.painted, 2U, "slot 0 rendered twice");
     TEST_ASSERT_EQ(comp.acquire_point, 3U, "acquire must advance to 3");
@@ -255,7 +255,7 @@ static bool test_dmabuf_present_loop_mock_body(khr_topology_t* topo_ctx) {
     /* Teardown retires all three Wayland timelines; struct zeroes.
      * Destroy sends: per slot buffer + release-timeline, plus acquire. */
     khr_dmabuf_present_destroy(&dev, &dp);
-    TEST_ASSERT_EQ(mock_compositor_drain(&comp), 5, "destroy send count");
+    TEST_ASSERT_EQ(mock_compositor_drain(&comp), 5U, "destroy send count");
     TEST_ASSERT_EQ(comp.timeline_destroy_count, 3U, "all timelines retired");
     TEST_ASSERT_EQ(dp.frames, 0U, "present struct must reset");
 

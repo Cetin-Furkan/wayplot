@@ -647,7 +647,7 @@ bool test_bda_virtual_arena_pool_and_commit(void) {
                     "alloc across 2 MiB boundary must trigger commit_more");
         TEST_ASSERT_NOT_NULL(host2, "host2 not null");
         TEST_ASSERT_NE(gpu2, 0U, "gpu2 non-zero");
-        TEST_ASSERT_GE(arena.committed_sz, 4'194'304, "committed_sz must grow to >= 4 MiB");
+        TEST_ASSERT_GE(arena.committed_sz, 4'194'304ULL, "committed_sz must grow to >= 4 MiB");
         TEST_ASSERT_GE(arena.block_count, 2U, "block_count must grow to >= 2");
 
         /* Write pattern in newly committed block and verify coherence */

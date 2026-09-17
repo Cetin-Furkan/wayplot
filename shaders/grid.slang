@@ -62,20 +62,31 @@ FsOutput fs_main(VsOutput in) {
     // Vulkan NDC: in.uv.x in [-1, 1] maps to +r, in.uv.y in [-1, 1] maps to -u
     float3 ray_dir = normalize(f + in.uv.x * half_w * r - in.uv.y * half_h * u);
 
+    static const float3 sky_color = float3(0.02, 0.04, 0.08);
+
     // 2. Intersect Ray with Ground Plane y = plane_y
     if (abs(ray_dir.y) < 1e-5) {
-        discard;
+        FsOutput sky_out;
+        sky_out.color = float4(sky_color, 1.0);
+        sky_out.depth = 0.0;
+        return sky_out;
     }
 
     float t = (plane_y - eye.y) / ray_dir.y;
     if (t <= 0.0) {
-        discard; // Points behind camera or into sky
+        FsOutput sky_out;
+        sky_out.color = float4(sky_color, 1.0);
+        sky_out.depth = 0.0;
+        return sky_out;
     }
 
     float3 hit_pos = eye + ray_dir * t;
     float dist = length(hit_pos - eye);
     if (dist > max_dist) {
-        discard;
+        FsOutput sky_out;
+        sky_out.color = float4(sky_color, 1.0);
+        sky_out.depth = 0.0;
+        return sky_out;
     }
 
     // 3. Compute View-Projection and Reversed-Z Depth
@@ -158,15 +169,10 @@ FsOutput fs_main(VsOutput in) {
     float norm_dist = dist / max_dist;
     float fog = exp(-norm_dist * norm_dist * 3.5);
 
-    float alpha = max(0.92, max(col_minor.a, max(col_major.a, max(col_xaxis.a, col_zaxis.a))));
-    alpha *= fog;
-
-    if (alpha < 0.005) {
-        discard;
-    }
+    color = lerp(sky_color, color, fog);
 
     FsOutput out;
-    out.color = float4(color, alpha);
+    out.color = float4(color, 1.0);
     out.depth = frag_depth;
     return out;
 }

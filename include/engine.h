@@ -23,8 +23,8 @@
 constexpr uint32_t ENGINE_VERSION_MAJOR = 0;
 constexpr uint32_t ENGINE_VERSION_MINOR = 3;
 constexpr uint32_t ENGINE_VERSION_PATCH = 5;
-constexpr uint32_t ENGINE_VERSION_BUILD = 1;
-#define ENGINE_VERSION_STRING "0.3.5.1-bug-fixes"
+constexpr uint32_t ENGINE_VERSION_BUILD = 2;
+#define ENGINE_VERSION_STRING "0.3.5.2"
 
 constexpr size_t   ENGINE_CACHE_LINE_SIZE   = 64;
 constexpr size_t   ENGINE_PAGE_SIZE         = 4'096;

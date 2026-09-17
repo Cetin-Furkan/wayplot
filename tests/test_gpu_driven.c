@@ -218,25 +218,33 @@ bool test_gpu_compute_math_and_frustum_culling(void) {
     dev.acquire_point++;
     uint64_t sig_val = dev.acquire_point;
 
-    VkTimelineSemaphoreSubmitInfo timeline_info = {
-        .sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
-        .waitSemaphoreValueCount = (wait_val > 0) ? 1 : 0,
-        .pWaitSemaphoreValues = (wait_val > 0) ? &wait_val : nullptr,
-        .signalSemaphoreValueCount = 1,
-        .pSignalSemaphoreValues = &sig_val,
+    VkSemaphoreSubmitInfo wait_semi = {
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+        .semaphore = dev.acquire_sem,
+        .value = wait_val,
+        .stageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
     };
-    VkSubmitInfo si = {
-        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-        .pNext = &timeline_info,
-        .waitSemaphoreCount = (wait_val > 0) ? 1 : 0,
-        .pWaitSemaphores = (wait_val > 0) ? &dev.acquire_sem : nullptr,
-        .commandBufferCount = 1,
-        .pCommandBuffers = &cmd,
-        .signalSemaphoreCount = 1,
-        .pSignalSemaphores = &dev.acquire_sem,
+    VkSemaphoreSubmitInfo sig_semi = {
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+        .semaphore = dev.acquire_sem,
+        .value = sig_val,
+        .stageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+    };
+    VkCommandBufferSubmitInfo cmd_info = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+        .commandBuffer = cmd,
+    };
+    VkSubmitInfo2 si2 = {
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+        .waitSemaphoreInfoCount = (wait_val > 0) ? 1U : 0U,
+        .pWaitSemaphoreInfos = (wait_val > 0) ? &wait_semi : nullptr,
+        .commandBufferInfoCount = 1U,
+        .pCommandBufferInfos = &cmd_info,
+        .signalSemaphoreInfoCount = 1U,
+        .pSignalSemaphoreInfos = &sig_semi,
     };
 
-    TEST_ASSERT_EQ(vkQueueSubmit(dev.gfx_queue, 1, &si, VK_NULL_HANDLE), VK_SUCCESS, "queue submit");
+    TEST_ASSERT_EQ(vkQueueSubmit2(dev.gfx_queue, 1U, &si2, VK_NULL_HANDLE), VK_SUCCESS, "queue submit2");
 
     /* Wait on timeline semaphore */
     VkSemaphoreWaitInfo wi = {
