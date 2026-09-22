@@ -1,13 +1,6 @@
 # Wayplot
 
-** The reality of this code and project **
 
-Everything you see on this code is a ai slop as of right now, i must said this from the very beginning, i will re write most of the part myself again in the future but for now, there is no human written code anymore. Some of the old versions or closed beta versions were having almost half human half ai slop code but this version is created to push the limits so i can learn new things and get new ideas by looking at it.
-
-This project will have no real life application now, its main purpose to give the real human of this project to ideas and ways to build an actual engine.
-Right now, the project has 2 rings, ring A and ring B, each of them is pinned to specific threads except the main thread, rings are small io_uring submission life cycle for the io_uring syscal, ring A is the small one with 4kb sqe and always running, the ring B is the one with big pages 2mb and only actiave when something is triggered it, the rings are working async, they submit their data as the same ring so the main submit is always running
-
----
 
 ## Release: Version 0.3.5.2
 
