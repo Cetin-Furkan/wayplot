@@ -6,11 +6,6 @@ A from-scratch Wayland + Vulkan 1.4 host for scientific and engineering 3D on **
 
 The product is a **document + views + GPU visualization**: meshes, heightmaps, plots, and instrument cards on one swapchain. The GPU shades triangles the CPU placed. It does not own the model.
 
----
-
-## Caution
-
-This repository is written **with** an AI agent. There is no clean line between “human code” and “AI code” here. Planning, structure, and the C are mixed. That is intentional, not a footnote.
 
 ---
 
